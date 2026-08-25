@@ -1,0 +1,1900 @@
+Full Mobile Application
+
+Create Account
+Log in
+
+5:13
+
+Create Account
+Profile Photos *
+
+Photo 1
+
+0/3 required
+
+Photo 2
+
+Full name
+
+Miles
+Race(Optional)
+
+White
+Date of Birth
+
+MM/DD/YYYY
+Email Address
+
+sarah@gmail.com
+Phone Number
+
++2(555) 0000 - 0000
+Location
+
+New York, NY
+Emergency Contact
+
+James Johnson - Father
+
+Continue - Verify Phone
+
+Photo 3
+
+5:13
+
+Create Account
+Profile Photos *
+
+0/3 required
+
+Photo 2
+
+Full name
+
+Miles
+Race(Optional)
+
+White
+Date of Birth
+
+MM/DD/YYYY
+Email Address
+
+sarah@gmail.com
+Phone Number
+
++2(555) 0000 - 0000
+Location
+
+New York, NY
+Emergency Contact
+
+James Johnson - Father
+
+Continue - Verify Phone
+
+Photo 3
+
+5:13
+
+Verify
+
+Verify your phone
+We sent a 6-digit code to +1 (555) 000-0000
+
+Verify & Continue
+Didn't receive it? Resend code
+
+5:13
+
+Secure Account
+
+Secure your Account
+Choose how to quickly access SafeGuard in
+emergencies
+
+Face ID
+
+1-digit pin
+
+Fastest access
+
+Simple Fallback
+
+Complete Setup
+
+Skip for now
+
+5:13
+
+Secure Account
+
+Secure your Account
+Choose how to quickly access SafeGuard in
+emergencies
+
+Face ID
+
+1-digit pin
+
+Fastest access
+
+Simple Fallback
+
+Enter 1 digit Pin
+
+1
+
+2
+
+3
+
+PIN 3 selected
+
+Complete Setup
+
+Skip for now
+
+4
+
+5:13
+
+Secure Account
+
+Secure your Account
+Choose how to quickly access SafeGuard in
+emergencies
+
+Face ID
+
+1-digit pin
+
+Fastest access
+
+Simple Fallback
+
+Tap to register Face ID
+Position your face in the frame
+
+Scan Face
+
+Complete Setup
+
+Skip for now
+
+5:13
+
+Secure Account
+
+Secure your Account
+Choose how to quickly access SafeGuard in
+emergencies
+
+Face ID
+
+1-digit pin
+
+Fastest access
+
+Simple Fallback
+
+Face ID registered!
+Position your face in the frame
+
+Complete Setup
+
+Skip for now
+
+5:13
+
+Log in
+Phone Number
+
++2(555) 0000 - 0000
+Pin
+
+Enter your 1 digit pin
+Forget your Pin? Reset Now
+
+Log in
+Don’t have an Account ? Create Account
+
+5:13
+
+Forget Pin
+Phone Number
+
++2(555) 0000 - 0000
+
+Get OTP
+
+5:13
+
+Enter OTP
+
+Verify your phone
+We sent a 6-digit code to +1 (555) 000-0000
+
+Set New Pin
+Didn't receive it? Resend code
+
+5:13
+
+Set New Pin
+Enter 1 digit Pin
+
+1
+
+2
+
+3
+
+PIN 3 selected
+
+Save New Pin
+
+4
+
+5:13
+
+Pin Updated!
+Your Emergency Support starts here
+
+Back to Login
+
+5:13
+Good morning
+
+Free
+
+Sarah Johnson
+Safe — No active alerts
+
+Last seen: Now
+
+SOS
+Tap or hold
+
+Hold for 1.5s to skip confirmation
+
+Quick Emergency — Alert All Groups
+Create Emergency Alert
+Test Emergency Alert
+
+No contacts yet
+Add people you trust. They'll be notified in
+
+emergencies.
+
+Add contact
+
+Home
+
+Alerts
+
+Contacts
+
+Journal
+
+Profile
+
+5:13
+Good morning
+
+Free
+
+Sarah Johnson
+Safe — No active alerts
+
+Last seen: Now
+
+SOS
+Tap or hold
+
+Hold for 1.5s to skip confirmation
+
+Quick Emergency — Alert All Groups
+Create Emergency Alert
+Test Emergency Alert
+
+RECENT ACTIVITY
+
+Test alert sent
+
+Test
+
+Location shared with Family
+
+Safe
+
+2h ago
+
+Yesterday
+
+Home
+
+Alerts
+
+Contacts
+
+Journal
+
+Profile
+
+5:13
+
+Activate Emergency Alert?
+This will immediately notify your emergency
+contacts and share your live location.
+
+Auto-activating in 4 seconds
+
+Create Now
+Cancel — I'm Safe
+
+5:13
+
+Alert Mode
+
+How Should we alert?
+Choose your emergency mode
+
+Emergency Mode
+Loud siren, visible alert, full notification to
+all contacts
+Siren
+
+Full Alert
+
+Visible
+
+Silent Mode
+Discreet alert. No sound. Contacts are
+notified quietly.
+No Sound
+
+Discreet
+
+Continue
+
+Safe
+
+5:13
+
+Alert Mode
+
+How Should we alert?
+Choose your emergency mode
+
+Emergency Mode
+Loud siren, visible alert, full notification to
+all contacts
+Siren
+
+Full Alert
+
+Visible
+
+Silent Mode
+Discreet alert. No sound. Contacts are
+notified quietly.
+No Sound
+
+Discreet
+
+Continue
+
+Safe
+
+5:13
+
+Alert Mode
+
+How Should we alert?
+Choose your emergency mode
+
+Emergency Mode
+Loud siren, visible alert, full notification to
+all contacts
+Siren
+
+Full Alert
+
+Visible
+
+Silent Mode
+Discreet alert. No sound. Contacts are
+notified quietly.
+No Sound
+
+Discreet
+
+Safe
+
+⚠️Starting a video call in Silent Mode may reveal your
+location to nearby threats. Proceed with caution.
+
+Continue
+
+5:13
+
+Emergency Type
+
+Search emergency type…
+
+Assault
+
+Medical
+
+Fire
+
+Accident
+
+Theft
+
+Stalking
+
+Natural Disaster
+
+Mental Health
+
+Child in danger
+
+I don’t feel safe
+
+Send Alert
+
+5:13
+
+Alert Sent!
+Your contacts are being notified
+
+00:02 Active Alert
+Live Location Active
+
+123 Main St, New York, NY 10001
+
+NOTIFIED GROUPS
+
+Family
+
+✓ Delivered
+
+Work Emergency
+
+✓ Delivered
+
+4 members
+
+3 members
+
+Start Group Video Call
+
+View Live Session
+
+Cancel Alert
+
+5:13
+
+● LIVE EMERGENCY CALL
+
+02:23
+
+Emergency Group
+You (Sarah) — Sender
+
+SOS
+
+SJ
+
+JJ
+
+ES
+
+James
+● Joined
+
+Emma
+● Joined
+
+Calling…
+Mike
+
+QUICK RESPONSE
+Need Help
+
+Send Location
+
+I'm Safe
+
+5:13
+
+SOS
+
+123 Main St, New York, NY
+
+Emergency Type
+
+Mode
+
+Emergency Type
+
+Assault
+
+Emergency
+
+02:33
+
+Responding Contacts
+JJ
+
+James Johnson
+
+● En route
+
+ES
+
+Emma Smith
+
+● En route
+
+Father
+
+Sister
+
+Call
+
+Message
+
+End Alert
+
+5:13
+
+SOS
+
+123 Main St, New York, NY
+
+Emergency Type
+
+Mode
+
+Emergency Type
+
+Assault
+
+Silent
+
+02:33
+
+Responding Contacts
+JJ
+
+James Johnson
+
+● En route
+
+ES
+
+Emma Smith
+
+● En route
+
+Father
+
+Sister
+
+Call
+
+Message
+
+End Alert
+
+5:13
+
+Cancel Alert
+
+Why are you Cancelling ?
+your Contacts will be notified
+
+I'm Safe
+
+Situation resolved, I am safe
+
+False Alert
+
+Accidentally triggered the alert
+
+Test
+
+This was a test alert
+
+Confirm Cancellation
+
+5:13
+
+Alert Cancelled
+Tamim has cancelled their emergency
+safety alert and indicated that it was a
+
+false alert.
+
+
+Reason: I'm Safe
+
+Back to Home
+
+5:13
+Good morning
+
+Free
+
+Sarah Johnson
+Safe — No active alerts
+
+Last seen: Now
+
+SOS
+Tap or hold
+
+Hold for 1.5s to skip confirmation
+
+Quick Emergency — Alert All Groups
+Create Emergency Alert
+Test Emergency Alert
+
+No contacts yet
+Add people you trust. They'll be notified in
+
+emergencies.
+
+Add contact
+
+Home
+
+Alerts
+
+Contacts
+
+Journal
+
+Profile
+
+5:13
+Good morning
+
+Free
+
+Sarah Johnson
+Safe — No active alerts
+
+Last seen: Now
+
+SOS
+Tap or hold
+
+Hold for 1.5s to skip confirmation
+
+Quick Emergency — Alert All Groups
+Create Emergency Alert
+Test Emergency Alert
+
+RECENT ACTIVITY
+
+Test alert sent
+
+Test
+
+Location shared with Family
+
+Safe
+
+2h ago
+
+Yesterday
+
+Home
+
+Alerts
+
+Contacts
+
+Journal
+
+Profile
+
+5:13
+
+Alert Sent!
+Your contacts are being notified
+
+00:02 Active Alert
+Live Location Active
+
+123 Main St, New York, NY 10001
+
+NOTIFIED GROUPS
+
+Family
+
+✓ Delivered
+
+Work Emergency
+
+✓ Delivered
+
+4 members
+
+3 members
+
+Start Group Video Call
+
+View Live Session
+
+Cancel Alert
+
+5:13
+
+● LIVE EMERGENCY CALL
+
+02:23
+
+Emergency Group
+You (Sarah) — Sender
+
+SOS
+
+SJ
+
+JJ
+
+ES
+
+James
+● Joined
+
+Emma
+● Joined
+
+Calling…
+Mike
+
+QUICK RESPONSE
+Need Help
+
+Send Location
+
+I'm Safe
+
+5:13
+
+SOS
+
+123 Main St, New York, NY
+
+Emergency Type
+
+Mode
+
+Emergency Type
+
+Assault
+
+Quick Emergency 02:33
+
+Responding Contacts
+JJ
+
+James Johnson
+
+● En route
+
+ES
+
+Emma Smith
+
+● En route
+
+Father
+
+Sister
+
+Call
+
+Message
+
+End Alert
+
+5:13
+
+Family
+
+Online
+
+Hello! I'm Dr. Kwame Mensah.
+How can I help you today?
+12:37 PM
+
+ok
+12:37 PM
+
+I understand your concern. Let
+me help you with that. Would
+you like to schedule a video
+consultation?
+12:37 PM
+consultation fee ?
+12:38 PM
+
+I understand your concern. Let
+me help you with that. Would
+you like to schedule a video
+consultation?
+
+I've set the consultation fee at
+12 XAF for a 30-minute video
+consultation. This includes
+follow-up messages for 24
+hours.
+
+Type your message...
+
+5:13
+
+Cancel Alert
+
+Why are you Cancelling ?
+your Contacts will be notified
+
+I'm Safe
+
+Situation resolved, I am safe
+
+False Alert
+
+Accidentally triggered the alert
+
+Test
+
+This was a test alert
+
+Confirm Cancellation
+
+5:13
+
+Alert Cancelled
+Tamim has cancelled their emergency
+safety alert and indicated that it was a
+
+false alert.
+
+
+Reason: I'm Safe
+
+Back to Home
+
+5:13
+
+Notification
+
+No Notification Yet
+
+5:13
+
+Notification
+Search Your Notifications
+
+Document Added
+
+1 day ago
+
+Bill of Lading has been uploaded for
+OC-2026-4587
+OC-2026-4587
+
+Document Added
+
+1 day ago
+
+Bill of Lading has been uploaded for
+OC-2026-4587
+OC-2026-4587
+
+Document Added
+
+1 day ago
+
+Bill of Lading has been uploaded for
+OC-2026-4587
+OC-2026-4587
+
+Document Added
+
+1 day ago
+
+Bill of Lading has been uploaded for
+OC-2026-4587
+OC-2026-4587
+
+See More
+
+5:13
+Good morning
+
+Sarah Johnson
+Active(1)
+
+Past alerts
+
+No Active Alert yet
+
+Join an Emergency Group
+please ! Accept or Reject the pending invitation
+Family
+
+Invited by Sarah Johnson
+2 min ago
+
+Accept & Join
+
+Decline
+
+Work Emergency
+
+Invited by Sarah Johnson
+2 min ago
+
+Accept & Join
+
+Decline
+
+Skip for now — join a group later
+
+Home
+
+Alerts
+
+Contacts
+
+Journal
+
+Profile
+
+5:13
+Good morning
+
+Sarah Johnson
+LIVE EMERGENCY
+
+Tap to respond →
+
+🥊 Sarah needs help!
+
+Assault · 123 Main St, New York · 4 min ago
+
+Active(1)
+
+Past alerts
+
+Sarah Johnson
+
+🥊
+
+● LIVE
+
+🚨 Assault · Emergency Mode
+123 Main St, New York · 4 min ago
+Join Call
+
+Message
+
+MY GROUPS
+
+Family
+
+4 members · 2 online
+
+Work Emergency
+
+4 members · 2 online
+
+Home
+
+Alerts
+
+Contacts
+
+Journal
+
+Profile
+
+5:13
+Good morning
+
+Sarah Johnson
+LIVE EMERGENCY
+
+Tap to respond →
+
+🥊 Sarah needs help!
+Assault · 123 Main St, New York · 4 min ago
+
+Active(1)
+
+Past alerts
+
+Past 7 Days
+
+Sarah Johnson
+
+Resolved
+
+Sarah Johnson
+
+Resolved
+
+Test Alert · 2 days ago
+
+Test Alert · 2 days ago
+
+Home
+
+Alerts
+
+Contacts
+
+Journal
+
+Profile
+
+5:13
+04:09
+
+LIVE ALERT
+
+SJ
+
+Sarah Johnson
+
+Your group: Family · Daughter
+Assault
+Emergency Mode
+
+SOS
+
+123 Main St, New York, NY
+
+Join Call
+
+Message
+
+I'm Responding
+Can't Help
+
+5:13
+04:09
+
+LIVE ALERT
+
+SJ
+
+Sarah Johnson
+
+Your group: Family · Daughter
+Assault
+Emergency Mode
+
+SOS
+
+123 Main St, New York, NY
+
+Join Call
+
+You're responding
+
+Message
+
+Sarah has been notified you're on the way
+
+5:13
+
+● LIVE EMERGENCY CALL
+
+02:23
+
+Emergency Group
+You (Sarah) — Sender
+
+SOS
+
+SJ
+
+JJ
+
+ES
+
+James
+● Joined
+
+Emma
+● Joined
+
+Calling…
+Mike
+
+QUICK RESPONSE
+Need Help
+
+Send Location
+
+I'm Safe
+
+5:13
+
+Contacts
+All Contacts
+
+Groups
+
+JJ
+
+James Johnson
+
+Family
+
+ES
+
+Emma Smith
+
+Family
+
+DL
+
+David Lee
+
+Work
+
+RK
+
+Rachel Kim
+
+Work
+
+TW
+
+Tom Wilson
+
+Family
+
+Home
+
+Father
+
+Sister
+
+Friend
+
+Colleague
+
+Neighbor
+
+Alerts
+
+Contacts
+
+Journal
+
+Profile
+
+5:13
+
+Contacts
+All Contacts
+
+Groups
+
+JJ
+
+James Johnson
+
+Family
+
+ES
+
+Emma Smith
+
+Family
+
+Father
+
+Sister
+
+Add Contact
+
+David Lee
+DL Contact
+Name
+
+Work
+
+Status
+Rachel Kim
+
+Work
+
+Friend
+
+RK
+
+Colleague
+
+Enter Phone Number
+
+TW
+
+Tom Wilson
+
+Family
+
+Neighbor
+
+Add Contacts
+
+Home
+
+Alerts
+
+Contacts
+
+Journal
+
+Profile
+
+5:13
+
+Contacts
+All Contacts
+
+Groups
+
+FREE PLAN — 2/2 groups
+
+Upgrade
+
+Free plan: max 2 groups, 5 members each
+
+Family
+
+Invite
+
+Work Emergency
+
+Invite
+
+3/5 members
+
+2/5 members
+
+Add New Group (Upgrade Required)
+
+Home
+
+Alerts
+
+Contacts
+
+Journal
+
+Profile
+
+5:13
+
+Create Group
+Group Name
+
+e.g. Family , close friends...
+ADD MEMBERS
+Emma
+
+0/5
+Emma
+
+Search or type a name…
+
+Add
+
+Suggested from contacts
+JJ
+
+James Johnson
+
++
+
+JJ
+
+James Johnson
+
++
+
+JJ
+
+James Johnson
+
++
+
+JJ
+
+James Johnson
+
++
+
+JJ
+
+James Johnson
+
++
+
+Save Group
+
+5:13
+
+Edit Group
+Group Name
+
+e.g. Family , close friends...
+ADD MEMBERS
+Emma
+
+0/5
+Emma
+
+Search or type a name…
+
+Add
+
+Suggested from contacts
+JJ
+
+James Johnson
+
++
+
+JJ
+
+James Johnson
+
++
+
+JJ
+
+James Johnson
+
++
+
+JJ
+
+James Johnson
+
++
+
+JJ
+
+James Johnson
+
++
+
+Update Group
+
+5:13
+
+Contacts
+All Contacts
+
+Groups
+
+FREE PLAN — 2/2 groups
+
+Upgrade
+
+Free plan: max 2 groups, 5 members each
+
+Family
+
+Invite
+
+Work Emergency
+
+Invite
+
+3/5 members
+
+2/5 members
+
+Add New Group (Upgrade Required)
+
+Invite your Friends to Safe
+Alert App
+Invite trusted contacts to join your safety circle and
+stay connected.
+
+Share a referral link
+
+Home
+
+Alerts
+
+Contacts
+
+Journal
+
+Profile
+
+5:13
+
+Incident Journal
+
+Incident
+
+Jul 30, 2026
+
+Was followed home from the subway. Got home
+safely but felt unsafe at 23rd St station.
+
+Test
+
+Jul 30, 2026
+
+Was followed home from the subway. Got home
+safely but felt unsafe at 23rd St station.
+
+Update
+
+Jul 30, 2026
+
+Was followed home from the subway. Got home
+safely but felt unsafe at 23rd St station.
+
+Home
+
+Alerts
+
+Contacts
+
+Journal
+
+Profile
+
+5:13
+
+Incident Journal
+
+New Entry
+Describe the incident or update…
+
+Save
+
+Cancel
+
+Test
+
+Jul 30, 2026
+
+Was followed home from the subway. Got home
+safely but felt unsafe at 23rd St station.
+
+Update
+
+Jul 30, 2026
+
+Was followed home from the subway. Got home
+safely but felt unsafe at 23rd St station.
+
+Home
+
+Alerts
+
+Contacts
+
+Journal
+
+Profile
+
+5:13
+
+Profile
+
+Delete Account
+
+Mohammod Jakuan
++880 189* ****
+
+Edit
+My Subscriptions
+About Us
+Privacy Policy
+Terms & Conditions
+
+Log out
+
+Home
+
+Alerts
+
+Contacts
+
+Journal
+
+Profile
+
+5:13
+
+Edit Profile
+Profile Photos *
+
+0/3 required
+
+Photo 2
+
+Full name
+
+Miles
+Date of Birth
+
+MM/DD/YYYY
+Email Address
+
+sarah@gmail.com
+Phone Number
+
++2(555) 0000 - 0000
+Location
+
+New York, NY
+Emergency Contact
+
+James Johnson - Father
+
+Update Profile
+
+Photo 3
+
+5:13
+
+My Subscription
+Current Plan
+
+Free
+
+$0
+
+forever
+✓
+
+2 emergency groups
+
+✓
+
+Up to 5 contacts per group
+
+✓
+
+SOS alerts
+
+✕
+
+Video calls
+
+✕
+
+Unlimited contacts
+
+✕
+
+Incident journal
+
+Switch Plan
+
+Premium
+
+$5.00
+/month
+
+✓
+
+Unlimited groups
+
+✓
+
+Unlimited Contacts per groups
+
+✓
+
+SOS alerts
+
+✓
+
+Group video calls
+
+✓
+
+Incident journal
+
+✓
+
+Wearable integration (coming soon)
+
+Cancel Subscription
+
+5:13
+
+Cancel Subscription
+
+Any Comments or 
+
+Suggestions?
+We’re always looking for opportunities to
+improve
+Describe the incident or update…
+
+Cancel Subscription
+
+5:13
+
+My Subscription
+Current Plan
+
+Free
+
+$0
+
+forever
+✓
+
+2 emergency groups
+
+✓
+
+Up to 5 contacts per group
+
+✓
+
+SOS alerts
+
+✕
+
+Video calls
+
+✕
+
+Unlimited contacts
+
+✕
+
+Incident journal
+
+Cancelled
+
+Switch Plan
+
+Premium
+
+$5.00
+/month
+
+✓
+
+Unlimited groups
+
+✓
+
+Unlimited Contacts per groups
+
+✓
+
+SOS alerts
+
+✓
+
+Group video calls
+
+✓
+
+Incident journal
+
+✓
+
+Wearable integration (coming soon)
+
+Cancel Subscription
+
+5:13
+
+Choose Plan
+
+$0
+
+Free
+
+forever
+✓
+
+2 emergency groups
+
+✓
+
+Up to 5 contacts per group
+
+✓
+
+SOS alerts
+
+✕
+
+Video calls
+
+✕
+
+Unlimited contacts
+
+✕
+
+Incident journal
+
+$5.00
+
+Premium
+
+/month
+
+✓
+
+Unlimited groups
+
+✓
+
+Unlimited Contacts per groups
+
+✓
+
+SOS alerts
+
+✓
+
+Group video calls
+
+✓
+
+Incident journal
+
+✓
+
+Wearable integration (coming soon)
+
+Get Standard - $5.00/mo
+Cancel anytime. 7-day free trial for Pro.
+
+5:13
+
+About Us
+Tu bienestar. Bien simplificado.
+Bienify is a digital health platform designed to make
+healthcare more accessible, connected, and convenient.
+Our goal is to bring essential healthcare services together
+in one easy-to-use platform—helping patients connect
+with healthcare professionals, manage prescriptions,
+access laboratory and radiology services, coordinate
+medications with participating pharmacies, and keep
+important health documents organized in one secure
+place.
+With Bienify, patients can access features such as virtual
+medical consultations, digital prescriptions, medication
+ordering and delivery where available, laboratory and
+radiology requests, medical report uploads, and a
+centralized Medical Vault for their health information.
+Our Mission
+Our mission is to simplify access to healthcare through
+technology, creating a more connected experience
+between patients, healthcare professionals, pharmacies,
+laboratories, diagnostic centers, and other healthcare
+partners.
+We believe healthcare should be easier to navigate—from
+the moment you need a doctor to the moment you
+receive your treatment and manage your ongoing health
+information.
+
+5:13
+
+Privacy Policy
+Tu bienestar. Bien simplificado.
+Bienify is a digital health platform designed to make
+healthcare more accessible, connected, and convenient.
+Our goal is to bring essential healthcare services together
+in one easy-to-use platform—helping patients connect
+with healthcare professionals, manage prescriptions,
+access laboratory and radiology services, coordinate
+medications with participating pharmacies, and keep
+important health documents organized in one secure
+place.
+With Bienify, patients can access features such as virtual
+medical consultations, digital prescriptions, medication
+ordering and delivery where available, laboratory and
+radiology requests, medical report uploads, and a
+centralized Medical Vault for their health information.
+Our Mission
+Our mission is to simplify access to healthcare through
+technology, creating a more connected experience
+between patients, healthcare professionals, pharmacies,
+laboratories, diagnostic centers, and other healthcare
+partners.
+We believe healthcare should be easier to navigate—from
+the moment you need a doctor to the moment you
+receive your treatment and manage your ongoing health
+information.
+
+5:13
+
+Terms & Conditions
+Tu bienestar. Bien simplificado.
+Bienify is a digital health platform designed to make
+healthcare more accessible, connected, and convenient.
+Our goal is to bring essential healthcare services together
+in one easy-to-use platform—helping patients connect
+with healthcare professionals, manage prescriptions,
+access laboratory and radiology services, coordinate
+medications with participating pharmacies, and keep
+important health documents organized in one secure
+place.
+With Bienify, patients can access features such as virtual
+medical consultations, digital prescriptions, medication
+ordering and delivery where available, laboratory and
+radiology requests, medical report uploads, and a
+centralized Medical Vault for their health information.
+Our Mission
+Our mission is to simplify access to healthcare through
+technology, creating a more connected experience
+between patients, healthcare professionals, pharmacies,
+laboratories, diagnostic centers, and other healthcare
+partners.
+We believe healthcare should be easier to navigate—from
+the moment you need a doctor to the moment you
+receive your treatment and manage your ongoing health
+information.
+
+5:13
+
+Profile
+Mohammod Jakuan
++880 189* ****
+
+Edit
+
+My Documents
+My Order History
+My Wallet
+Settings
+Ready to log out?
+Cancel
+
+Log out
+
+Log out
+
+5:13
+
+Profile
+Mohammod Jakuan
++880 189* ****
+
+Edit
+
+My Documents
+My Order History
+My Wallet
+Settings
+Input your Pin
+Delete
+
+Input your pin
+
+Log out
+
+
