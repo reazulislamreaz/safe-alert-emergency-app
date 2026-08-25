@@ -1,0 +1,55 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: safealert-backend-dev
+    command: pnpm dev
+    volumes:
+      - ./backend/src:/app/src
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - NODE_ENV=development
+      - JWT_SECRET=safealert_dev_jwt_secret
+      - CORS_ORIGIN=*
+      - DATABASE_URL=postgresql://safealert:safealert_password@postgres:5432/safealert_db?schema=public
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - safealert-network
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: safealert-postgres-dev
+    environment:
+      POSTGRES_USER: safealert
+      POSTGRES_PASSWORD: safealert_password
+      POSTGRES_DB: safealert_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    networks:
+      - safealert-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: safealert-redis-dev
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_dev_data:/data
+    networks:
+      - safealert-network
+
+volumes:
+  postgres_dev_data:
+  redis_dev_data:
+
+networks:
+  safealert-network:
+    driver: bridge

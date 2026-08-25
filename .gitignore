@@ -1,0 +1,58 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+.npm
+.yarn/
+
+# Build and production outputs
+dist/
+build/
+out/
+.next/
+*.tsbuildinfo
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+backend/.env
+dashboard/.env
+
+# AI Agent & CLI Agent instructions & configurations (keep local, hide from GitHub)
+AGENTS.md
+CLAUDE.md
+CLAUDE_CODE.md
+.agents/
+.cursor/
+.cursorrules
+.windsurfrules
+.gemini/
+.claude/
+.aider*
+.copilot/
+
+# Logs and runtime data
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# OS and Editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Temporary & cache
+.cache/
+.tmp/
+tmp/
+coverage/
+.nyc_output/

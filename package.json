@@ -1,0 +1,27 @@
+{
+  "name": "safe-alert-emergency-app-root",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SafeAlert Emergency Response System - Monorepo Orchestration",
+  "scripts": {
+    "dev:backend": "pnpm --filter safealert-backend dev",
+    "dev:dashboard": "pnpm --filter safealert-dashboard dev",
+    "build:backend": "pnpm --filter safealert-backend build",
+    "build:dashboard": "pnpm --filter safealert-dashboard build",
+    "build": "pnpm --recursive build",
+    "docker:build": "docker compose build",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f",
+    "deploy": "./deploy.sh"
+  },
+  "keywords": [
+    "safealert",
+    "emergency",
+    "docker",
+    "realtime",
+    "webrtc"
+  ],
+  "author": "SafeAlert Architecture Team",
+  "license": "ISC"
+}

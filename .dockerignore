@@ -1,0 +1,14 @@
+.git
+.gitignore
+.env
+.env.local
+node_modules
+dist
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+.vscode
+.idea
+*.pdf
+extracted_pdf_text.txt
