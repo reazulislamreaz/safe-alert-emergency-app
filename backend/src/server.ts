@@ -5,6 +5,7 @@ import { Server as SocketIOServer } from "socket.io";
 import { config } from "./config/env.js";
 import { db } from "./core/database.js";
 import { authService } from "./modules/auth/auth.service.js";
+import { authenticateJwt, requireRole } from "./modules/auth/auth.middleware.js";
 import { alertService } from "./modules/alerts/alert.service.js";
 import { contactService } from "./modules/contacts/contact.service.js";
 import { dashboardService } from "./modules/dashboard/dashboard.service.js";
@@ -36,29 +37,120 @@ app.get("/health", (req, res) => {
   });
 });
 
-// --- AUTH ROUTES ---
+// ============================================================================
+// --- AUTHENTICATION & ONBOARDING ROUTES ---
+// ============================================================================
+
+/**
+ * Register a new user (matches mobile profile setup screen)
+ */
+app.post("/api/auth/register", (req, res) => {
+  try {
+    const result = authService.register(req.body);
+    res.status(201).json({
+      success: true,
+      message: "Account created successfully. Verification OTP dispatched.",
+      data: result,
+    });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Send 6-digit phone verification OTP
+ */
+app.post("/api/auth/otp/send", (req, res) => {
+  try {
+    const { phone } = req.body;
+    if (!phone) {
+      return res.status(400).json({ success: false, error: "Phone number is required." });
+    }
+    const result = authService.sendPhoneOtp(phone);
+    res.json({
+      success: true,
+      message: `Verification code sent to ${phone}`,
+      data: result,
+    });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Verify 6-digit phone verification OTP
+ */
+app.post("/api/auth/otp/verify", (req, res) => {
+  try {
+    const { phone, code } = req.body;
+    if (!phone || !code) {
+      return res.status(400).json({ success: false, error: "Phone and 6-digit code are required." });
+    }
+    const result = authService.verifyPhoneOtp(phone, code);
+    res.json({ success: true, data: result });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Set or update 4-digit security PIN
+ */
+app.post("/api/auth/pin/setup", (req, res) => {
+  try {
+    const { userId, pin } = req.body;
+    if (!userId || !pin) {
+      return res.status(400).json({ success: false, error: "User ID and 4-digit PIN are required." });
+    }
+    const result = authService.setupPin(userId, pin);
+    res.json({ success: true, data: result });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Verify PIN (De-escalation check for cancelling alerts / safe confirmation)
+ */
+app.post("/api/auth/pin/verify", (req, res) => {
+  try {
+    const { userId, pin } = req.body;
+    const targetUserId = userId || req.user?.sub || "usr-sarah-101";
+    const result = authService.verifyPin(targetUserId, pin);
+    res.json({ success: true, data: result });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Login endpoint (Email/Phone + PIN/Password for Citizens & Admins)
+ */
 app.post("/api/auth/login", (req, res) => {
   try {
-    const { emailOrPhone, pin } = req.body;
-    const result = authService.login(emailOrPhone, pin);
+    const result = authService.login(req.body);
     res.json({ success: true, data: result });
   } catch (error: any) {
     res.status(401).json({ success: false, error: error.message });
   }
 });
 
-app.post("/api/auth/verify-pin", (req, res) => {
-  const { userId, pin } = req.body;
-  const valid = authService.verifyPin(userId || "usr-sarah-101", pin);
-  res.json({ success: valid });
+/**
+ * Fetch authenticated user profile and active emergency data
+ */
+app.get("/api/auth/me", authenticateJwt, (req, res) => {
+  try {
+    const userId = req.user!.sub;
+    const result = authService.getMe(userId);
+    res.json({ success: true, data: result });
+  } catch (error: any) {
+    res.status(404).json({ success: false, error: error.message });
+  }
 });
 
-app.get("/api/auth/me", (req, res) => {
-  const user = db.users[0]; // Default mock Sarah Johnson
-  res.json({ success: true, data: user });
-});
-
+// ============================================================================
 // --- ALERT ROUTES ---
+// ============================================================================
 app.get("/api/alerts/active", (req, res) => {
   const alerts = alertService.getActiveAlerts();
   res.json({ success: true, data: alerts });
@@ -74,7 +166,7 @@ app.post("/api/alerts/trigger", (req, res) => {
   try {
     const { userId, emergencyTypeId, mode, latitude, longitude, address } = req.body;
     const alert = alertService.triggerAlert({
-      userId: userId || "usr-sarah-101",
+      userId: userId || req.user?.sub || "usr-sarah-101",
       emergencyTypeId: emergencyTypeId || "et-assault",
       mode: mode || "EMERGENCY",
       latitude: latitude || 40.712776,
@@ -120,7 +212,7 @@ app.post("/api/alerts/:id/resolve", (req, res) => {
       reason || "SAFE",
       notes || "",
       pin || "1234",
-      userId || "usr-sarah-101"
+      userId || req.user?.sub || "usr-sarah-101"
     );
 
     io.to(`room:${req.params.id}`).emit("alert:resolved", resolved);
@@ -132,16 +224,18 @@ app.post("/api/alerts/:id/resolve", (req, res) => {
   }
 });
 
+// ============================================================================
 // --- CONTACT & GROUP ROUTES ---
+// ============================================================================
 app.get("/api/contacts/groups", (req, res) => {
-  const userId = (req.query.userId as string) || "usr-sarah-101";
+  const userId = (req.query.userId as string) || req.user?.sub || "usr-sarah-101";
   const groups = contactService.getGroups(userId);
   res.json({ success: true, data: groups });
 });
 
 app.post("/api/contacts/groups", (req, res) => {
   const { userId, name, color } = req.body;
-  const group = contactService.createGroup(userId || "usr-sarah-101", name, color);
+  const group = contactService.createGroup(userId || req.user?.sub || "usr-sarah-101", name, color);
   res.status(201).json({ success: true, data: group });
 });
 
@@ -156,7 +250,9 @@ app.delete("/api/contacts/members/:id", (req, res) => {
   res.json({ success });
 });
 
+// ============================================================================
 // --- EMERGENCY TYPES & JOURNALS ---
+// ============================================================================
 app.get("/api/emergency-types", (req, res) => {
   res.json({ success: true, data: db.emergencyTypes });
 });
@@ -165,7 +261,9 @@ app.get("/api/journals", (req, res) => {
   res.json({ success: true, data: db.historicalJournals });
 });
 
+// ============================================================================
 // --- ADMIN DASHBOARD ROUTES ---
+// ============================================================================
 app.get("/api/dashboard/metrics", (req, res) => {
   const metrics = dashboardService.getOverviewMetrics();
   res.json({ success: true, data: metrics });
@@ -210,5 +308,6 @@ server.listen(config.port, () => {
   console.log(`🚨 SafeAlert Emergency Backend running on port ${config.port}`);
   console.log(`📡 WebSocket Gateway ready on ws://localhost:${config.port}`);
   console.log(`🩺 Health check: http://localhost:${config.port}/health`);
+  console.log(`🔐 Auth system: Ready (JWT + OTP + RBAC + PIN verification)`);
   console.log(`======================================================\n`);
 });

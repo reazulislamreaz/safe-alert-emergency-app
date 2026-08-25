@@ -1,3 +1,5 @@
 packages:
   - 'backend'
   - 'dashboard'
+allowBuilds:
+  esbuild: set this to true or false

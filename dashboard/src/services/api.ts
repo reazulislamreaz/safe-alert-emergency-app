@@ -10,11 +10,123 @@ import {
 
 const API_BASE = '/api';
 
+const TOKEN_KEY = 'safealert_auth_token';
+
 export const api = {
+  // --- Auth & Session ---
+  getAuthToken(): string | null {
+    try {
+      return localStorage.getItem(TOKEN_KEY);
+    } catch {
+      return null;
+    }
+  },
+
+  setAuthToken(token: string | null) {
+    try {
+      if (token) {
+        localStorage.setItem(TOKEN_KEY, token);
+      } else {
+        localStorage.removeItem(TOKEN_KEY);
+      }
+    } catch (e) {
+      console.warn("Could not access localStorage", e);
+    }
+  },
+
+  async login(emailOrPhone: string, passwordOrPin: string): Promise<{ user: User; token: string }> {
+    const isPin = /^\d{4}$/.test(passwordOrPin);
+    const body = isPin
+      ? { emailOrPhone, pin: passwordOrPin }
+      : { emailOrPhone, password: passwordOrPin };
+
+    const res = await fetch(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Authentication failed. Please verify credentials.');
+    }
+
+    this.setAuthToken(data.data.token);
+    return data.data;
+  },
+
+  async getMe(): Promise<{ user: User; groups: ContactGroup[]; activeAlerts: ActiveAlert[] }> {
+    const token = this.getAuthToken();
+    const res = await fetch(`${API_BASE}/auth/me`, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Failed to fetch current user session');
+    }
+    return data.data;
+  },
+
+  async register(payload: any): Promise<{ user: User; token: string; otpCode: string }> {
+    const res = await fetch(`${API_BASE}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Registration failed');
+    }
+    if (data.data?.token) {
+      this.setAuthToken(data.data.token);
+    }
+    return data.data;
+  },
+
+  async sendOtp(phone: string): Promise<{ phone: string; code: string }> {
+    const res = await fetch(`${API_BASE}/auth/otp/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Failed to send OTP');
+    }
+    return data.data;
+  },
+
+  async verifyOtp(phone: string, code: string): Promise<{ verified: boolean; token?: string; user?: User }> {
+    const res = await fetch(`${API_BASE}/auth/otp/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, code }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Verification failed');
+    }
+    if (data.data?.token) {
+      this.setAuthToken(data.data.token);
+    }
+    return data.data;
+  },
+
+  logout() {
+    this.setAuthToken(null);
+  },
+
   // --- Dashboard Metrics ---
   async getMetrics(): Promise<DashboardMetrics> {
     try {
-      const res = await fetch(`${API_BASE}/dashboard/metrics`);
+      const token = this.getAuthToken();
+      const res = await fetch(`${API_BASE}/dashboard/metrics`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       if (!res.ok) throw new Error('Failed to fetch metrics');
       const data = await res.json();
       return data.data;

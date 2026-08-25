@@ -1,10 +1,34 @@
 import { Server as SocketIOServer, Socket } from "socket.io";
+import jwt from "jsonwebtoken";
+import { config } from "../config/env.js";
 import { alertService } from "../modules/alerts/alert.service.js";
 import { dashboardService } from "../modules/dashboard/dashboard.service.js";
+import { AuthenticatedUserPayload } from "../modules/auth/auth.middleware.js";
 
 export function initSocketGateway(io: SocketIOServer) {
+  // Socket.io Handshake Authentication Middleware
+  io.use((socket: Socket, next) => {
+    const token =
+      socket.handshake.auth?.token ||
+      socket.handshake.headers?.authorization?.replace("Bearer ", "");
+
+    if (token) {
+      try {
+        const decoded = jwt.verify(token, config.jwtSecret) as AuthenticatedUserPayload;
+        socket.data.user = decoded;
+      } catch (err) {
+        console.warn(`[WebSocket Auth] Handshake token invalid for client: ${socket.id}`);
+      }
+    }
+    // Allow connection (unauthenticated clients can connect for public/test feeds)
+    next();
+  });
+
   io.on("connection", (socket: Socket) => {
-    console.log(`[WebSocket] Client connected: ${socket.id}`);
+    const user = socket.data?.user as AuthenticatedUserPayload | undefined;
+    console.log(
+      `[WebSocket] Client connected: ${socket.id}${user ? ` (User: ${user.email} [${user.role}])` : " (Guest/Demo)"}`
+    );
 
     // Join specific emergency room
     socket.on("alert:join", (alertId: string) => {
@@ -57,9 +81,10 @@ export function initSocketGateway(io: SocketIOServer) {
     socket.on(
       "alert:message:send",
       (data: { alertId: string; sender: string; text: string }) => {
+        const senderName = user?.email ? (user.email.split("@")[0]) : data.sender;
         const updated = alertService.addMessage(
           data.alertId,
-          data.sender,
+          senderName,
           data.text,
           "USER"
         );
@@ -83,9 +108,10 @@ export function initSocketGateway(io: SocketIOServer) {
         else if (data.action === "im_safe")
           text = "✅ I am currently safe and secure.";
 
+        const senderName = user?.email ? user.email.split("@")[0] : data.sender;
         const updated = alertService.addMessage(
           data.alertId,
-          data.sender,
+          senderName,
           text,
           "QUICK_REPLY"
         );

@@ -8,9 +8,25 @@ export interface User {
   role: "USER" | "OPS_ADMIN" | "SUPER_ADMIN";
   subscriptionTier: "FREE" | "PREMIUM";
   isVerified: boolean;
+  isPhoneVerified: boolean;
   pin: string; // 4-digit security PIN for de-escalation
+  password?: string; // For admin / password authentication
   avatar?: string;
+  profilePhotos?: string[]; // Up to 3 photos from onboarding
+  dob?: string;
+  race?: string;
+  location?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  emergencyContactRelation?: string;
   createdAt: string;
+}
+
+export interface OtpRecord {
+  phone: string;
+  code: string;
+  expiresAt: number; // timestamp in ms
+  attempts: number;
 }
 
 export interface ContactGroup {
@@ -106,6 +122,8 @@ export interface SubscriptionPlan {
 }
 
 class Database {
+  otpStore: Map<string, OtpRecord> = new Map();
+
   users: User[] = [
     {
       id: "usr-sarah-101",
@@ -115,20 +133,49 @@ class Database {
       role: "USER",
       subscriptionTier: "FREE",
       isVerified: true,
+      isPhoneVerified: true,
       pin: "1234",
+      password: "password123",
+      dob: "1998-05-14",
+      race: "White",
+      location: "New York, NY",
+      emergencyContactName: "James Johnson",
+      emergencyContactPhone: "+1 (555) 987-6543",
+      emergencyContactRelation: "Father",
+      profilePhotos: [
+        "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=300",
+        "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300",
+      ],
       avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150",
       createdAt: "2026-07-15T10:00:00Z",
     },
     {
       id: "usr-admin-001",
-      fullName: "Admin User",
+      fullName: "Super Admin",
       email: "admin@safealert.app",
       phone: "+1 (555) 000-0001",
       role: "SUPER_ADMIN",
       subscriptionTier: "PREMIUM",
       isVerified: true,
+      isPhoneVerified: true,
       pin: "9999",
+      password: "adminpassword",
+      avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150",
       createdAt: "2026-01-01T00:00:00Z",
+    },
+    {
+      id: "usr-ops-001",
+      fullName: "Dispatch Officer Dave",
+      email: "ops@safealert.app",
+      phone: "+1 (555) 000-0002",
+      role: "OPS_ADMIN",
+      subscriptionTier: "PREMIUM",
+      isVerified: true,
+      isPhoneVerified: true,
+      pin: "8888",
+      password: "opspassword",
+      avatar: "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=150",
+      createdAt: "2026-02-01T00:00:00Z",
     },
     {
       id: "usr-002",
@@ -138,6 +185,7 @@ class Database {
       role: "USER",
       subscriptionTier: "PREMIUM",
       isVerified: true,
+      isPhoneVerified: true,
       pin: "1111",
       createdAt: "2026-06-10T12:30:00Z",
     },
@@ -149,6 +197,7 @@ class Database {
       role: "USER",
       subscriptionTier: "PREMIUM",
       isVerified: true,
+      isPhoneVerified: true,
       pin: "2222",
       createdAt: "2026-05-20T08:15:00Z",
     },
@@ -160,6 +209,7 @@ class Database {
       role: "USER",
       subscriptionTier: "FREE",
       isVerified: true,
+      isPhoneVerified: true,
       pin: "3333",
       createdAt: "2026-04-12T14:45:00Z",
     },
@@ -171,6 +221,7 @@ class Database {
       role: "USER",
       subscriptionTier: "FREE",
       isVerified: true,
+      isPhoneVerified: true,
       pin: "4444",
       createdAt: "2026-07-02T19:20:00Z",
     },
@@ -182,6 +233,7 @@ class Database {
       role: "USER",
       subscriptionTier: "FREE",
       isVerified: true,
+      isPhoneVerified: true,
       pin: "5555",
       createdAt: "2026-08-01T11:00:00Z",
     },

@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
+import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { UserManagementPage } from './pages/UserManagementPage';
 import { EmergencyTypesPage } from './pages/EmergencyTypesPage';
@@ -8,16 +9,66 @@ import { LiveGroupStatusPage } from './pages/LiveGroupStatusPage';
 import { SubscriptionManagementPage } from './pages/SubscriptionManagementPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
-import { AlertCircle, X } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
+import { api } from './services/api';
+import { User } from './types';
 
 export const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState<boolean>(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
+
+  // Check existing session on mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      const token = api.getAuthToken();
+      if (!token) {
+        setIsAuthChecking(false);
+        return;
+      }
+
+      try {
+        const response = await api.getMe();
+        setCurrentUser(response.user);
+      } catch (err) {
+        console.warn('Session expired or invalid, please sign in.');
+        api.logout();
+        setCurrentUser(null);
+      } finally {
+        setIsAuthChecking(false);
+      }
+    };
+
+    checkAuth();
+  }, []);
+
+  const handleLoginSuccess = (user: User) => {
+    setCurrentUser(user);
+    setCurrentTab('dashboard');
+  };
 
   const handleLogout = () => {
+    api.logout();
+    setCurrentUser(null);
     setIsLogoutModalOpen(false);
-    alert('Logged out from SafeAlert Admin Console');
   };
+
+  if (isAuthChecking) {
+    return (
+      <div className="h-screen w-full bg-[#0B1528] flex items-center justify-center text-white">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-xs text-slate-400 font-medium">Verifying SafeAlert Security Session...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Render Login Page if unauthenticated
+  if (!currentUser) {
+    return <LoginPage onLoginSuccess={handleLoginSuccess} />;
+  }
 
   return (
     <div className="flex h-screen bg-[#F4F6FA] text-slate-800 overflow-hidden font-sans antialiased">
@@ -70,7 +121,7 @@ export const App: React.FC = () => {
               Log out from App
             </h3>
             <p className="text-xs text-gray-500 mb-6 max-w-xs mx-auto">
-              Are you sure you want to log out from this admin account?
+              Are you sure you want to log out from <strong>{currentUser.email}</strong>?
             </p>
 
             <div className="flex items-center justify-center gap-3">
