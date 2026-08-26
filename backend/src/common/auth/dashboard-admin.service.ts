@@ -6,6 +6,7 @@ import {
   designatedDashboardAdminEmail,
   isDashboardSession,
   isDesignatedAdminEmail,
+  isSuperAdminRole,
 } from "./dashboard-admin";
 
 @Injectable()
@@ -20,14 +21,14 @@ export class DashboardAdminService implements OnModuleInit {
     const email = designatedDashboardAdminEmail();
     await this.prisma.user.updateMany({
       where: {
-        role: { in: [Role.ADMIN, Role.OPS_ADMIN, Role.SUPER_ADMIN] },
+        role: Role.SUPER_ADMIN,
         NOT: { email },
       },
       data: { role: Role.USER },
     });
     await this.prisma.user.updateMany({
       where: { email },
-      data: { role: Role.ADMIN },
+      data: { role: Role.SUPER_ADMIN },
     });
   }
 
@@ -51,8 +52,12 @@ export class DashboardAdminService implements OnModuleInit {
       role: record.role,
     };
 
-    if (!isDashboardSession(session) || !isDesignatedAdminEmail(record.email) || record.role !== Role.ADMIN) {
-      throw new ForbiddenException("Dashboard access is limited to the designated Admin account.");
+    if (
+      !isDashboardSession(session) ||
+      !isDesignatedAdminEmail(record.email) ||
+      !isSuperAdminRole(record.role)
+    ) {
+      throw new ForbiddenException("Dashboard access is limited to the Super Admin account.");
     }
   }
 }

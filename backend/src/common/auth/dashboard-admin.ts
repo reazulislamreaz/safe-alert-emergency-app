@@ -13,11 +13,15 @@ export function isDesignatedAdminEmail(email: string): boolean {
   return normalizeEmail(email) === designatedDashboardAdminEmail();
 }
 
+export function isSuperAdminRole(role?: string | null): boolean {
+  return role === Role.SUPER_ADMIN;
+}
+
 export function isDashboardSession(user?: JwtPayload | null): boolean {
   return (
     !!user &&
     user.aud === "dashboard" &&
-    user.role === Role.ADMIN &&
+    isSuperAdminRole(user.role) &&
     isDesignatedAdminEmail(user.email)
   );
 }

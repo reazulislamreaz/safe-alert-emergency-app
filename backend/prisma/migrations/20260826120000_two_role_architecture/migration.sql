@@ -1,8 +1,7 @@
-import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from "@nestjs/common";
-import { PrismaClient } from "@prisma/client";
-import { seedDatabase } from "./seed";
+-- Two-role architecture: USER (app) and SUPER_ADMIN (dashboard).
+-- Existing ADMIN rows become SUPER_ADMIN. Existing OPS_ADMIN rows become USER.
+-- No users are deleted.
 
-const COLLAPSE_ROLES_SQL = `
 DO $$
 DECLARE
   has_user_table boolean;
@@ -64,30 +63,3 @@ BEGIN
   DROP TYPE "Role";
   ALTER TYPE "Role_new" RENAME TO "Role";
 END $$;
-`;
-
-@Injectable()
-export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
-  private readonly logger = new Logger(PrismaService.name);
-
-  async onModuleInit(): Promise<void> {
-    await this.$connect();
-    await this.collapseObsoleteRoles();
-    await seedDatabase(this);
-    this.logger.log("PostgreSQL connected");
-  }
-
-  async onModuleDestroy(): Promise<void> {
-    await this.$disconnect();
-  }
-
-  private async collapseObsoleteRoles(): Promise<void> {
-    try {
-      await this.$executeRawUnsafe(COLLAPSE_ROLES_SQL);
-    } catch (error) {
-      this.logger.warn(
-        `Role enum collapse skipped: ${error instanceof Error ? error.message : "unknown error"}`,
-      );
-    }
-  }
-}

@@ -11,11 +11,13 @@ import {
 } from "@nestjs/common";
 import {
   ApiBearerAuth,
+  ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiOperation,
   ApiParam,
   ApiQuery,
   ApiTags,
+  ApiUnauthorizedResponse,
 } from "@nestjs/swagger";
 import { CreateEmergencyTypeDto } from "./dto/emergency-type.dto";
 import { DashboardService } from "./dashboard.service";
@@ -24,6 +26,8 @@ import { DashboardAdminGuard } from "../../common/guards/dashboard-admin.guard";
 
 @ApiTags("Dashboard")
 @ApiBearerAuth("access-token")
+@ApiUnauthorizedResponse({ description: "Authentication required" })
+@ApiForbiddenResponse({ description: "USER tokens cannot access the Dashboard" })
 @Controller("api/dashboard")
 @UseGuards(JwtAuthGuard, DashboardAdminGuard)
 export class DashboardController {

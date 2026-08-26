@@ -9,8 +9,6 @@ datasource db {
 
 enum Role {
   USER
-  ADMIN
-  OPS_ADMIN
   SUPER_ADMIN
 }
 

@@ -15,6 +15,7 @@ services:
       - NODE_ENV=production
       - JWT_SECRET=${JWT_SECRET:-safealert_super_secret_jwt_key_2026_production}
       - CORS_ORIGIN=${CORS_ORIGIN:-*}
+      - DASHBOARD_ADMIN_EMAIL=${DASHBOARD_ADMIN_EMAIL:-admin@safealert.app}
       - DATABASE_URL=postgresql://${POSTGRES_USER:-safealert}:${POSTGRES_PASSWORD:-safealert_password}@postgres:5432/${POSTGRES_DB:-safealert_db}?schema=public
       - REDIS_URL=redis://redis:6379
     depends_on:

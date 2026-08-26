@@ -4,7 +4,7 @@ export interface User {
   email: string;
   phone: string;
   phoneMasked?: string;
-  role: "USER" | "OPS_ADMIN" | "SUPER_ADMIN";
+  role: "USER" | "SUPER_ADMIN";
   subscriptionTier: "FREE" | "PREMIUM";
   isVerified: boolean;
   pin: string;
@@ -15,8 +15,10 @@ export interface User {
   createdAt: string;
 }
 
-export function isOperatorRole(role: User['role']): boolean {
-  return role === 'OPS_ADMIN' || role === 'SUPER_ADMIN';
+export type AuthAudience = "app" | "dashboard";
+
+export function isDashboardAdmin(user: Pick<User, "role"> | null | undefined, audience?: string): boolean {
+  return user?.role === "SUPER_ADMIN" && audience === "dashboard";
 }
 
 export interface TelemetryPoint {

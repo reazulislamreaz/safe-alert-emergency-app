@@ -25,6 +25,48 @@ function hashSecret(value: string): string {
   return hashSync(value, 10);
 }
 
+async function ensureDashboardAdmin(prisma: PrismaClient): Promise<void> {
+  const email = (process.env.DASHBOARD_ADMIN_EMAIL || "admin@safealert.app").trim().toLowerCase();
+
+  await prisma.user.updateMany({
+    where: {
+      role: Role.SUPER_ADMIN,
+      NOT: { email },
+    },
+    data: { role: Role.USER },
+  });
+
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing) {
+    if (existing.role !== Role.SUPER_ADMIN) {
+      await prisma.user.update({
+        where: { id: existing.id },
+        data: { role: Role.SUPER_ADMIN },
+      });
+    }
+    return;
+  }
+
+  const takenId = await prisma.user.findUnique({ where: { id: "usr-admin-001" } });
+  await prisma.user.create({
+    data: {
+      id: takenId ? `usr-admin-${crypto.randomUUID().slice(0, 8)}` : "usr-admin-001",
+      fullName: "Super Admin",
+      email,
+      phone: "+1 (555) 000-0001",
+      phoneDigits: digitsOnly("+1 (555) 000-0001"),
+      role: Role.SUPER_ADMIN,
+      subscriptionTier: SubscriptionTier.PREMIUM,
+      isVerified: true,
+      isPhoneVerified: true,
+      pinHash: hashSecret("9999"),
+      passwordHash: hashSecret("adminpassword"),
+      avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150",
+      createdAt: new Date("2026-01-01T00:00:00Z"),
+    },
+  });
+}
+
 const FIGMA_CONTACTS = [
   {
     id: "ct-james-01",
@@ -426,6 +468,7 @@ async function ensureFigmaContacts(prisma: PrismaClient): Promise<void> {
 export async function seedDatabase(prisma: PrismaClient): Promise<void> {
   const existingUsers = await prisma.user.count();
   if (existingUsers > 0) {
+    await ensureDashboardAdmin(prisma);
     await ensureFigmaEmergencyTypes(prisma);
     await ensureFigmaContacts(prisma);
     await ensureFigmaJournals(prisma);
@@ -484,7 +527,7 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
         email: "ops@safealert.app",
         phone: "+1 (555) 000-0002",
         phoneDigits: digitsOnly("+1 (555) 000-0002"),
-        role: Role.OPS_ADMIN,
+        role: Role.USER,
         subscriptionTier: SubscriptionTier.PREMIUM,
         isVerified: true,
         isPhoneVerified: true,
@@ -561,6 +604,7 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
     ],
   });
 
+  await ensureDashboardAdmin(prisma);
   await ensureFigmaEmergencyTypes(prisma);
 
   await ensureFigmaContacts(prisma);

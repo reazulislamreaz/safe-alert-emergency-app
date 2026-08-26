@@ -28,7 +28,7 @@ export type JwtPayload = {
   sub: string;
   email: string;
   phone: string;
-  role: "USER" | "ADMIN" | "OPS_ADMIN" | "SUPER_ADMIN";
+  role: "USER" | "SUPER_ADMIN";
   tier: "FREE" | "PREMIUM";
   aud?: JwtAudience;
   iat?: number;

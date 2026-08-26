@@ -80,7 +80,7 @@ export class AlertsController {
 
   @Get("active")
   @UseGuards(JwtAuthGuard, DashboardAdminGuard)
-  @ApiOperation({ summary: "Dashboard Admin: list broadcasting SOS alerts" })
+  @ApiOperation({ summary: "Dashboard Super Admin: list broadcasting SOS alerts" })
   async getActive() {
     const data = await this.alertService.getActiveAlerts();
     return { success: true, data };

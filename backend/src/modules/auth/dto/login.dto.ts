@@ -21,7 +21,7 @@ export class LoginDto {
 
   @ApiPropertyOptional({
     example: "password123",
-    description: "Citizen password login. Dashboard Admin must use POST /api/auth/dashboard/login.",
+    description: "Citizen password login. Super Admin must use POST /api/auth/dashboard/login.",
   })
   @IsOptional()
   @IsString()

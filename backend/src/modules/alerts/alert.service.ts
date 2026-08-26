@@ -920,7 +920,7 @@ export class AlertService {
     const viewer = await this.requireUser(userId);
     if (
       alert.userId === userId ||
-      (viewer.role === Role.ADMIN && isDesignatedAdminEmail(viewer.email))
+      (viewer.role === Role.SUPER_ADMIN && isDesignatedAdminEmail(viewer.email))
     ) {
       return alert;
     }

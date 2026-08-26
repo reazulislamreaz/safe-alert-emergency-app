@@ -39,7 +39,7 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({
             Log in
           </button>
           <button type="button" onClick={onOperatorLogin} className={`${authLinkClass} w-full text-center text-white/80 hover:text-white`}>
-            Operator console
+            Super Admin dashboard
           </button>
         </div>
       </div>

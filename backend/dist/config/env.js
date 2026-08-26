@@ -20,5 +20,8 @@ exports.env = {
         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
         publicBaseUrl: process.env.AWS_S3_PUBLIC_BASE_URL || "",
     },
+    dashboardAdminEmail: (process.env.DASHBOARD_ADMIN_EMAIL || "admin@safealert.app")
+        .trim()
+        .toLowerCase(),
 };
 //# sourceMappingURL=env.js.map

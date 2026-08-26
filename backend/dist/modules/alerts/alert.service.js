@@ -16,6 +16,7 @@ const client_1 = require("@prisma/client");
 const prisma_service_1 = require("../../prisma/prisma.service");
 const realtime_service_1 = require("../../realtime/realtime.service");
 const env_1 = require("../../config/env");
+const dashboard_admin_1 = require("../../common/auth/dashboard-admin");
 const alert_mapper_1 = require("../../common/mappers/alert.mapper");
 const alert_constants_1 = require("./alert.constants");
 const zego_util_1 = require("./zego.util");
@@ -704,7 +705,7 @@ let AlertService = class AlertService {
             initials: initialsFrom(dto.userName),
             emoji,
             statusLabel: dto.status === "BROADCASTING" ? "LIVE" : "Resolved",
-            headline: `🚨 ${dto.emergencyType} · ${dto.modeLabel}`,
+            headline: `🚨 ${dto.emergencyType} · ${dto.mode === "EMERGENCY" ? "Emergency Mode" : dto.modeLabel}`,
             subtitle: `${dto.location.address} · ${formatRelative(new Date(dto.triggeredAt))}`,
             emergencyType: dto.emergencyType,
             modeLabel: dto.modeLabel,
@@ -775,7 +776,8 @@ let AlertService = class AlertService {
     async requireAccessible(alertId, userId) {
         const alert = await this.requireAlert(alertId);
         const viewer = await this.requireUser(userId);
-        if (alert.userId === userId || viewer.role !== client_1.Role.USER) {
+        if (alert.userId === userId ||
+            (viewer.role === client_1.Role.SUPER_ADMIN && (0, dashboard_admin_1.isDesignatedAdminEmail)(viewer.email))) {
             return alert;
         }
         const phones = new Set((await this.prisma.contactMember.findMany({

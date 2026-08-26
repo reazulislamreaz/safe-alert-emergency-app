@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { api } from '../services/api';
-import { User } from '../types';
+import { AuthAudience, User } from '../types';
 import {
   AuthShell,
   authInputClass,
@@ -11,7 +11,7 @@ import {
 import { AuthErrorBanner, AuthSpinner } from '../components/auth/AuthFeedback';
 
 interface OperatorLoginPageProps {
-  onLoginSuccess: (user: User) => void;
+  onLoginSuccess: (user: User, audience?: AuthAudience) => void;
   onForgotPassword: () => void;
   onBack: () => void;
 }
@@ -21,7 +21,7 @@ export const OperatorLoginPage: React.FC<OperatorLoginPageProps> = ({
   onForgotPassword,
   onBack,
 }) => {
-  const [emailOrPhone, setEmailOrPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
@@ -34,8 +34,8 @@ export const OperatorLoginPage: React.FC<OperatorLoginPageProps> = ({
     setIsLoading(true);
 
     try {
-      const response = await api.login(emailOrPhone, password, rememberMe);
-      onLoginSuccess(response.user);
+      const response = await api.dashboardLogin(email, password, rememberMe);
+      onLoginSuccess(response.user, response.audience);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Login failed. Please check credentials.';
       setErrorMessage(message);
@@ -44,16 +44,10 @@ export const OperatorLoginPage: React.FC<OperatorLoginPageProps> = ({
     }
   };
 
-  const handleQuickFill = (email: string, secret: string) => {
-    setEmailOrPhone(email);
-    setPassword(secret);
-    setErrorMessage(null);
-  };
-
   return (
     <AuthShell>
       <h1 className={`${authTitleClass} text-center mb-5 sm:mb-7 font-semibold`}>
-        Operator console
+        Super Admin dashboard
       </h1>
       <AuthErrorBanner message={errorMessage} />
 
@@ -64,12 +58,12 @@ export const OperatorLoginPage: React.FC<OperatorLoginPageProps> = ({
           </label>
           <input
             id="ops-email"
-            type="text"
+            type="email"
             required
             autoComplete="username"
-            value={emailOrPhone}
-            onChange={(e) => setEmailOrPhone(e.target.value)}
-            placeholder="Enter your email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Enter Super Admin email"
             className={authInputClass}
           />
         </div>
@@ -129,33 +123,25 @@ export const OperatorLoginPage: React.FC<OperatorLoginPageProps> = ({
         onClick={onBack}
         className="mt-4 w-full text-center text-xs text-[#3A67D5] touch-manipulation"
       >
-        Back to citizen login
+        Back to app login
       </button>
 
       <div className="mt-6 sm:mt-8 pt-5 sm:pt-6 border-t border-gray-100">
         <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-3 text-center">
-          Quick Switch Demo Roles
+          Demo Super Admin
         </p>
-        <div className="grid grid-cols-1 min-[480px]:grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => handleQuickFill('admin@safealert.app', 'adminpassword')}
-            className="p-3 bg-gray-50 hover:bg-blue-50 border border-gray-200 hover:border-blue-200 rounded-xl text-left transition-all group touch-manipulation min-w-0"
-          >
-            <div className="text-xs font-bold text-blue-600 group-hover:text-blue-700">Super Admin</div>
-            <div className="text-[11px] text-gray-400 truncate">admin@safealert.app</div>
-          </button>
-          <button
-            type="button"
-            onClick={() => handleQuickFill('ops@safealert.app', 'opspassword')}
-            className="p-3 bg-gray-50 hover:bg-emerald-50 border border-gray-200 hover:border-emerald-200 rounded-xl text-left transition-all group touch-manipulation min-w-0"
-          >
-            <div className="text-xs font-bold text-emerald-600 group-hover:text-emerald-700">
-              Ops Dispatcher
-            </div>
-            <div className="text-[11px] text-gray-400 truncate">ops@safealert.app</div>
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setEmail('admin@safealert.app');
+            setPassword('adminpassword');
+            setErrorMessage(null);
+          }}
+          className="w-full p-3 bg-gray-50 hover:bg-blue-50 border border-gray-200 hover:border-blue-200 rounded-xl text-left transition-all group touch-manipulation min-w-0"
+        >
+          <div className="text-xs font-bold text-blue-600 group-hover:text-blue-700">Super Admin</div>
+          <div className="text-[11px] text-gray-400 truncate">admin@safealert.app</div>
+        </button>
       </div>
     </AuthShell>
   );

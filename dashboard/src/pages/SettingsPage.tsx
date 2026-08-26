@@ -4,7 +4,6 @@ import { User as AccountUser } from '../types';
 
 const roleLabel: Record<AccountUser['role'], string> = {
   SUPER_ADMIN: 'Super Admin',
-  OPS_ADMIN: 'Ops Dispatcher',
   USER: 'Citizen',
 };
 

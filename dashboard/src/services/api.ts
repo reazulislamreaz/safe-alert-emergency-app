@@ -123,6 +123,26 @@ export const api = {
     return data.data;
   },
 
+  async dashboardLogin(
+    email: string,
+    password: string,
+    remember: boolean = true,
+  ): Promise<{ user: User; token: string; audience: 'dashboard' }> {
+    const res = await fetch(`${API_BASE}/auth/dashboard/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Dashboard authentication failed. Super Admin only.'));
+    }
+
+    this.setAuthToken(data.data.token, remember);
+    return data.data;
+  },
+
   async loginWithFaceId(phone?: string): Promise<{ user: User; token: string }> {
     // If phone is provided or remembered from Face ID registration
     const targetPhone = phone || this.getFaceIdUser() || "+1 (555) 234-5678";
@@ -161,7 +181,12 @@ export const api = {
     return data.data;
   },
 
-  async getMe(): Promise<{ user: User; groups: ContactGroup[]; activeAlerts: ActiveAlert[] }> {
+  async getMe(): Promise<{
+    user: User;
+    audience?: 'app' | 'dashboard';
+    groups: ContactGroup[];
+    activeAlerts: ActiveAlert[];
+  }> {
     const res = await fetch(`${API_BASE}/auth/me`, {
       headers: this.authHeaders(),
     });

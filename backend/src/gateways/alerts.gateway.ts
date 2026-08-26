@@ -10,7 +10,6 @@ import {
   WebSocketGateway,
   WebSocketServer,
 } from "@nestjs/websockets";
-import { Role } from "@prisma/client";
 import { Server, Socket } from "socket.io";
 import { env, JwtAudience, JwtPayload } from "../config/env";
 import { isDashboardSession } from "../common/auth/dashboard-admin";
@@ -38,6 +37,7 @@ export class AlertsGateway
     private readonly alertService: AlertService,
     private readonly dashboardService: DashboardService,
     private readonly jwt: JwtService,
+    private readonly prisma: PrismaService,
   ) {}
 
   afterInit(server: Server): void {
@@ -45,14 +45,36 @@ export class AlertsGateway
     this.logger.log("WebSocket gateway ready");
   }
 
-  handleConnection(socket: Socket): void {
+  async handleConnection(socket: Socket): Promise<void> {
     const token =
       (socket.handshake.auth?.token as string | undefined) ||
       socket.handshake.headers?.authorization?.replace("Bearer ", "");
 
     if (token) {
       try {
-        socket.data.user = this.jwt.verify<JwtPayload>(token);
+        const payload = this.jwt.verify<JwtPayload>(token);
+        const record = await this.prisma.user.findUnique({
+          where: { id: payload.sub },
+          select: {
+            id: true,
+            email: true,
+            phone: true,
+            role: true,
+            subscriptionTier: true,
+          },
+        });
+        if (record) {
+          const aud: JwtAudience | undefined =
+            payload.aud === "dashboard" ? "dashboard" : payload.aud === "app" ? "app" : undefined;
+          socket.data.user = {
+            sub: record.id,
+            email: record.email,
+            phone: record.phone,
+            role: record.role,
+            tier: record.subscriptionTier,
+            aud,
+          } satisfies JwtPayload;
+        }
       } catch {
         this.logger.warn(`Handshake token invalid for client: ${socket.id}`);
       }
@@ -159,7 +181,7 @@ export class AlertsGateway
   @SubscribeMessage("admin:subscribe")
   async adminSubscribe(@ConnectedSocket() socket: Socket) {
     const user = socket.data?.user as JwtPayload | undefined;
-    if (user?.role !== Role.OPS_ADMIN && user?.role !== Role.SUPER_ADMIN) {
+    if (!isDashboardSession(user)) {
       this.logger.warn(`admin:subscribe denied for ${socket.id}`);
       return;
     }

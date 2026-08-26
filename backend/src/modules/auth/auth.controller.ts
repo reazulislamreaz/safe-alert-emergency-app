@@ -6,6 +6,7 @@ import {
   ApiOperation,
   ApiTags,
   ApiUnauthorizedResponse,
+  ApiForbiddenResponse,
 } from "@nestjs/swagger";
 import { AuthService } from "./auth.service";
 import { RegisterDto } from "./dto/register.dto";
@@ -134,6 +135,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: "Citizen login with email/phone + PIN or password" })
   @ApiUnauthorizedResponse({ description: "Invalid credentials" })
+  @ApiForbiddenResponse({ description: "Super Admin must use dashboard login" })
   async login(@Body() dto: LoginDto) {
     const data = await this.authService.login(dto);
     return { success: true, data };
@@ -141,8 +143,9 @@ export class AuthController {
 
   @Post("dashboard/login")
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Dashboard Admin login — designated Admin account only" })
+  @ApiOperation({ summary: "Dashboard Super Admin login — designated Super Admin account only" })
   @ApiUnauthorizedResponse({ description: "Invalid credentials" })
+  @ApiForbiddenResponse({ description: "Caller is not the designated Super Admin" })
   async dashboardLogin(@Body() dto: DashboardLoginDto) {
     const data = await this.authService.loginDashboard(dto);
     return { success: true, data };

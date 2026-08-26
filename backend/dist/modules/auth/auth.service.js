@@ -21,16 +21,23 @@ const token_hash_1 = require("../../common/utils/token-hash");
 const user_mapper_1 = require("../../common/mappers/user.mapper");
 const alert_mapper_1 = require("../../common/mappers/alert.mapper");
 const uploads_constants_1 = require("../uploads/uploads.constants");
+const dashboard_admin_service_1 = require("../../common/auth/dashboard-admin.service");
+const dashboard_admin_1 = require("../../common/auth/dashboard-admin");
 let AuthService = class AuthService {
     prisma;
     jwt;
-    constructor(prisma, jwt) {
+    dashboardAdmin;
+    constructor(prisma, jwt, dashboardAdmin) {
         this.prisma = prisma;
         this.jwt = jwt;
+        this.dashboardAdmin = dashboardAdmin;
     }
     async register(dto) {
         const email = dto.email.toLowerCase();
         const phoneDigits = (0, phone_1.digitsOnly)(dto.phone);
+        if ((0, dashboard_admin_1.isDesignatedAdminEmail)(email)) {
+            throw new common_1.BadRequestException("This email is reserved for the Super Admin account.");
+        }
         const existing = await this.prisma.user.findFirst({
             where: {
                 OR: [{ email }, { phoneDigits }],
@@ -60,6 +67,7 @@ let AuthService = class AuthService {
                 race: dto.race,
                 location: dto.location,
                 emergencyContactName: dto.emergencyContactName,
+                role: client_1.Role.USER,
                 emergencyContactPhone: emergencyPhone,
                 emergencyContactRelation: emergencyRelation,
                 profilePhotos: (0, uploads_constants_1.requireStoredImageUrls)(dto.profilePhotos) ?? [],
@@ -95,7 +103,7 @@ let AuthService = class AuthService {
             },
         });
         const otp = await this.sendPhoneOtp(user.phone);
-        const token = this.signToken(user.id, user.email, user.phone, user.role, user.subscriptionTier);
+        const token = this.signToken(user.id, user.email, user.phone, user.role, user.subscriptionTier, "app");
         return { user: (0, user_mapper_1.toPublicUser)(user), token, otpCode: otp.code };
     }
     async sendPhoneOtp(phone) {
@@ -144,7 +152,14 @@ let AuthService = class AuthService {
                 where: { id: user.id },
                 data: { isPhoneVerified: true, isVerified: true },
             });
-            const token = this.signToken(verified.id, verified.email, verified.phone, verified.role, verified.subscriptionTier);
+            if ((0, dashboard_admin_1.isDesignatedAdminEmail)(verified.email) || verified.role === client_1.Role.SUPER_ADMIN) {
+                return {
+                    phone,
+                    verified: true,
+                    user: (0, user_mapper_1.toPublicUser)(verified),
+                };
+            }
+            const token = this.signToken(verified.id, verified.email, verified.phone, verified.role, verified.subscriptionTier, "app");
             return {
                 verified: true,
                 message: "Phone successfully verified.",
@@ -218,8 +233,32 @@ let AuthService = class AuthService {
         if (user.role === client_1.Role.USER && !user.isPhoneVerified) {
             throw new common_1.UnauthorizedException("Verify your phone number before logging in.");
         }
-        const token = this.signToken(user.id, user.email, user.phone, user.role, user.subscriptionTier);
-        return { user: (0, user_mapper_1.toPublicUser)(user), token };
+        await this.dashboardAdmin.ensureSingleAdmin();
+        const fresh = await this.prisma.user.findUnique({ where: { id: user.id } });
+        if (!fresh) {
+            throw new common_1.UnauthorizedException("Invalid credentials. Account not found.");
+        }
+        if ((0, dashboard_admin_1.isDesignatedAdminEmail)(fresh.email) || fresh.role === client_1.Role.SUPER_ADMIN) {
+            throw new common_1.ForbiddenException("This account must sign in through the dashboard.");
+        }
+        const token = this.signToken(fresh.id, fresh.email, fresh.phone, fresh.role, fresh.subscriptionTier, "app");
+        return { user: (0, user_mapper_1.toPublicUser)(fresh), token };
+    }
+    async loginDashboard(dto) {
+        const email = dto.email.trim().toLowerCase();
+        const user = await this.prisma.user.findUnique({ where: { email } });
+        if (!user || !user.passwordHash || !(await (0, bcryptjs_1.compare)(dto.password, user.passwordHash))) {
+            throw new common_1.UnauthorizedException("Invalid admin credentials.");
+        }
+        await this.dashboardAdmin.ensureSingleAdmin();
+        const fresh = await this.prisma.user.findUnique({ where: { id: user.id } });
+        if (!fresh ||
+            fresh.role !== client_1.Role.SUPER_ADMIN ||
+            !(0, dashboard_admin_1.isDesignatedAdminEmail)(fresh.email)) {
+            throw new common_1.ForbiddenException("Dashboard access is limited to the Super Admin account.");
+        }
+        const token = this.signToken(fresh.id, fresh.email, fresh.phone, fresh.role, fresh.subscriptionTier, "dashboard");
+        return { user: (0, user_mapper_1.toPublicUser)(fresh), token, audience: "dashboard" };
     }
     async requestPasswordReset(email) {
         const normalizedEmail = email.toLowerCase().trim();
@@ -387,7 +426,7 @@ let AuthService = class AuthService {
         });
         return { loggedOut: true };
     }
-    async getMe(userId) {
+    async getMe(userId, audience = "app") {
         const user = await this.prisma.user.findUnique({ where: { id: userId } });
         if (!user) {
             throw new common_1.NotFoundException("User account not found.");
@@ -405,12 +444,13 @@ let AuthService = class AuthService {
         });
         return {
             user: (0, user_mapper_1.toPublicUser)(user),
+            audience,
             groups,
             activeAlerts: activeAlerts.map(alert_mapper_1.toAlertDto),
         };
     }
-    signToken(userId, email, phone, role, tier) {
-        const payload = { sub: userId, email, phone, role, tier };
+    signToken(userId, email, phone, role, tier, aud) {
+        const payload = { sub: userId, email, phone, role, tier, aud };
         return this.jwt.sign(payload);
     }
 };
@@ -418,6 +458,7 @@ exports.AuthService = AuthService;
 exports.AuthService = AuthService = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
-        jwt_1.JwtService])
+        jwt_1.JwtService,
+        dashboard_admin_service_1.DashboardAdminService])
 ], AuthService);
 //# sourceMappingURL=auth.service.js.map

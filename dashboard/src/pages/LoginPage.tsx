@@ -160,7 +160,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       </p>
       <p className="mt-3 text-center">
         <button type="button" onClick={onOperatorLogin} className={authLinkClass}>
-          Operator console
+          Super Admin dashboard
         </button>
       </p>
 

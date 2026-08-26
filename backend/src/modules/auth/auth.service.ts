@@ -34,7 +34,7 @@ export class AuthService {
     const phoneDigits = digitsOnly(dto.phone);
 
     if (isDesignatedAdminEmail(email)) {
-      throw new BadRequestException("This email is reserved for the dashboard Admin account.");
+      throw new BadRequestException("This email is reserved for the Super Admin account.");
     }
 
     const existing = await this.prisma.user.findFirst({
@@ -183,6 +183,13 @@ export class AuthService {
         where: { id: user.id },
         data: { isPhoneVerified: true, isVerified: true },
       });
+      if (isDesignatedAdminEmail(verified.email) || verified.role === Role.SUPER_ADMIN) {
+        return {
+          phone,
+          verified: true,
+          user: toPublicUser(verified),
+        };
+      }
       const token = this.signToken(
         verified.id,
         verified.email,
@@ -283,7 +290,7 @@ export class AuthService {
     if (!fresh) {
       throw new UnauthorizedException("Invalid credentials. Account not found.");
     }
-    if (isDesignatedAdminEmail(fresh.email) || fresh.role === Role.ADMIN) {
+    if (isDesignatedAdminEmail(fresh.email) || fresh.role === Role.SUPER_ADMIN) {
       throw new ForbiddenException("This account must sign in through the dashboard.");
     }
 
@@ -310,10 +317,10 @@ export class AuthService {
     const fresh = await this.prisma.user.findUnique({ where: { id: user.id } });
     if (
       !fresh ||
-      fresh.role !== Role.ADMIN ||
+      fresh.role !== Role.SUPER_ADMIN ||
       !isDesignatedAdminEmail(fresh.email)
     ) {
-      throw new ForbiddenException("Dashboard access is limited to the designated Admin account.");
+      throw new ForbiddenException("Dashboard access is limited to the Super Admin account.");
     }
 
     const token = this.signToken(

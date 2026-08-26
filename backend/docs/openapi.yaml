@@ -186,7 +186,28 @@ paths:
           description: ''
         '401':
           description: Invalid credentials
-      summary: Login with email/phone + password or PIN
+        '403':
+          description: Super Admin must use POST /api/auth/dashboard/login
+      summary: Citizen login with email/phone + password or PIN
+      tags:
+        - Auth
+  /api/auth/dashboard/login:
+    post:
+      operationId: AuthController_dashboardLogin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DashboardLoginDto'
+      responses:
+        '200':
+          description: Super Admin session with dashboard-audience JWT
+        '401':
+          description: Invalid credentials
+        '403':
+          description: Caller is not the designated Super Admin
+      summary: Dashboard Super Admin login — designated Super Admin account only
       tags:
         - Auth
   /api/auth/password/forgot:
@@ -533,7 +554,7 @@ paths:
         '200':
           description: Broadcasting SOS alerts
         '403':
-          description: Citizen JWT is not allowed
+          description: USER tokens cannot access the Dashboard
       security:
         - access-token: []
       summary: Admin — list broadcasting SOS alerts
@@ -1273,6 +1294,12 @@ paths:
       responses:
         '200':
           description: ''
+        '401':
+          description: Authentication required
+        '403':
+          description: USER tokens cannot access the Dashboard
+      security:
+        - access-token: []
       summary: Overview KPIs, subscription split, recent alerts
       tags:
         - Dashboard
@@ -1289,6 +1316,12 @@ paths:
       responses:
         '200':
           description: ''
+        '401':
+          description: Authentication required
+        '403':
+          description: USER tokens cannot access the Dashboard
+      security:
+        - access-token: []
       summary: List users (optional search)
       tags:
         - Dashboard
@@ -1305,8 +1338,14 @@ paths:
       responses:
         '200':
           description: ''
+        '401':
+          description: Authentication required
+        '403':
+          description: USER tokens cannot access the Dashboard
         '404':
           description: User not found
+      security:
+        - access-token: []
       summary: Toggle user verification
       tags:
         - Dashboard
@@ -1317,6 +1356,12 @@ paths:
       responses:
         '200':
           description: ''
+        '401':
+          description: Authentication required
+        '403':
+          description: USER tokens cannot access the Dashboard
+      security:
+        - access-token: []
       summary: List emergency types for admin
       tags:
         - Dashboard
@@ -1332,6 +1377,12 @@ paths:
       responses:
         '201':
           description: ''
+        '401':
+          description: Authentication required
+        '403':
+          description: USER tokens cannot access the Dashboard
+      security:
+        - access-token: []
       summary: Create an emergency type
       tags:
         - Dashboard
@@ -1348,8 +1399,14 @@ paths:
       responses:
         '200':
           description: ''
+        '401':
+          description: Authentication required
+        '403':
+          description: USER tokens cannot access the Dashboard
         '404':
           description: Type not found
+      security:
+        - access-token: []
       summary: Toggle emergency type active flag
       tags:
         - Dashboard
@@ -1360,6 +1417,12 @@ paths:
       responses:
         '200':
           description: ''
+        '401':
+          description: Authentication required
+        '403':
+          description: USER tokens cannot access the Dashboard
+      security:
+        - access-token: []
       summary: List subscription plans
       tags:
         - Dashboard
@@ -1369,6 +1432,10 @@ paths:
       responses:
         '200':
           description: Historical journals for all users
+        '401':
+          description: Authentication required
+        '403':
+          description: USER tokens cannot access the Dashboard
       security:
         - access-token: []
       summary: Historical incident journals (all users)
@@ -1555,22 +1622,20 @@ info:
 
     **Demo accounts**
 
-    - Super Admin: `admin@safealert.app` / `adminpassword`
+    - Super Admin (Dashboard): `admin@safealert.app` / `adminpassword` via `POST /api/auth/dashboard/login`
 
-    - Ops: `ops@safealert.app` / `opspassword`
-
-    - Citizen (Sarah): `sarah.johnson@example.com` / PIN `1234`
+    - Citizen (Sarah): `sarah.johnson@example.com` / PIN `1234` via `POST /api/auth/login`
 
     - Phone OTP for Sarah: `123456`
 
+    Roles: `SUPER_ADMIN` (Dashboard only) and `USER` (App only).
 
-        Use **Authorize** after login and paste the JWT as a Bearer token for
-        `/api/auth/me`.
+        Use **Authorize** after login and paste the JWT as a Bearer token.
 
         **Socket.io** (`ws://localhost:5002`, same origin as REST)
 
         - Client → server: `alert:join`, `alert:telemetry`, `alert:message:send`,
-        `alert:quick_response`, `admin:subscribe`
+        `alert:quick_response`, `admin:subscribe` (dashboard Super Admin JWT)
 
         - Server → client: `alert:state`, `alert:telemetry:update`,
         `alert:messages:update`, `alert:resolved`, `notification:new`,
@@ -1600,7 +1665,7 @@ tags:
   - name: Catalog
     description: Public emergency types
   - name: Dashboard
-    description: Admin metrics, users, types, subscriptions, journals
+    description: Super Admin metrics, users, types, subscriptions, journals
 servers: []
 components:
   securitySchemes:
@@ -1608,7 +1673,7 @@ components:
       scheme: bearer
       bearerFormat: JWT
       type: http
-      description: JWT from POST /api/auth/login
+      description: JWT from POST /api/auth/login (App) or POST /api/auth/dashboard/login (Dashboard)
   schemas:
     RegisterDto:
       type: object
@@ -1773,7 +1838,7 @@ components:
         emailOrPhone:
           type: string
           minLength: 3
-          example: admin@safealert.app
+          example: sarah.johnson@example.com
           description: Email address or phone number
         pin:
           type: string
@@ -1783,12 +1848,26 @@ components:
         password:
           type: string
           minLength: 4
-          example: adminpassword
+          example: password123
           description: >-
-            Admin / password login. Use adminpassword or opspassword for demo
-            admins.
+            Citizen password login. Super Admin must use POST
+            /api/auth/dashboard/login.
       required:
         - emailOrPhone
+    DashboardLoginDto:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          example: admin@safealert.app
+        password:
+          type: string
+          minLength: 8
+          example: adminpassword
+      required:
+        - email
+        - password
     ForgotPasswordDto:
       type: object
       properties:

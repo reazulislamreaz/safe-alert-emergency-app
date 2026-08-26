@@ -108,7 +108,7 @@ export const CitizenHomePage: React.FC<CitizenHomePageProps> = ({
                     onClick={onOperatorLogin}
                     className="w-full min-h-12 h-12 rounded-full border border-[#3A67D5] text-[#3A67D5] text-sm font-medium touch-manipulation"
                   >
-                    Operator console
+                    Super Admin dashboard
                   </button>
                 </div>
               </div>

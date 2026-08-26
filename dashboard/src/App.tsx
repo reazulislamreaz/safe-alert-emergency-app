@@ -19,7 +19,8 @@ import { SettingsPage } from './pages/SettingsPage';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { AlertCircle } from 'lucide-react';
 import { api } from './services/api';
-import { isOperatorRole, User } from './types';
+import { socketService } from './services/socket';
+import { AuthAudience, isDashboardAdmin, User } from './types';
 
 type AuthView =
   | 'welcome'
@@ -41,6 +42,7 @@ export const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState<boolean>(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [sessionAudience, setSessionAudience] = useState<AuthAudience>('app');
   const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
   const [authView, setAuthView] = useState<AuthView>('welcome');
   const [signupSession, setSignupSession] = useState<SignupSession | null>(null);
@@ -56,7 +58,15 @@ export const App: React.FC = () => {
 
       try {
         const response = await api.getMe();
+        if (response.user.role === 'SUPER_ADMIN' && response.audience !== 'dashboard') {
+          api.logout();
+          setCurrentUser(null);
+          setSessionAudience('app');
+          setAuthView('operator');
+          return;
+        }
         setCurrentUser(response.user);
+        setSessionAudience(response.audience === 'dashboard' ? 'dashboard' : 'app');
       } catch (err) {
         console.warn('Session expired or invalid, please sign in.');
         api.logout();
@@ -94,16 +104,36 @@ export const App: React.FC = () => {
     };
   }, [isSidebarOpen]);
 
-  const handleLoginSuccess = (user: User) => {
+  const canAccessDashboard = isDashboardAdmin(currentUser, sessionAudience);
+
+  useEffect(() => {
+    if (!canAccessDashboard) {
+      return;
+    }
+    socketService.connect({ token: api.getAuthToken(), asAdmin: true });
+    return () => socketService.disconnect();
+  }, [canAccessDashboard]);
+
+  const handleLoginSuccess = (user: User, audience: AuthAudience = 'app') => {
+    if (user.role === 'SUPER_ADMIN' && audience !== 'dashboard') {
+      api.logout();
+      setCurrentUser(null);
+      setSessionAudience('app');
+      setAuthView('operator');
+      return;
+    }
     setCurrentUser(user);
+    setSessionAudience(audience);
     setCurrentTab('dashboard');
-    setAuthView(isOperatorRole(user.role) ? 'operator' : 'login');
+    setAuthView(isDashboardAdmin(user, audience) ? 'operator' : 'login');
     setSignupSession(null);
   };
 
   const handleLogout = (nextView: AuthView = 'welcome') => {
+    socketService.disconnect();
     api.logout();
     setCurrentUser(null);
+    setSessionAudience('app');
     setSignupSession(null);
     setAuthView(nextView);
     setIsLogoutModalOpen(false);
@@ -120,7 +150,7 @@ export const App: React.FC = () => {
     );
   }
 
-  if (currentUser && !isOperatorRole(currentUser.role)) {
+  if (currentUser && !canAccessDashboard) {
     return (
       <CitizenHomePage
         user={currentUser}

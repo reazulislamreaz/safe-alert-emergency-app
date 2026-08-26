@@ -2,11 +2,16 @@ const firstArray = [];
 const secondArray = [];
 
 for (let i = 0; i < 6000; i++) {
-  if (i < 3000) {
+  if (i < 10) {
     firstArray.push(i);
   } else {
     secondArray.push(i);
   }
 }
-console.log(firstArray.length);
-console.log(secondArray.length);
+
+const firstMap = firstArray.map((item) => ({
+  id: item,
+  name: `this is name ${item}`,
+}));
+
+console.log(firstMap);
