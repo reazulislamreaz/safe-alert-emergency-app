@@ -1,19 +1,29 @@
 import React from 'react';
 
 export const authInputClass =
-  'w-full min-h-11 h-11 px-3.5 rounded-lg border border-gray-200 bg-white text-base sm:text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/20 focus:border-[#3B82F6] transition-colors';
+  'w-full min-h-12 h-12 px-[17px] rounded-lg border border-[#E1E1E1] bg-white text-sm text-[#09003B] placeholder:text-[#888887] focus:outline-none focus:ring-2 focus:ring-[#3A67D5]/20 focus:border-[#3A67D5] transition-colors';
 
 export const authPrimaryBtnClass =
-  'w-full min-h-11 h-11 rounded-lg bg-[#3B82F6] hover:bg-[#2563EB] disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold shadow-sm shadow-blue-500/20 transition-colors touch-manipulation';
+  'w-full min-h-12 h-12 rounded-full bg-[#3A67D5] hover:bg-[#2F56B8] disabled:opacity-50 disabled:cursor-not-allowed text-[#DBF5FF] text-sm font-medium shadow-sm shadow-blue-500/20 transition-colors touch-manipulation';
 
 export const authTitleClass =
-  'text-xl sm:text-[22px] font-bold text-gray-800 leading-tight';
+  'text-lg sm:text-[18px] font-normal text-[#09003B] leading-7';
 
 export const authBackTitleClass =
-  `${authTitleClass} flex items-center gap-1 -ml-1 mb-5 sm:mb-7 text-left w-full min-w-0`;
+  `${authTitleClass} flex items-center gap-2 -ml-1 mb-8 sm:mb-10 text-left w-full min-w-0`;
 
 export const authOtpInputClass =
-  'min-w-0 flex-1 aspect-square max-w-12 h-auto text-center text-base sm:text-lg font-semibold text-gray-800 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/20 focus:border-[#3B82F6]';
+  'min-w-0 flex-1 h-14 text-center text-base font-medium text-[#09003B] rounded-2xl border border-[#E1E1E1] focus:outline-none focus:ring-2 focus:ring-[#3A67D5]/20 focus:border-[#3A67D5] bg-white';
+
+export const authLabelClass =
+  'block text-xs font-normal text-[#09003B] mb-2';
+
+export const authLinkClass =
+  'text-xs font-normal text-[#3A67D5] hover:text-[#2F56B8] touch-manipulation';
+
+export const authMutedClass =
+  'text-xs text-[#30302F]';
+
 
 export const AuthLogo: React.FC = () => (
   <div className="flex items-center justify-center gap-2 sm:gap-2.5 mb-5 sm:mb-8">

@@ -1,8 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
+import { WelcomePage } from './pages/WelcomePage';
 import { LoginPage } from './pages/LoginPage';
+import { OperatorLoginPage } from './pages/OperatorLoginPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
+import { ForgotPinPage } from './pages/ForgotPinPage';
+import { CreateAccountPage } from './pages/CreateAccountPage';
+import { VerifyPhonePage } from './pages/VerifyPhonePage';
+import { SecureAccountPage } from './pages/SecureAccountPage';
+import { CitizenHomePage } from './pages/CitizenHomePage';
 import { DashboardPage } from './pages/DashboardPage';
 import { UserManagementPage } from './pages/UserManagementPage';
 import { EmergencyTypesPage } from './pages/EmergencyTypesPage';
@@ -12,17 +19,33 @@ import { SettingsPage } from './pages/SettingsPage';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { AlertCircle } from 'lucide-react';
 import { api } from './services/api';
-import { User } from './types';
+import { isOperatorRole, User } from './types';
+
+type AuthView =
+  | 'welcome'
+  | 'login'
+  | 'operator'
+  | 'register'
+  | 'verify-phone'
+  | 'secure-account'
+  | 'forgot-pin'
+  | 'forgot-password';
+
+type SignupSession = {
+  phone: string;
+  token: string;
+  otpCode?: string;
+};
 
 export const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState<boolean>(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
-  const [authView, setAuthView] = useState<'login' | 'forgot'>('login');
+  const [authView, setAuthView] = useState<AuthView>('welcome');
+  const [signupSession, setSignupSession] = useState<SignupSession | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
 
-  // Check existing session on mount
   useEffect(() => {
     const checkAuth = async () => {
       const token = api.getAuthToken();
@@ -74,13 +97,15 @@ export const App: React.FC = () => {
   const handleLoginSuccess = (user: User) => {
     setCurrentUser(user);
     setCurrentTab('dashboard');
-    setAuthView('login');
+    setAuthView(isOperatorRole(user.role) ? 'operator' : 'login');
+    setSignupSession(null);
   };
 
-  const handleLogout = () => {
+  const handleLogout = (nextView: AuthView = 'welcome') => {
     api.logout();
     setCurrentUser(null);
-    setAuthView('login');
+    setSignupSession(null);
+    setAuthView(nextView);
     setIsLogoutModalOpen(false);
   };
 
@@ -88,21 +113,101 @@ export const App: React.FC = () => {
     return (
       <div className="min-h-dvh w-full bg-[#F3F4F6] flex items-center justify-center px-4">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-[3px] border-[#3B82F6] border-t-transparent rounded-full animate-spin" />
+          <div className="w-8 h-8 border-[3px] border-[#3A67D5] border-t-transparent rounded-full animate-spin" />
           <p className="text-xs text-gray-400 font-medium">Verifying session...</p>
         </div>
       </div>
     );
   }
 
-  if (!currentUser) {
-    if (authView === 'forgot') {
-      return <ForgotPasswordPage onBackToLogin={() => setAuthView('login')} />;
-    }
+  if (currentUser && !isOperatorRole(currentUser.role)) {
     return (
-      <LoginPage
-        onLoginSuccess={handleLoginSuccess}
-        onForgotPassword={() => setAuthView('forgot')}
+      <CitizenHomePage
+        user={currentUser}
+        onLogout={() => handleLogout('welcome')}
+        onOperatorLogin={() => handleLogout('operator')}
+      />
+    );
+  }
+
+  if (!currentUser) {
+    if (authView === 'login') {
+      return (
+        <LoginPage
+          onLoginSuccess={handleLoginSuccess}
+          onForgotPin={() => setAuthView('forgot-pin')}
+          onCreateAccount={() => setAuthView('register')}
+          onClose={() => setAuthView('welcome')}
+          onOperatorLogin={() => setAuthView('operator')}
+        />
+      );
+    }
+
+    if (authView === 'operator') {
+      return (
+        <OperatorLoginPage
+          onLoginSuccess={handleLoginSuccess}
+          onForgotPassword={() => setAuthView('forgot-password')}
+          onBack={() => setAuthView('login')}
+        />
+      );
+    }
+
+    if (authView === 'forgot-password') {
+      return <ForgotPasswordPage onBackToLogin={() => setAuthView('operator')} />;
+    }
+
+    if (authView === 'forgot-pin') {
+      return <ForgotPinPage onBackToLogin={() => setAuthView('login')} />;
+    }
+
+    if (authView === 'register') {
+      return (
+        <CreateAccountPage
+          onClose={() => setAuthView('welcome')}
+          onRegistered={(session) => {
+            setSignupSession(session);
+            setAuthView('verify-phone');
+          }}
+        />
+      );
+    }
+
+    if (authView === 'verify-phone' && signupSession) {
+      return (
+        <VerifyPhonePage
+          phone={signupSession.phone}
+          demoCode={signupSession.otpCode}
+          onBack={() => setAuthView('register')}
+          onVerified={(token) => {
+            setSignupSession({
+              ...signupSession,
+              token: token || signupSession.token,
+            });
+            setAuthView('secure-account');
+          }}
+        />
+      );
+    }
+
+    if (authView === 'secure-account' && signupSession) {
+      return (
+        <SecureAccountPage
+          setupToken={signupSession.token}
+          onBack={() => setAuthView('verify-phone')}
+          onComplete={() => {
+            setSignupSession(null);
+            setAuthView('login');
+          }}
+        />
+      );
+    }
+
+    return (
+      <WelcomePage
+        onCreateAccount={() => setAuthView('register')}
+        onLogin={() => setAuthView('login')}
+        onOperatorLogin={() => setAuthView('operator')}
       />
     );
   }
@@ -120,6 +225,7 @@ export const App: React.FC = () => {
 
       <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
         <Header
+          currentUser={currentUser}
           currentTab={currentTab}
           onOpenLogoutModal={() => setIsLogoutModalOpen(true)}
           onToggleSidebar={() => setIsSidebarOpen((open) => !open)}
@@ -139,16 +245,14 @@ export const App: React.FC = () => {
 
             {currentTab === 'subscriptions' && <SubscriptionManagementPage />}
 
-            {currentTab === 'settings' && <SettingsPage />}
+            {currentTab === 'settings' && <SettingsPage currentUser={currentUser} />}
           </ErrorBoundary>
         </main>
       </div>
 
-      {/* Log out Confirmation Modal (Matching Figma Frame) */}
       {isLogoutModalOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl w-full max-w-sm overflow-hidden p-6 text-center">
-            {/* Red Warning Icon */}
             <div className="w-12 h-12 rounded-full bg-red-50 text-red-500 border border-red-100 flex items-center justify-center mx-auto mb-3">
               <AlertCircle className="w-6 h-6" />
             </div>
@@ -170,7 +274,7 @@ export const App: React.FC = () => {
               </button>
               <button
                 type="button"
-                onClick={handleLogout}
+                onClick={() => handleLogout('welcome')}
                 className="flex-1 py-2.5 px-4 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl transition-colors shadow-md"
               >
                 Log Out

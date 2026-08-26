@@ -12,6 +12,29 @@ const API_BASE = '/api';
 
 const TOKEN_KEY = 'safealert_auth_token';
 
+export type RegisterPayload = {
+  fullName: string;
+  email: string;
+  phone: string;
+  dob?: string;
+  race?: string;
+  location?: string;
+  emergencyContactName: string;
+  emergencyContactPhone?: string;
+  emergencyContactRelation?: string;
+  profilePhotos?: string[];
+  pin?: string;
+  password?: string;
+};
+
+function readApiError(data: unknown, fallback: string): string {
+  if (data && typeof data === 'object' && 'error' in data) {
+    const error = (data as { error?: unknown }).error;
+    if (typeof error === 'string' && error.trim()) return error;
+  }
+  return fallback;
+}
+
 export const api = {
   // --- Auth & Session ---
   getAuthToken(): string | null {
@@ -34,6 +57,14 @@ export const api = {
     }
   },
 
+  authHeaders(json: boolean = true): HeadersInit {
+    const token = this.getAuthToken();
+    return {
+      ...(json ? { 'Content-Type': 'application/json' } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+  },
+
   async login(
     emailOrPhone: string,
     passwordOrPin: string,
@@ -52,7 +83,7 @@ export const api = {
 
     const data = await res.json();
     if (!res.ok || !data.success) {
-      throw new Error(data.error || 'Authentication failed. Please verify credentials.');
+      throw new Error(readApiError(data, 'Authentication failed. Please verify credentials.'));
     }
 
     this.setAuthToken(data.data.token, remember);
@@ -60,12 +91,8 @@ export const api = {
   },
 
   async getMe(): Promise<{ user: User; groups: ContactGroup[]; activeAlerts: ActiveAlert[] }> {
-    const token = this.getAuthToken();
     const res = await fetch(`${API_BASE}/auth/me`, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
+      headers: this.authHeaders(),
     });
 
     const data = await res.json();
@@ -75,7 +102,7 @@ export const api = {
     return data.data;
   },
 
-  async register(payload: any): Promise<{ user: User; token: string; otpCode: string }> {
+  async register(payload: RegisterPayload): Promise<{ user: User; token: string; otpCode: string }> {
     const res = await fetch(`${API_BASE}/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -83,10 +110,7 @@ export const api = {
     });
     const data = await res.json();
     if (!res.ok || !data.success) {
-      throw new Error(data.error || 'Registration failed');
-    }
-    if (data.data?.token) {
-      this.setAuthToken(data.data.token);
+      throw new Error(readApiError(data, 'Registration failed'));
     }
     return data.data;
   },
@@ -99,7 +123,7 @@ export const api = {
     });
     const data = await res.json();
     if (!res.ok || !data.success) {
-      throw new Error(data.error || 'Failed to send OTP');
+      throw new Error(readApiError(data, 'Failed to send OTP'));
     }
     return data.data;
   },
@@ -112,10 +136,63 @@ export const api = {
     });
     const data = await res.json();
     if (!res.ok || !data.success) {
-      throw new Error(data.error || 'Verification failed');
+      throw new Error(readApiError(data, 'Verification failed'));
     }
-    if (data.data?.token) {
-      this.setAuthToken(data.data.token);
+    return data.data;
+  },
+
+  async setupPin(pin: string, token?: string): Promise<{ success: boolean; message: string }> {
+    const authToken = token || this.getAuthToken();
+    const res = await fetch(`${API_BASE}/auth/pin/setup`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      },
+      body: JSON.stringify({ pin }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to save PIN.'));
+    }
+    return data.data;
+  },
+
+  async requestPinReset(phone: string): Promise<{ phone: string; code?: string; expiresInMinutes: number }> {
+    const res = await fetch(`${API_BASE}/auth/pin/forgot`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to send verification code.'));
+    }
+    return data.data;
+  },
+
+  async verifyPinResetOtp(phone: string, code: string): Promise<{ verified: boolean }> {
+    const res = await fetch(`${API_BASE}/auth/pin/verify-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, code }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Invalid verification code.'));
+    }
+    return data.data;
+  },
+
+  async resetPin(phone: string, code: string, newPin: string): Promise<{ message: string }> {
+    const res = await fetch(`${API_BASE}/auth/pin/reset`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, code, newPin }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to update PIN.'));
     }
     return data.data;
   },
@@ -166,9 +243,8 @@ export const api = {
   // --- Dashboard Metrics ---
   async getMetrics(): Promise<DashboardMetrics> {
     try {
-      const token = this.getAuthToken();
       const res = await fetch(`${API_BASE}/dashboard/metrics`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: this.authHeaders(false),
       });
       if (!res.ok) throw new Error('Failed to fetch metrics');
       const data = await res.json();
@@ -248,7 +324,7 @@ export const api = {
   async getUsers(query?: string): Promise<User[]> {
     try {
       const url = query ? `${API_BASE}/dashboard/users?q=${encodeURIComponent(query)}` : `${API_BASE}/dashboard/users`;
-      const res = await fetch(url);
+      const res = await fetch(url, { headers: this.authHeaders(false) });
       if (!res.ok) throw new Error('Failed to fetch users');
       const data = await res.json();
       return data.data;
@@ -339,6 +415,7 @@ export const api = {
   async toggleUserVerification(id: string): Promise<User> {
     const res = await fetch(`${API_BASE}/dashboard/users/${id}/verify`, {
       method: 'PATCH',
+      headers: this.authHeaders(false),
     });
     if (!res.ok) throw new Error('Failed to toggle verification');
     const data = await res.json();
@@ -348,7 +425,7 @@ export const api = {
   // --- Active Alerts ---
   async getActiveAlerts(): Promise<ActiveAlert[]> {
     try {
-      const res = await fetch(`${API_BASE}/alerts/active`);
+      const res = await fetch(`${API_BASE}/alerts/active`, { headers: this.authHeaders(false) });
       if (!res.ok) throw new Error('Failed to fetch active alerts');
       const data = await res.json();
       return data.data;
@@ -466,7 +543,7 @@ export const api = {
   }): Promise<ActiveAlert> {
     const res = await fetch(`${API_BASE}/alerts/trigger`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.authHeaders(),
       body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error('Failed to trigger alert');
@@ -482,7 +559,7 @@ export const api = {
   }): Promise<ActiveAlert> {
     const res = await fetch(`${API_BASE}/alerts/${alertId}/resolve`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.authHeaders(),
       body: JSON.stringify(payload),
     });
     if (!res.ok) {
@@ -496,7 +573,9 @@ export const api = {
   // --- Emergency Types ---
   async getEmergencyTypes(): Promise<EmergencyType[]> {
     try {
-      const res = await fetch(`${API_BASE}/dashboard/emergency-types`);
+      const res = await fetch(`${API_BASE}/dashboard/emergency-types`, {
+        headers: this.authHeaders(false),
+      });
       if (!res.ok) throw new Error('Failed to fetch emergency types');
       const data = await res.json();
       return data.data;
@@ -563,6 +642,7 @@ export const api = {
   async toggleEmergencyType(id: string): Promise<EmergencyType> {
     const res = await fetch(`${API_BASE}/dashboard/emergency-types/${id}/toggle`, {
       method: 'PATCH',
+      headers: this.authHeaders(false),
     });
     if (!res.ok) throw new Error('Failed to toggle emergency type');
     const data = await res.json();
@@ -572,7 +652,7 @@ export const api = {
   async createEmergencyType(payload: Partial<EmergencyType>): Promise<EmergencyType> {
     const res = await fetch(`${API_BASE}/dashboard/emergency-types`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.authHeaders(),
       body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error('Failed to create emergency type');
@@ -583,7 +663,9 @@ export const api = {
   // --- Subscriptions ---
   async getSubscriptions(): Promise<SubscriptionPlan[]> {
     try {
-      const res = await fetch(`${API_BASE}/dashboard/subscriptions`);
+      const res = await fetch(`${API_BASE}/dashboard/subscriptions`, {
+        headers: this.authHeaders(false),
+      });
       if (!res.ok) throw new Error('Failed to fetch subscriptions');
       const data = await res.json();
       return data.data;
@@ -628,7 +710,7 @@ export const api = {
   // --- Journals / Incident Logs ---
   async getJournals(): Promise<HistoricalJournal[]> {
     try {
-      const res = await fetch(`${API_BASE}/journals`);
+      const res = await fetch(`${API_BASE}/journals`, { headers: this.authHeaders(false) });
       if (!res.ok) throw new Error('Failed to fetch journals');
       const data = await res.json();
       return data.data;
@@ -689,7 +771,9 @@ export const api = {
   // --- Contact Groups for User ---
   async getContactGroups(userId: string = "usr-sarah-101"): Promise<ContactGroup[]> {
     try {
-      const res = await fetch(`${API_BASE}/contacts/groups?userId=${userId}`);
+      const res = await fetch(`${API_BASE}/contacts/groups?userId=${userId}`, {
+        headers: this.authHeaders(false),
+      });
       if (!res.ok) throw new Error('Failed to fetch groups');
       const data = await res.json();
       return data.data;

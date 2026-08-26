@@ -1,14 +1,24 @@
 import React, { useState } from 'react';
 import { User, FileText, Info, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { User as AccountUser } from '../types';
 
-export const SettingsPage: React.FC = () => {
+const roleLabel: Record<AccountUser['role'], string> = {
+  SUPER_ADMIN: 'Super Admin',
+  OPS_ADMIN: 'Ops Dispatcher',
+  USER: 'Citizen',
+};
+
+interface SettingsPageProps {
+  currentUser: AccountUser;
+}
+
+export const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
   const [activeSubTab, setActiveSubTab] = useState<'profile' | 'about' | 'terms' | 'privacy'>('profile');
 
-  // Form States
-  const [profileName, setProfileName] = useState('Admin User');
-  const [profilePhone, setProfilePhone] = useState('+1 (555) 000-0001');
-  const [profileRole, setProfileRole] = useState('Super Admin');
-  const [profileEmail, setProfileEmail] = useState('admin@safealert.app');
+  const [profileName, setProfileName] = useState(currentUser.fullName);
+  const [profilePhone, setProfilePhone] = useState(currentUser.phone);
+  const [profileRole, setProfileRole] = useState(roleLabel[currentUser.role]);
+  const [profileEmail, setProfileEmail] = useState(currentUser.email);
 
   const [termsText, setTermsText] = useState(
     `1. Acceptance of Terms\nBy accessing and using the SafeAlert Emergency Operations Platform, you accept and agree to be bound by the terms and provisions of this agreement.\n\n2. Emergency Dispatch and Telemetry Usage\nAll telemetry, GPS broadcasts, and emergency dispatch communications transmitted via this system are strictly for crisis de-escalation, rapid responder coordination, and community safety protection.`
@@ -101,9 +111,9 @@ export const SettingsPage: React.FC = () => {
               </label>
               <input
                 type="text"
+                readOnly
                 value={profileRole}
-                onChange={(e) => setProfileRole(e.target.value)}
-                className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-xs text-gray-800 focus:outline-none focus:border-blue-500 shadow-sm"
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-xs text-gray-800 focus:outline-none shadow-sm"
               />
             </div>
 

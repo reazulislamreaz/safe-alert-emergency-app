@@ -7,13 +7,28 @@ import {
   Patch,
   Post,
   Query,
+  UseGuards,
 } from "@nestjs/common";
-import { ApiNotFoundResponse, ApiOperation, ApiParam, ApiQuery, ApiTags } from "@nestjs/swagger";
+import {
+  ApiBearerAuth,
+  ApiNotFoundResponse,
+  ApiOperation,
+  ApiParam,
+  ApiQuery,
+  ApiTags,
+} from "@nestjs/swagger";
+import { Role } from "@prisma/client";
 import { DashboardService } from "./dashboard.service";
 import { CreateEmergencyTypeDto } from "./dto/emergency-type.dto";
+import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
+import { RolesGuard } from "../../common/guards/roles.guard";
+import { Roles } from "../../common/decorators/roles.decorator";
 
 @ApiTags("Dashboard")
+@ApiBearerAuth("access-token")
 @Controller("api/dashboard")
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(Role.OPS_ADMIN, Role.SUPER_ADMIN)
 export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 

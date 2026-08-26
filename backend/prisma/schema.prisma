@@ -89,6 +89,7 @@ model PhoneOtp {
   code       String
   expiresAt  DateTime
   attempts   Int      @default(0)
+  verified   Boolean  @default(false)
 
   @@map("phone_otps")
 }

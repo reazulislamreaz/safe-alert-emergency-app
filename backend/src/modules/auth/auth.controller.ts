@@ -11,7 +11,7 @@ import { AuthService } from "./auth.service";
 import { RegisterDto } from "./dto/register.dto";
 import { LoginDto } from "./dto/login.dto";
 import { SendOtpDto, VerifyOtpDto } from "./dto/otp.dto";
-import { SetupPinDto, VerifyPinDto } from "./dto/pin.dto";
+import { ForgotPinDto, ResetPinDto, SetupPinDto, VerifyPinDto, VerifyPinResetDto } from "./dto/pin.dto";
 import { ForgotPasswordDto, ResetPasswordDto, VerifyResetOtpDto } from "./dto/password-reset.dto";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { OptionalJwtGuard } from "../../common/guards/optional-jwt.guard";
@@ -59,9 +59,39 @@ export class AuthController {
 
   @Post("pin/setup")
   @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth("access-token")
   @ApiOperation({ summary: "Set or update a 4-digit security PIN" })
-  async setupPin(@Body() dto: SetupPinDto) {
-    const data = await this.authService.setupPin(dto.userId, dto.pin);
+  async setupPin(@Body() dto: SetupPinDto, @CurrentUser() user: JwtPayload) {
+    const data = await this.authService.setupPin(user.sub, dto.pin);
+    return { success: true, data };
+  }
+
+  @Post("pin/forgot")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Request a PIN-reset OTP by phone" })
+  async forgotPin(@Body() dto: ForgotPinDto) {
+    const data = await this.authService.requestPinReset(dto.phone);
+    return {
+      success: true,
+      message: "If an account exists for this phone, a verification code has been sent.",
+      data,
+    };
+  }
+
+  @Post("pin/verify-otp")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Verify PIN-reset OTP" })
+  async verifyPinResetOtp(@Body() dto: VerifyPinResetDto) {
+    const data = await this.authService.verifyPinResetOtp(dto.phone, dto.code);
+    return { success: true, data };
+  }
+
+  @Post("pin/reset")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Set a new 4-digit PIN with a verified OTP" })
+  async resetPin(@Body() dto: ResetPinDto) {
+    const data = await this.authService.resetPin(dto.phone, dto.code, dto.newPin);
     return { success: true, data };
   }
 

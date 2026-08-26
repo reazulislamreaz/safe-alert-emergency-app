@@ -11,6 +11,10 @@ export interface User {
   createdAt: string;
 }
 
+export function isOperatorRole(role: User['role']): boolean {
+  return role === 'OPS_ADMIN' || role === 'SUPER_ADMIN';
+}
+
 export interface TelemetryPoint {
   latitude: number;
   longitude: number;

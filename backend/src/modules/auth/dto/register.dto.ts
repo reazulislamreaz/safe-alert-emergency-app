@@ -36,15 +36,15 @@ export class RegisterDto {
   @MinLength(2, { message: "Emergency contact name required" })
   emergencyContactName!: string;
 
-  @ApiProperty({ example: "+1 (555) 987-6543" })
+  @ApiPropertyOptional({ example: "+1 (555) 987-6543" })
+  @IsOptional()
   @IsString()
-  @MinLength(7, { message: "Emergency contact phone required" })
-  emergencyContactPhone!: string;
+  emergencyContactPhone?: string;
 
-  @ApiProperty({ example: "Father" })
+  @ApiPropertyOptional({ example: "Father" })
+  @IsOptional()
   @IsString()
-  @MinLength(2, { message: "Relationship required" })
-  emergencyContactRelation!: string;
+  emergencyContactRelation?: string;
 
   @ApiPropertyOptional({
     type: [String],

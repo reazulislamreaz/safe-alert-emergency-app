@@ -1,15 +1,49 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsOptional, IsString, Matches } from "class-validator";
+import { IsOptional, IsString, Length, Matches, MinLength } from "class-validator";
 
 export class SetupPinDto {
-  @ApiProperty({ example: "usr-sarah-101" })
-  @IsString()
-  userId!: string;
-
   @ApiProperty({ example: "1234" })
   @IsString()
   @Matches(/^\d{4}$/, { message: "Security PIN must be exactly 4 digits" })
   pin!: string;
+}
+
+export class ForgotPinDto {
+  @ApiProperty({ example: "+1 (555) 234-5678" })
+  @IsString()
+  @MinLength(7, { message: "Valid phone number is required" })
+  phone!: string;
+}
+
+export class VerifyPinResetDto {
+  @ApiProperty({ example: "+1 (555) 234-5678" })
+  @IsString()
+  @MinLength(7, { message: "Valid phone number is required" })
+  phone!: string;
+
+  @ApiProperty({ example: "123456" })
+  @IsString()
+  @Length(6, 6, { message: "Verification code must be 6 digits" })
+  @Matches(/^\d{6}$/, { message: "Verification code must be 6 digits" })
+  code!: string;
+}
+
+export class ResetPinDto {
+  @ApiProperty({ example: "+1 (555) 234-5678" })
+  @IsString()
+  @MinLength(7, { message: "Valid phone number is required" })
+  phone!: string;
+
+  @ApiProperty({ example: "123456" })
+  @IsString()
+  @Length(6, 6, { message: "Verification code must be 6 digits" })
+  @Matches(/^\d{6}$/, { message: "Verification code must be 6 digits" })
+  code!: string;
+
+  @ApiProperty({ example: "1234" })
+  @IsString()
+  @Matches(/^\d{4}$/, { message: "Security PIN must be exactly 4 digits" })
+  newPin!: string;
 }
 
 export class VerifyPinDto {

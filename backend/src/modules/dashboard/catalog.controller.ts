@@ -1,6 +1,10 @@
-import { Controller, Get } from "@nestjs/common";
-import { ApiOperation, ApiTags } from "@nestjs/swagger";
+import { Controller, Get, UseGuards } from "@nestjs/common";
+import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
+import { Role } from "@prisma/client";
 import { DashboardService } from "../dashboard/dashboard.service";
+import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
+import { RolesGuard } from "../../common/guards/roles.guard";
+import { Roles } from "../../common/decorators/roles.decorator";
 
 @ApiTags("Catalog")
 @Controller("api")
@@ -15,6 +19,9 @@ export class CatalogController {
   }
 
   @Get("journals")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.OPS_ADMIN, Role.SUPER_ADMIN)
+  @ApiBearerAuth("access-token")
   @ApiOperation({ summary: "Historical incident journals" })
   async journals() {
     const data = await this.dashboardService.getJournals();

@@ -1,13 +1,25 @@
 import React, { useState } from 'react';
 import { Menu } from 'lucide-react';
+import { User } from '../../types';
 
 interface HeaderProps {
+  currentUser: User;
   currentTab: string;
   onOpenLogoutModal: () => void;
   onToggleSidebar: () => void;
 }
 
+function initialsFor(name: string): string {
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('');
+}
+
 export const Header: React.FC<HeaderProps> = ({
+  currentUser,
   currentTab,
   onOpenLogoutModal,
   onToggleSidebar,
@@ -87,9 +99,11 @@ export const Header: React.FC<HeaderProps> = ({
           className="flex items-center gap-2.5 cursor-pointer p-1.5 rounded-xl hover:bg-gray-100 transition-colors touch-manipulation"
         >
           <div className="w-8 h-8 rounded-full bg-[#2563EB] flex items-center justify-center font-bold text-xs text-white shadow-sm">
-            AU
+            {initialsFor(currentUser.fullName) || 'OP'}
           </div>
-          <span className="text-xs font-bold text-gray-800 hidden sm:inline">Admin User</span>
+          <span className="text-xs font-bold text-gray-800 hidden sm:inline">
+            {currentUser.fullName}
+          </span>
         </button>
       </div>
     </header>

@@ -55,8 +55,8 @@ export class AuthService {
         race: dto.race,
         location: dto.location,
         emergencyContactName: dto.emergencyContactName,
-        emergencyContactPhone: dto.emergencyContactPhone,
-        emergencyContactRelation: dto.emergencyContactRelation,
+        emergencyContactPhone: dto.emergencyContactPhone || dto.phone,
+        emergencyContactRelation: dto.emergencyContactRelation || "Emergency Contact",
         profilePhotos: dto.profilePhotos ?? [],
         avatar:
           dto.profilePhotos?.[0] ||
@@ -72,8 +72,8 @@ export class AuthService {
               create: {
                 id: `mem-${crypto.randomUUID().slice(0, 8)}`,
                 name: dto.emergencyContactName,
-                phone: dto.emergencyContactPhone,
-                relationship: dto.emergencyContactRelation,
+                phone: dto.emergencyContactPhone || dto.phone,
+                relationship: dto.emergencyContactRelation || "Emergency Contact",
               },
             },
           },
@@ -98,8 +98,8 @@ export class AuthService {
 
     await this.prisma.phoneOtp.upsert({
       where: { phone: cleanPhone },
-      create: { phone: cleanPhone, code, expiresAt, attempts: 0 },
-      update: { code, expiresAt, attempts: 0 },
+      create: { phone: cleanPhone, code, expiresAt, attempts: 0, verified: false },
+      update: { code, expiresAt, attempts: 0, verified: false },
     });
 
     return {
@@ -297,6 +297,100 @@ export class AuthService {
     ]);
 
     return { message: "Password updated successfully." };
+  }
+
+  async requestPinReset(phone: string) {
+    const cleanPhone = digitsOnly(phone);
+    const user = await this.prisma.user.findFirst({ where: { phoneDigits: cleanPhone } });
+
+    if (!user) {
+      throw new NotFoundException("No account found with this phone number.");
+    }
+
+    return this.sendPhoneOtp(user.phone);
+  }
+
+  async verifyPinResetOtp(phone: string, code: string) {
+    const record = await this.getActivePhoneOtp(phone);
+
+    if (record.code !== code) {
+      await this.recordFailedPhoneOtpAttempt(record.phone);
+      throw new BadRequestException("Invalid verification code. Please check and try again.");
+    }
+
+    await this.prisma.phoneOtp.update({
+      where: { phone: record.phone },
+      data: { verified: true },
+    });
+
+    return { verified: true, message: "Phone verified. You may now set a new PIN." };
+  }
+
+  async resetPin(phone: string, code: string, newPin: string) {
+    if (!/^\d{4}$/.test(newPin)) {
+      throw new BadRequestException("PIN must be a 4-digit number.");
+    }
+
+    const record = await this.getActivePhoneOtp(phone);
+
+    if (record.code !== code) {
+      throw new BadRequestException("Invalid verification code. Please request a new code.");
+    }
+
+    if (!record.verified) {
+      throw new BadRequestException("Please verify the code before setting a new PIN.");
+    }
+
+    const user = await this.prisma.user.findFirst({
+      where: { phoneDigits: record.phone },
+    });
+    if (!user) {
+      throw new NotFoundException("User account not found.");
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: user.id },
+        data: { pinHash: await hash(newPin, 10) },
+      }),
+      this.prisma.phoneOtp.delete({ where: { phone: record.phone } }),
+    ]);
+
+    return { message: "PIN updated successfully." };
+  }
+
+  private async getActivePhoneOtp(phone: string) {
+    const cleanPhone = digitsOnly(phone);
+    const record = await this.prisma.phoneOtp.findUnique({ where: { phone: cleanPhone } });
+
+    if (!record) {
+      throw new BadRequestException(
+        "No pending verification found for this phone number. Please request a new code.",
+      );
+    }
+
+    if (Date.now() > record.expiresAt.getTime()) {
+      await this.prisma.phoneOtp.delete({ where: { phone: cleanPhone } });
+      throw new BadRequestException("Verification code has expired. Please request a new code.");
+    }
+
+    return record;
+  }
+
+  private async recordFailedPhoneOtpAttempt(phone: string) {
+    const record = await this.prisma.phoneOtp.findUnique({ where: { phone } });
+    if (!record) return;
+
+    const attempts = record.attempts + 1;
+    if (attempts >= 5) {
+      await this.prisma.phoneOtp.delete({ where: { phone } });
+      throw new BadRequestException("Too many failed attempts. Verification code invalidated.");
+    }
+
+    await this.prisma.phoneOtp.update({
+      where: { phone },
+      data: { attempts },
+    });
   }
 
   private async getActiveEmailOtp(email: string) {
