@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { User, FileText, Info, ShieldCheck, CheckCircle2 } from 'lucide-react';
 import { User as AccountUser } from '../types';
+import { api } from '../services/api';
 
 const roleLabel: Record<AccountUser['role'], string> = {
   SUPER_ADMIN: 'Super Admin',
@@ -9,9 +10,10 @@ const roleLabel: Record<AccountUser['role'], string> = {
 
 interface SettingsPageProps {
   currentUser: AccountUser;
+  onProfileUpdated?: (user: AccountUser) => void;
 }
 
-export const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
+export const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser, onProfileUpdated }) => {
   const [activeSubTab, setActiveSubTab] = useState<'profile' | 'about' | 'terms' | 'privacy'>('profile');
 
   const [profileName, setProfileName] = useState(currentUser.fullName);
@@ -19,24 +21,53 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
   const [profileRole, setProfileRole] = useState(roleLabel[currentUser.role]);
   const [profileEmail, setProfileEmail] = useState(currentUser.email);
 
-  const [termsText, setTermsText] = useState(
-    `1. Acceptance of Terms\nBy accessing and using the SafeAlert Emergency Operations Platform, you accept and agree to be bound by the terms and provisions of this agreement.\n\n2. Emergency Dispatch and Telemetry Usage\nAll telemetry, GPS broadcasts, and emergency dispatch communications transmitted via this system are strictly for crisis de-escalation, rapid responder coordination, and community safety protection.`
-  );
-
-  const [aboutText, setAboutText] = useState(
-    `SafeAlert is a next-generation emergency alert and responder coordination system designed to protect individuals, families, and organizations in mission-critical crisis situations through high-precision telemetry, multi-party live dispatch bridges, and rapid response networks.`
-  );
-
-  const [privacyText, setPrivacyText] = useState(
-    `SafeAlert collects live telemetry, location coordinates, and audio/chat transmissions exclusively during active SOS broadcast cycles. Encrypted transmission channels and strict access controls ensure all citizen data remains confidential and audit-compliant.`
-  );
+  const [termsText, setTermsText] = useState('');
+  const [aboutText, setAboutText] = useState('');
+  const [privacyText, setPrivacyText] = useState('');
 
   const [savedSuccess, setSavedSuccess] = useState(false);
 
-  const handleSave = (e: React.FormEvent) => {
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      api.getLegalPage('about'),
+      api.getLegalPage('terms'),
+      api.getLegalPage('privacy'),
+    ])
+      .then(([about, terms, privacy]) => {
+        if (cancelled) return;
+        setAboutText(about.body ?? '');
+        setTermsText(terms.body ?? '');
+        setPrivacyText(privacy.body ?? '');
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 3000);
+    try {
+      if (activeSubTab === 'profile') {
+        const data = await api.updateProfile({
+          fullName: profileName,
+          phone: profilePhone,
+          email: profileEmail,
+        });
+        if (data?.user) {
+          onProfileUpdated?.({ ...currentUser, ...data.user });
+        }
+      } else {
+        const slug = activeSubTab === 'about' ? 'about' : activeSubTab === 'terms' ? 'terms' : 'privacy';
+        const body = activeSubTab === 'about' ? aboutText : activeSubTab === 'terms' ? termsText : privacyText;
+        await api.updateLegalPage(slug, body);
+      }
+      setSavedSuccess(true);
+      setTimeout(() => setSavedSuccess(false), 3000);
+    } catch {
+      // Existing success banner is the only feedback surface.
+    }
   };
 
   return (

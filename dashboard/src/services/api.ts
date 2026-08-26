@@ -1,12 +1,40 @@
 import { 
   DashboardMetrics, 
   User, 
+  UserItem,
   EmergencyType, 
-  SubscriptionPlan, 
+  SubscriptionItem,
+  TransactionItem,
   ActiveAlert, 
   HistoricalJournal,
-  ContactGroup 
+  ContactGroup,
+  LiveGroupItem,
 } from '../types';
+
+export interface DashboardUserList {
+  users: UserItem[];
+  total: number;
+}
+
+export interface LiveGroupCounts {
+  all: number;
+  sos: number;
+  fire: number;
+  medical: number;
+  police: number;
+  natural: number;
+  idle: number;
+}
+
+export interface DashboardLiveGroups {
+  groups: LiveGroupItem[];
+  counts: LiveGroupCounts;
+}
+
+export interface DashboardSubscriptions {
+  plans: SubscriptionItem[];
+  transactions: TransactionItem[];
+}
 
 const API_BASE = '/api';
 
@@ -468,174 +496,51 @@ export const api = {
 
   // --- Dashboard Metrics ---
   async getMetrics(): Promise<DashboardMetrics> {
-    try {
-      const res = await fetch(`${API_BASE}/dashboard/metrics`, {
-        headers: this.authHeaders(false),
-      });
-      if (!res.ok) throw new Error('Failed to fetch metrics');
-      const data = await res.json();
-      return data.data;
-    } catch {
-      // Fallback data synced with Figma
-      return {
-        kpis: {
-          totalUsers: { value: 4821, change: "+12% this month" },
-          activeAlerts: { value: 17, change: "+3 today this month" },
-          premiumUsers: { value: 1294, change: "+8% this month" },
-          groupsActive: { value: 342, change: "+5% this month" },
-        },
-        subscriptionSplit: {
-          premium: 1294,
-          free: 1340,
-          monthlyRevenue: 21885,
-          revenueGrowth: "+14% from last month",
-        },
-        recentAlerts: [
-          {
-            id: "rec-1",
-            userName: "Sarah Mitchell",
-            userInitials: "SM",
-            color: "#2563EB",
-            category: "Assault",
-            severity: "Critical",
-            timeAgo: "14 min ago",
-            status: "Active",
-          },
-          {
-            id: "rec-2",
-            userName: "Priya Sharma",
-            userInitials: "PS",
-            color: "#2563EB",
-            category: "Medical Emergency",
-            severity: "Critical",
-            timeAgo: "31 min ago",
-            status: "Active",
-          },
-          {
-            id: "rec-3",
-            userName: "Aisha Johnson",
-            userInitials: "AJ",
-            color: "#2563EB",
-            category: "Car Accident",
-            severity: "High",
-            timeAgo: "1h ago",
-            status: "Resolved",
-          },
-          {
-            id: "rec-4",
-            userName: "Devon Brooks",
-            userInitials: "DB",
-            color: "#2563EB",
-            category: "Vehicle Breakdown",
-            severity: "Urgent",
-            timeAgo: "2h ago",
-            status: "Resolved",
-          },
-          {
-            id: "rec-5",
-            userName: "Nina Torres",
-            userInitials: "NT",
-            color: "#2563EB",
-            category: "Suspicious Person",
-            severity: "Urgent",
-            timeAgo: "3h ago",
-            status: "Resolved",
-          },
-        ],
-      };
+    const res = await fetch(`${API_BASE}/dashboard/metrics`, {
+      headers: this.authHeaders(false),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to fetch metrics'));
     }
+    return data.data;
   },
 
   // --- Users ---
-  async getUsers(query?: string): Promise<User[]> {
-    try {
-      const url = query ? `${API_BASE}/dashboard/users?q=${encodeURIComponent(query)}` : `${API_BASE}/dashboard/users`;
-      const res = await fetch(url, { headers: this.authHeaders(false) });
-      if (!res.ok) throw new Error('Failed to fetch users');
-      const data = await res.json();
-      return data.data;
-    } catch {
-      return [
-        {
-          id: "usr-sarah-101",
-          fullName: "Sarah Johnson",
-          email: "sarah.johnson@example.com",
-          phone: "+1 (555) 234-5678",
-          role: "USER",
-          subscriptionTier: "FREE",
-          isVerified: true,
-          pin: "1234",
-          avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150",
-          createdAt: "2026-07-15T10:00:00Z",
-        },
-        {
-          id: "usr-admin-001",
-          fullName: "Admin User",
-          email: "admin@safealert.app",
-          phone: "+1 (555) 000-0001",
-          role: "SUPER_ADMIN",
-          subscriptionTier: "PREMIUM",
-          isVerified: true,
-          pin: "9999",
-          createdAt: "2026-01-01T00:00:00Z",
-        },
-        {
-          id: "usr-002",
-          fullName: "Sarah Mitchell",
-          email: "s.mitchell@example.com",
-          phone: "+1 (555) 345-6789",
-          role: "USER",
-          subscriptionTier: "PREMIUM",
-          isVerified: true,
-          pin: "1111",
-          createdAt: "2026-06-10T12:30:00Z",
-        },
-        {
-          id: "usr-003",
-          fullName: "Priya Sharma",
-          email: "priya.s@example.com",
-          phone: "+1 (555) 456-7890",
-          role: "USER",
-          subscriptionTier: "PREMIUM",
-          isVerified: true,
-          pin: "2222",
-          createdAt: "2026-05-20T08:15:00Z",
-        },
-        {
-          id: "usr-004",
-          fullName: "Aisha Johnson",
-          email: "aisha.j@example.com",
-          phone: "+1 (555) 567-8901",
-          role: "USER",
-          subscriptionTier: "FREE",
-          isVerified: true,
-          pin: "3333",
-          createdAt: "2026-04-12T14:45:00Z",
-        },
-        {
-          id: "usr-005",
-          fullName: "Devon Brooks",
-          email: "devon.b@example.com",
-          phone: "+1 (555) 678-9012",
-          role: "USER",
-          subscriptionTier: "FREE",
-          isVerified: true,
-          pin: "4444",
-          createdAt: "2026-07-02T19:20:00Z",
-        },
-        {
-          id: "usr-006",
-          fullName: "Nina Torres",
-          email: "nina.t@example.com",
-          phone: "+1 (555) 789-0123",
-          role: "USER",
-          subscriptionTier: "FREE",
-          isVerified: true,
-          pin: "5555",
-          createdAt: "2026-08-01T11:00:00Z",
-        },
-      ];
+  async getUsers(query?: string): Promise<DashboardUserList> {
+    const url = query
+      ? `${API_BASE}/dashboard/users?q=${encodeURIComponent(query)}`
+      : `${API_BASE}/dashboard/users`;
+    const res = await fetch(url, { headers: this.authHeaders(false) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to fetch users'));
     }
+    return data.data;
+  },
+
+  async getLiveGroups(): Promise<DashboardLiveGroups> {
+    const res = await fetch(`${API_BASE}/dashboard/live-groups`, {
+      headers: this.authHeaders(false),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to fetch live groups'));
+    }
+    return data.data;
+  },
+
+  async updateLegalPage(slug: 'about' | 'privacy' | 'terms', body: string, title?: string) {
+    const res = await fetch(`${API_BASE}/dashboard/legal/${slug}`, {
+      method: 'PATCH',
+      headers: this.authHeaders(),
+      body: JSON.stringify({ body, title }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to update page'));
+    }
+    return data.data;
   },
 
   async toggleUserVerification(id: string): Promise<User> {
@@ -1062,71 +967,14 @@ export const api = {
   },
 
   async getEmergencyTypes(): Promise<EmergencyType[]> {
-    try {
-      const res = await fetch(`${API_BASE}/dashboard/emergency-types`, {
-        headers: this.authHeaders(false),
-      });
-      if (!res.ok) throw new Error('Failed to fetch emergency types');
-      const data = await res.json();
-      return data.data;
-    } catch {
-      return [
-        {
-          id: "et-assault",
-          key: "ASSAULT",
-          label: "Assault & Physical Danger",
-          severity: "CRITICAL",
-          icon: "ShieldAlert",
-          description: "Immediate violent threat or physical harassment",
-          isActive: true,
-        },
-        {
-          id: "et-medical",
-          key: "MEDICAL",
-          label: "Medical Emergency",
-          severity: "CRITICAL",
-          icon: "HeartPulse",
-          description: "Severe injury, unconsciousness, cardiac or allergic reaction",
-          isActive: true,
-        },
-        {
-          id: "et-accident",
-          key: "ACCIDENT",
-          label: "Car Accident / Crash",
-          severity: "HIGH",
-          icon: "CarCrash",
-          description: "Vehicular collision or roadside emergency",
-          isActive: true,
-        },
-        {
-          id: "et-breakdown",
-          key: "BREAKDOWN",
-          label: "Vehicle Breakdown",
-          severity: "URGENT",
-          icon: "Wrench",
-          description: "Stranded vehicle on dark or remote road",
-          isActive: true,
-        },
-        {
-          id: "et-suspicious",
-          key: "SUSPICIOUS",
-          label: "Suspicious Person / Stalking",
-          severity: "URGENT",
-          icon: "Eye",
-          description: "Being followed or observing dangerous prowler",
-          isActive: true,
-        },
-        {
-          id: "et-fire",
-          key: "FIRE",
-          label: "Fire & Natural Disaster",
-          severity: "CRITICAL",
-          icon: "Flame",
-          description: "Building fire, gas leak, or environmental hazard",
-          isActive: true,
-        },
-      ];
+    const res = await fetch(`${API_BASE}/dashboard/emergency-types`, {
+      headers: this.authHeaders(false),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to fetch emergency types'));
     }
+    return data.data;
   },
 
   async toggleEmergencyType(id: string): Promise<EmergencyType> {
@@ -1134,67 +982,106 @@ export const api = {
       method: 'PATCH',
       headers: this.authHeaders(false),
     });
-    if (!res.ok) throw new Error('Failed to toggle emergency type');
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to toggle emergency type'));
+    }
     return data.data;
   },
 
-  async createEmergencyType(payload: Partial<EmergencyType>): Promise<EmergencyType> {
+  async createEmergencyType(payload: { label: string; icon?: string }): Promise<EmergencyType> {
     const res = await fetch(`${API_BASE}/dashboard/emergency-types`, {
       method: 'POST',
       headers: this.authHeaders(),
       body: JSON.stringify(payload),
     });
-    if (!res.ok) throw new Error('Failed to create emergency type');
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to create emergency type'));
+    }
+    return data.data;
+  },
+
+  async updateEmergencyType(id: string, payload: { label?: string; icon?: string }): Promise<EmergencyType> {
+    const res = await fetch(`${API_BASE}/dashboard/emergency-types/${id}`, {
+      method: 'PATCH',
+      headers: this.authHeaders(),
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to update emergency type'));
+    }
+    return data.data;
+  },
+
+  async deleteEmergencyType(id: string): Promise<{ id: string; deleted: boolean }> {
+    const res = await fetch(`${API_BASE}/dashboard/emergency-types/${id}`, {
+      method: 'DELETE',
+      headers: this.authHeaders(false),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to delete emergency type'));
+    }
     return data.data;
   },
 
   // --- Subscriptions ---
-  async getSubscriptions(): Promise<SubscriptionPlan[]> {
-    try {
-      const res = await fetch(`${API_BASE}/dashboard/subscriptions`, {
-        headers: this.authHeaders(false),
-      });
-      if (!res.ok) throw new Error('Failed to fetch subscriptions');
-      const data = await res.json();
-      return data.data;
-    } catch {
-      return [
-        {
-          id: "plan-free",
-          name: "Free Basic",
-          priceMonthly: 0,
-          priceYearly: 0,
-          maxContacts: 5,
-          maxGroups: 1,
-          features: [
-            "Instant SOS Trigger",
-            "Live GPS location broadcast",
-            "SMS/Push alerts to 1 group",
-            "Community emergency updates",
-          ],
-          subscriberCount: 1340,
-        },
-        {
-          id: "plan-pro",
-          name: "SafeAlert Pro",
-          priceMonthly: 7.99,
-          priceYearly: 79.99,
-          maxContacts: 25,
-          maxGroups: 5,
-          features: [
-            "Everything in Free",
-            "Multi-party WebRTC Live Video / Audio",
-            "Unlimited Emergency Groups",
-            "Silent SOS & Fake Lock Screen Mode",
-            "30-day Incident Cloud Recordings",
-            "Priority 911/PSAP Auto-Dispatch",
-          ],
-          subscriberCount: 1294,
-        },
-      ];
+  async getSubscriptions(): Promise<DashboardSubscriptions> {
+    const res = await fetch(`${API_BASE}/dashboard/subscriptions`, {
+      headers: this.authHeaders(false),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to fetch subscriptions'));
     }
+    return data.data;
+  },
+
+  async createSubscription(payload: {
+    name: string;
+    price: number;
+    features: string[];
+  }): Promise<SubscriptionItem> {
+    const res = await fetch(`${API_BASE}/dashboard/subscriptions`, {
+      method: 'POST',
+      headers: this.authHeaders(),
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to create subscription'));
+    }
+    return data.data;
+  },
+
+  async updateSubscription(
+    id: string,
+    payload: { name?: string; price?: number; features?: string[] },
+  ): Promise<SubscriptionItem> {
+    const res = await fetch(`${API_BASE}/dashboard/subscriptions/${id}`, {
+      method: 'PATCH',
+      headers: this.authHeaders(),
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to update subscription'));
+    }
+    return data.data;
+  },
+
+  async deleteSubscription(id: string): Promise<{ id: string; deleted: boolean }> {
+    const res = await fetch(`${API_BASE}/dashboard/subscriptions/${id}`, {
+      method: 'DELETE',
+      headers: this.authHeaders(false),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to delete subscription'));
+    }
+    return data.data;
   },
 
   // --- Journals / Incident Logs ---

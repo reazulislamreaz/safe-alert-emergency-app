@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   Users, 
   AlertTriangle, 
@@ -6,65 +6,58 @@ import {
   ShieldCheck, 
   TrendingUp
 } from 'lucide-react';
-import { RecentAlertItem } from '../types';
+import { DashboardMetrics, RecentAlertItem } from '../types';
+import { api } from '../services/api';
 
 interface DashboardPageProps {
   onNavigateToTab: (tab: string) => void;
 }
 
+const EMPTY_METRICS: DashboardMetrics = {
+  kpis: {
+    totalUsers: { value: 0, change: '0% this month' },
+    activeAlerts: { value: 0, change: '+0 today this month' },
+    premiumUsers: { value: 0, change: '0% this month' },
+    groupsActive: { value: 0, change: '0% this month' },
+  },
+  subscriptionSplit: {
+    premium: 0,
+    free: 0,
+    monthlyRevenue: 0,
+    revenueGrowth: '0% from last month',
+  },
+  recentAlerts: [],
+};
+
+function formatCount(value: number): string {
+  return value.toLocaleString('en-US');
+}
+
+function formatRevenue(value: number): string {
+  return `$${Math.round(value).toLocaleString('en-US')}`;
+}
+
 export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigateToTab }) => {
-  const recentAlerts: RecentAlertItem[] = [
-    {
-      id: 'rec-1',
-      userName: 'Sarah Mitchell',
-      userInitials: 'SM',
-      color: '#2563EB',
-      category: 'Assault',
-      severity: 'Critical',
-      timeAgo: '14 min ago',
-      status: 'Active',
-    },
-    {
-      id: 'rec-2',
-      userName: 'Priya Sharma',
-      userInitials: 'PS',
-      color: '#2563EB',
-      category: 'Medical Emergency',
-      severity: 'Critical',
-      timeAgo: '31 min ago',
-      status: 'Active',
-    },
-    {
-      id: 'rec-3',
-      userName: 'Aisha Johnson',
-      userInitials: 'AJ',
-      color: '#2563EB',
-      category: 'Car Accident',
-      severity: 'High',
-      timeAgo: '1h ago',
-      status: 'Resolved',
-    },
-    {
-      id: 'rec-4',
-      userName: 'Devon Brooks',
-      userInitials: 'DB',
-      color: '#2563EB',
-      category: 'Vehicle Breakdown',
-      severity: 'Urgent',
-      timeAgo: '2h ago',
-      status: 'Resolved',
-    },
-    {
-      id: 'rec-5',
-      userName: 'Nina Torres',
-      userInitials: 'NT',
-      color: '#2563EB',
-      category: 'Suspicious Person',
-      severity: 'Urgent',
-      timeAgo: '3h ago',
-      status: 'Resolved',
-    },
-  ];
+  const [metrics, setMetrics] = useState<DashboardMetrics>(EMPTY_METRICS);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.getMetrics()
+      .then((data) => {
+        if (!cancelled) setMetrics(data);
+      })
+      .catch(() => {
+        if (!cancelled) setMetrics(EMPTY_METRICS);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const recentAlerts = metrics.recentAlerts as RecentAlertItem[];
+  const splitTotal = metrics.subscriptionSplit.premium + metrics.subscriptionSplit.free;
+  const premiumPct = splitTotal > 0 ? (metrics.subscriptionSplit.premium / splitTotal) * 100 : 0;
+  const freePct = splitTotal > 0 ? (metrics.subscriptionSplit.free / splitTotal) * 100 : 0;
 
   return (
     <div className="space-y-6">
@@ -87,9 +80,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigateToTab })
         >
           <div>
             <p className="text-xs font-semibold text-gray-400">Total Users</p>
-            <h3 className="text-2xl font-extrabold text-gray-900 mt-1">4,821</h3>
+            <h3 className="text-2xl font-extrabold text-gray-900 mt-1">{formatCount(metrics.kpis.totalUsers.value)}</h3>
             <p className="text-[11px] font-semibold text-emerald-600 mt-1 flex items-center gap-1">
-              +12% this month
+              {metrics.kpis.totalUsers.change}
             </p>
           </div>
           <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
@@ -104,9 +97,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigateToTab })
         >
           <div>
             <p className="text-xs font-semibold text-gray-400">Active Alerts</p>
-            <h3 className="text-2xl font-extrabold text-gray-900 mt-1">17</h3>
+            <h3 className="text-2xl font-extrabold text-gray-900 mt-1">{formatCount(metrics.kpis.activeAlerts.value)}</h3>
             <p className="text-[11px] font-semibold text-red-500 mt-1">
-              +3 today this month
+              {metrics.kpis.activeAlerts.change}
             </p>
           </div>
           <div className="w-11 h-11 rounded-xl bg-red-50 text-red-500 flex items-center justify-center">
@@ -121,9 +114,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigateToTab })
         >
           <div>
             <p className="text-xs font-semibold text-gray-400">Premium Users</p>
-            <h3 className="text-2xl font-extrabold text-gray-900 mt-1">1,294</h3>
+            <h3 className="text-2xl font-extrabold text-gray-900 mt-1">{formatCount(metrics.kpis.premiumUsers.value)}</h3>
             <p className="text-[11px] font-semibold text-emerald-600 mt-1">
-              +8% this month
+              {metrics.kpis.premiumUsers.change}
             </p>
           </div>
           <div className="w-11 h-11 rounded-xl bg-amber-50 text-amber-500 flex items-center justify-center">
@@ -138,9 +131,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigateToTab })
         >
           <div>
             <p className="text-xs font-semibold text-gray-400">Groups Active</p>
-            <h3 className="text-2xl font-extrabold text-gray-900 mt-1">342</h3>
+            <h3 className="text-2xl font-extrabold text-gray-900 mt-1">{formatCount(metrics.kpis.groupsActive.value)}</h3>
             <p className="text-[11px] font-semibold text-emerald-600 mt-1">
-              +5% this month
+              {metrics.kpis.groupsActive.change}
             </p>
           </div>
           <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
@@ -220,10 +213,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigateToTab })
               <div>
                 <div className="flex items-center justify-between text-xs font-medium mb-1.5">
                   <span className="text-gray-700 font-semibold">Premium</span>
-                  <span className="text-gray-500 font-mono">1,294</span>
+                  <span className="text-gray-500 font-mono">{formatCount(metrics.subscriptionSplit.premium)}</span>
                 </div>
                 <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
-                  <div className="bg-amber-500 h-full rounded-full w-[49%]" />
+                  <div className="bg-amber-500 h-full rounded-full" style={{ width: `${premiumPct}%` }} />
                 </div>
               </div>
 
@@ -231,10 +224,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigateToTab })
               <div>
                 <div className="flex items-center justify-between text-xs font-medium mb-1.5">
                   <span className="text-gray-700 font-semibold">Free</span>
-                  <span className="text-gray-500 font-mono">1,340</span>
+                  <span className="text-gray-500 font-mono">{formatCount(metrics.subscriptionSplit.free)}</span>
                 </div>
                 <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
-                  <div className="bg-blue-200 h-full rounded-full w-[51%]" />
+                  <div className="bg-blue-200 h-full rounded-full" style={{ width: `${freePct}%` }} />
                 </div>
               </div>
             </div>
@@ -243,10 +236,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigateToTab })
           {/* Lower Monthly Revenue Stats */}
           <div className="pt-6 border-t border-gray-100 mt-8">
             <p className="text-xs text-gray-400 font-medium">Monthly Revenue</p>
-            <h4 className="text-2xl font-extrabold text-gray-900 mt-1">$21,885</h4>
+            <h4 className="text-2xl font-extrabold text-gray-900 mt-1">{formatRevenue(metrics.subscriptionSplit.monthlyRevenue)}</h4>
             <p className="text-[11px] font-semibold text-emerald-600 mt-1 flex items-center gap-1">
               <TrendingUp className="w-3.5 h-3.5" />
-              +14% from last month
+              {metrics.subscriptionSplit.revenueGrowth}
             </p>
           </div>
         </div>

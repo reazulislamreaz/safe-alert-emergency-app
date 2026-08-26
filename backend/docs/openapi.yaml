@@ -1386,6 +1386,59 @@ paths:
       summary: Create an emergency type
       tags:
         - Dashboard
+  /api/dashboard/emergency-types/{id}:
+    patch:
+      operationId: DashboardController_updateEmergencyType
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            example: et-assault
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateEmergencyTypeDto'
+      responses:
+        '200':
+          description: ''
+        '401':
+          description: Authentication required
+        '403':
+          description: USER tokens cannot access the Dashboard
+        '404':
+          description: Type not found
+      security:
+        - access-token: []
+      summary: Update an emergency type
+      tags:
+        - Dashboard
+    delete:
+      operationId: DashboardController_deleteEmergencyType
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            example: et-assault
+            type: string
+      responses:
+        '200':
+          description: ''
+        '401':
+          description: Authentication required
+        '403':
+          description: USER tokens cannot access the Dashboard
+        '404':
+          description: Type not found
+      security:
+        - access-token: []
+      summary: Delete an unused emergency type
+      tags:
+        - Dashboard
   /api/dashboard/emergency-types/{id}/toggle:
     patch:
       operationId: DashboardController_toggleEmergencyType
@@ -1423,7 +1476,129 @@ paths:
           description: USER tokens cannot access the Dashboard
       security:
         - access-token: []
-      summary: List subscription plans
+      summary: List subscription plans and derived transactions
+      tags:
+        - Dashboard
+    post:
+      operationId: DashboardController_createSubscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSubscriptionPlanDto'
+      responses:
+        '201':
+          description: ''
+        '401':
+          description: Authentication required
+        '403':
+          description: USER tokens cannot access the Dashboard
+      security:
+        - access-token: []
+      summary: Create a subscription plan
+      tags:
+        - Dashboard
+  /api/dashboard/subscriptions/{id}:
+    patch:
+      operationId: DashboardController_updateSubscription
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            example: plan-pro
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSubscriptionPlanDto'
+      responses:
+        '200':
+          description: ''
+        '401':
+          description: Authentication required
+        '403':
+          description: USER tokens cannot access the Dashboard
+        '404':
+          description: Plan not found
+      security:
+        - access-token: []
+      summary: Update a subscription plan
+      tags:
+        - Dashboard
+    delete:
+      operationId: DashboardController_deleteSubscription
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            example: plan-pro
+            type: string
+      responses:
+        '200':
+          description: ''
+        '401':
+          description: Authentication required
+        '403':
+          description: USER tokens cannot access the Dashboard
+        '404':
+          description: Plan not found
+      security:
+        - access-token: []
+      summary: Delete a subscription plan
+      tags:
+        - Dashboard
+  /api/dashboard/live-groups:
+    get:
+      operationId: DashboardController_liveGroups
+      responses:
+        '200':
+          description: Live contact groups with SOS status
+        '401':
+          description: Authentication required
+        '403':
+          description: USER tokens cannot access the Dashboard
+      security:
+        - access-token: []
+      summary: Live contact groups with SOS status and members
+      tags:
+        - Dashboard
+  /api/dashboard/legal/{slug}:
+    patch:
+      operationId: DashboardController_updateLegal
+      parameters:
+        - name: slug
+          required: true
+          in: path
+          schema:
+            example: about
+            enum:
+              - about
+              - privacy
+              - terms
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateLegalPageDto'
+      responses:
+        '200':
+          description: ''
+        '401':
+          description: Authentication required
+        '403':
+          description: USER tokens cannot access the Dashboard
+        '404':
+          description: Page not found
+      security:
+        - access-token: []
+      summary: Update a legal page (about, privacy, terms)
       tags:
         - Dashboard
   /api/dashboard/journals:
@@ -2213,11 +2388,67 @@ components:
           type: boolean
           example: true
       required:
-        - key
         - label
-        - severity
-        - icon
-        - description
+    UpdateEmergencyTypeDto:
+      type: object
+      properties:
+        label:
+          type: string
+          example: Flood / Water Rescue
+        icon:
+          type: string
+          example: ShieldAlert
+        description:
+          type: string
+        severity:
+          enum:
+            - LOW
+            - URGENT
+            - HIGH
+            - CRITICAL
+          type: string
+        isActive:
+          type: boolean
+    CreateSubscriptionPlanDto:
+      type: object
+      properties:
+        name:
+          type: string
+          example: Premium
+        price:
+          type: number
+          example: 5
+        priceMonthly:
+          type: number
+          example: 5
+        features:
+          type: array
+          items:
+            type: string
+      required:
+        - name
+    UpdateSubscriptionPlanDto:
+      type: object
+      properties:
+        name:
+          type: string
+        price:
+          type: number
+        priceMonthly:
+          type: number
+        features:
+          type: array
+          items:
+            type: string
+    UpdateLegalPageDto:
+      type: object
+      properties:
+        body:
+          type: string
+        title:
+          type: string
+      required:
+        - body
     CreateJournalDto:
       type: object
       properties:

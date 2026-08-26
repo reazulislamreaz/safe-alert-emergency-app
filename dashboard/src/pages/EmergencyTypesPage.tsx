@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { 
   Plus, 
   Edit3, 
@@ -18,26 +18,56 @@ import {
   Lock
 } from 'lucide-react';
 import { EmergencyTypeItem } from '../types';
+import { api } from '../services/api';
+
+function isUploadedIcon(icon: string): boolean {
+  return icon.startsWith('/') || icon.startsWith('http://') || icon.startsWith('https://');
+}
+
+function mapIconName(icon: string): string {
+  if (isUploadedIcon(icon)) return icon;
+  if (icon === 'Wallet') return 'Lock';
+  if (icon === 'CloudLightning') return 'Flame';
+  if (icon === 'MoreVertical') return 'AlertTriangle';
+  if (icon === 'CarCrash') return 'Car';
+  return icon;
+}
 
 export const EmergencyTypesPage: React.FC = () => {
-  const [types, setTypes] = useState<EmergencyTypeItem[]>([
-    { id: 'et-1', name: 'Assault', iconName: 'ShieldAlert' },
-    { id: 'et-2', name: 'Medical', iconName: 'HeartPulse' },
-    { id: 'et-3', name: 'Fire', iconName: 'Flame' },
-    { id: 'et-4', name: 'Accident', iconName: 'Car' },
-    { id: 'et-5', name: 'Theft', iconName: 'Lock' },
-    { id: 'et-6', name: 'Stalking', iconName: 'Eye' },
-    { id: 'et-7', name: 'Natural Disaster', iconName: 'Flame' },
-    { id: 'et-8', name: 'Mental Health', iconName: 'Brain' },
-    { id: 'et-9', name: 'Child in Danger', iconName: 'Baby' },
-    { id: 'et-10', name: "I don't feel safe", iconName: 'AlertTriangle' },
-  ]);
+  const [types, setTypes] = useState<EmergencyTypeItem[]>([]);
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingType, setEditingType] = useState<EmergencyTypeItem | null>(null);
   const [typeName, setTypeName] = useState('');
+  const [iconUrl, setIconUrl] = useState('');
+  const [iconFileName, setIconFileName] = useState('');
+  const iconInputRef = useRef<HTMLInputElement | null>(null);
+
+  const resetIconState = () => {
+    setIconUrl('');
+    setIconFileName('');
+    if (iconInputRef.current) iconInputRef.current.value = '';
+  };
+
+  const loadTypes = async () => {
+    const rows = await api.getEmergencyTypes();
+    setTypes(
+      rows.map((row) => ({
+        id: row.id,
+        name: row.label,
+        iconName: mapIconName(row.icon),
+      })),
+    );
+  };
+
+  useEffect(() => {
+    loadTypes().catch(() => setTypes([]));
+  }, []);
 
   const renderIcon = (name: string) => {
+    if (isUploadedIcon(name)) {
+      return <img src={name} alt="" className="w-8 h-8 object-contain" />;
+    }
     switch (name) {
       case 'ShieldAlert':
         return <ShieldAlert className="w-8 h-8 text-gray-800" strokeWidth={1.5} />;
@@ -60,37 +90,74 @@ export const EmergencyTypesPage: React.FC = () => {
     }
   };
 
-  const handleCreate = (e: React.FormEvent) => {
+  const handleIconFile = async (file?: File) => {
+    if (!file) return;
+    try {
+      const uploaded = await api.uploadImages([file]);
+      const url = uploaded.files[0]?.url;
+      if (!url) return;
+      setIconUrl(url);
+      setIconFileName(file.name);
+    } catch {
+      // Keep the existing modal so the admin can retry.
+    }
+  };
+
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!typeName.trim()) return;
-    setTypes([
-      ...types,
-      {
-        id: `et-${Date.now()}`,
-        name: typeName.trim(),
-        iconName: 'ShieldAlert',
-      },
-    ]);
-    setTypeName('');
-    setIsAddModalOpen(false);
+    try {
+      await api.createEmergencyType({
+        label: typeName.trim(),
+        ...(iconUrl ? { icon: iconUrl } : {}),
+      });
+      await loadTypes();
+      setTypeName('');
+      resetIconState();
+      setIsAddModalOpen(false);
+    } catch {
+      // Keep the existing modal so the admin can retry.
+    }
   };
 
-  const handleUpdate = (e: React.FormEvent) => {
+  const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingType || !typeName.trim()) return;
-    setTypes(
-      types.map((t) => (t.id === editingType.id ? { ...t, name: typeName.trim() } : t))
-    );
-    setEditingType(null);
-    setTypeName('');
+    try {
+      await api.updateEmergencyType(editingType.id, {
+        label: typeName.trim(),
+        ...(iconUrl ? { icon: iconUrl } : {}),
+      });
+      await loadTypes();
+      setEditingType(null);
+      setTypeName('');
+      resetIconState();
+    } catch {
+      // Keep the existing modal so the admin can retry.
+    }
   };
 
-  const handleDelete = (id: string) => {
-    setTypes(types.filter((t) => t.id !== id));
+  const handleDelete = async (id: string) => {
+    try {
+      await api.deleteEmergencyType(id);
+      await loadTypes();
+    } catch {
+      await loadTypes();
+    }
   };
 
   return (
     <div className="space-y-6">
+      <input
+        ref={iconInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/gif"
+        className="hidden"
+        onChange={(e) => {
+          handleIconFile(e.target.files?.[0]);
+          e.target.value = '';
+        }}
+      />
       {/* Top Header & Add Button */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-bold text-gray-900 tracking-tight">
@@ -100,6 +167,7 @@ export const EmergencyTypesPage: React.FC = () => {
         <button
           onClick={() => {
             setTypeName('');
+            resetIconState();
             setIsAddModalOpen(true);
           }}
           className="flex items-center gap-2 px-4 py-2 bg-[#2563EB] hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm shrink-0"
@@ -133,6 +201,12 @@ export const EmergencyTypesPage: React.FC = () => {
                   onClick={() => {
                     setEditingType(t);
                     setTypeName(t.name);
+                    if (isUploadedIcon(t.iconName)) {
+                      setIconUrl(t.iconName);
+                      setIconFileName('Icon uploaded');
+                    } else {
+                      resetIconState();
+                    }
                   }}
                   className="p-1 text-blue-600 hover:text-blue-700 transition-colors"
                   title="Edit Type"
@@ -159,7 +233,10 @@ export const EmergencyTypesPage: React.FC = () => {
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
               <h3 className="font-bold text-gray-900 text-sm">Add Type</h3>
               <button
-                onClick={() => setIsAddModalOpen(false)}
+                onClick={() => {
+                  setIsAddModalOpen(false);
+                  resetIconState();
+                }}
                 className="p-1 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100"
               >
                 <X className="w-4 h-4" />
@@ -179,9 +256,12 @@ export const EmergencyTypesPage: React.FC = () => {
               </div>
 
               {/* Upload Icon Box */}
-              <div className="border border-gray-200 border-dashed rounded-xl p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors">
-                <span className="text-xs text-gray-400">Upload Icon</span>
-                <UploadCloud className="w-4 h-4 text-gray-400" />
+              <div
+                className="border border-gray-200 border-dashed rounded-xl p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors"
+                onClick={() => iconInputRef.current?.click()}
+              >
+                <span className="text-xs text-gray-400 truncate pr-2">{iconFileName || 'Upload Icon'}</span>
+                <UploadCloud className="w-4 h-4 text-gray-400 shrink-0" />
               </div>
 
               <button
@@ -202,7 +282,10 @@ export const EmergencyTypesPage: React.FC = () => {
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
               <h3 className="font-bold text-gray-900 text-sm">Edit Type</h3>
               <button
-                onClick={() => setEditingType(null)}
+                onClick={() => {
+                  setEditingType(null);
+                  resetIconState();
+                }}
                 className="p-1 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100"
               >
                 <X className="w-4 h-4" />
@@ -222,9 +305,12 @@ export const EmergencyTypesPage: React.FC = () => {
               </div>
 
               {/* Upload Icon Box */}
-              <div className="border border-gray-200 border-dashed rounded-xl p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors">
-                <span className="text-xs text-gray-400">Upload Icon</span>
-                <UploadCloud className="w-4 h-4 text-gray-400" />
+              <div
+                className="border border-gray-200 border-dashed rounded-xl p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors"
+                onClick={() => iconInputRef.current?.click()}
+              >
+                <span className="text-xs text-gray-400 truncate pr-2">{iconFileName || 'Upload Icon'}</span>
+                <UploadCloud className="w-4 h-4 text-gray-400 shrink-0" />
               </div>
 
               <button

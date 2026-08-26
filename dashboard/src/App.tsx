@@ -47,6 +47,7 @@ export const App: React.FC = () => {
   const [authView, setAuthView] = useState<AuthView>('welcome');
   const [signupSession, setSignupSession] = useState<SignupSession | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
+  const [activeSosCount, setActiveSosCount] = useState(0);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -105,6 +106,23 @@ export const App: React.FC = () => {
   }, [isSidebarOpen]);
 
   const canAccessDashboard = isDashboardAdmin(currentUser, sessionAudience);
+
+  useEffect(() => {
+    if (!canAccessDashboard) {
+      return;
+    }
+    let cancelled = false;
+    api.getMetrics()
+      .then((data) => {
+        if (!cancelled) setActiveSosCount(data.kpis.activeAlerts.value);
+      })
+      .catch(() => {
+        if (!cancelled) setActiveSosCount(0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canAccessDashboard]);
 
   useEffect(() => {
     if (!canAccessDashboard) {
@@ -248,7 +266,7 @@ export const App: React.FC = () => {
         currentTab={currentTab}
         onSelectTab={setCurrentTab}
         onOpenLogoutModal={() => setIsLogoutModalOpen(true)}
-        activeSOSCount={5}
+        activeSOSCount={activeSosCount}
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
       />
@@ -275,7 +293,12 @@ export const App: React.FC = () => {
 
             {currentTab === 'subscriptions' && <SubscriptionManagementPage />}
 
-            {currentTab === 'settings' && <SettingsPage currentUser={currentUser} />}
+            {currentTab === 'settings' && (
+              <SettingsPage
+                currentUser={currentUser}
+                onProfileUpdated={(user) => setCurrentUser(user)}
+              />
+            )}
           </ErrorBoundary>
         </main>
       </div>

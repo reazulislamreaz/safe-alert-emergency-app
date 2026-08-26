@@ -1,108 +1,52 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Search, User as UserIcon } from 'lucide-react';
 import { LiveTacticalMap } from '../components/common/LiveTacticalMap';
 import { LiveGroupItem } from '../types';
+import { api, LiveGroupCounts } from '../services/api';
+
+const EMPTY_COUNTS: LiveGroupCounts = {
+  all: 0,
+  sos: 0,
+  fire: 0,
+  medical: 0,
+  police: 0,
+  natural: 0,
+  idle: 0,
+};
 
 export const LiveGroupStatusPage: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+  const [groups, setGroups] = useState<LiveGroupItem[]>([]);
+  const [counts, setCounts] = useState<LiveGroupCounts>(EMPTY_COUNTS);
+  const [selectedGroup, setSelectedGroup] = useState<LiveGroupItem | null>(null);
 
-  const groups: LiveGroupItem[] = [
-    {
-      id: 'grp-1',
-      code: 'GRP-3391',
-      name: 'Uttara Night Patrol',
-      category: 'MEDICAL',
-      membersCount: 8,
-      timeAgo: '6 min ago',
-      status: 'SOS active',
-      lat: 23.8759,
-      lng: 90.3795,
-      members: [
-        { id: 'm-1', name: 'Rafiq Ahmed', initials: 'RA', color: '#2563EB', role: 'Group Admin', status: 'SOS triggered', timeAgo: '6 min ago' },
-        { id: 'm-2', name: 'Shirin Nahar', initials: 'SN', color: '#2563EB', role: 'Member', status: 'Safe', timeAgo: '1 min ago' },
-        { id: 'm-3', name: 'Kamal Islam', initials: 'KI', color: '#2563EB', role: 'Member', status: 'Safe', timeAgo: '3 min ago' },
-        { id: 'm-4', name: 'Farzana Haque', initials: 'FH', color: '#2563EB', role: 'Member', status: 'Last seen', timeAgo: '12 min ago' },
-      ],
-    },
-    {
-      id: 'grp-2',
-      code: 'GRP-3388',
-      name: 'Farmgate Response Team',
-      category: 'FIRE',
-      membersCount: 12,
-      timeAgo: '41 min ago',
-      status: 'SOS active',
-      lat: 23.7561,
-      lng: 90.3872,
-      members: [
-        { id: 'm-5', name: 'Kabir Hossain', initials: 'KH', color: '#2563EB', role: 'Group Admin', status: 'SOS triggered', timeAgo: '41 min ago' },
-        { id: 'm-6', name: 'Fariha Yasmin', initials: 'FY', color: '#2563EB', role: 'Member', status: 'Safe', timeAgo: '42 min ago' },
-      ],
-    },
-    {
-      id: 'grp-3',
-      code: 'GRP-3360',
-      name: 'Gulshan Watch Circle',
-      category: 'POLICE / SECURITY',
-      membersCount: 5,
-      timeAgo: '38 min ago',
-      status: 'Idle',
-      lat: 23.7925,
-      lng: 90.4078,
-      members: [
-        { id: 'm-7', name: 'Tanvir Islam', initials: 'TI', color: '#2563EB', role: 'Group Admin', status: 'Safe', timeAgo: '38 min ago' },
-      ],
-    },
-    {
-      id: 'grp-4',
-      code: 'GRP-3401',
-      name: 'Riverside Watch',
-      category: 'MEDICAL',
-      membersCount: 6,
-      timeAgo: '14 min ago',
-      status: 'Monitoring',
-      lat: 23.7104,
-      lng: 90.4074,
-      members: [
-        { id: 'm-8', name: 'Farhan Zahed', initials: 'FZ', color: '#2563EB', role: 'Group Admin', status: 'Safe', timeAgo: '14 min ago' },
-      ],
-    },
-    {
-      id: 'grp-5',
-      code: 'GRP-3355',
-      name: 'Dhaka-04 Night Patrol',
-      category: 'MEDICAL',
-      membersCount: 9,
-      timeAgo: '2 min ago',
-      status: 'Resolved' as any,
-      lat: 23.8103,
-      lng: 90.4125,
-      members: [
-        { id: 'm-9', name: 'Mehedi Hasan', initials: 'MH', color: '#2563EB', role: 'Group Admin', status: 'Safe', timeAgo: '2 min ago' },
-      ],
-    },
-    {
-      id: 'grp-6',
-      code: 'GRP-3299',
-      name: 'Mirpur Coastal Watch',
-      category: 'NATURAL DISASTER',
-      membersCount: 15,
-      timeAgo: '1 hr ago',
-      status: 'Monitoring',
-      lat: 23.8223,
-      lng: 90.3654,
-      members: [
-        { id: 'm-10', name: 'Zubair Alom', initials: 'ZA', color: '#2563EB', role: 'Group Admin', status: 'Safe', timeAgo: '1 hr ago' },
-      ],
-    },
-  ];
-
-  const [selectedGroup, setSelectedGroup] = useState<LiveGroupItem>(groups[0]);
+  useEffect(() => {
+    let cancelled = false;
+    api.getLiveGroups()
+      .then((data) => {
+        if (cancelled) return;
+        setGroups(data.groups);
+        setCounts(data.counts);
+        setSelectedGroup((prev) => {
+          const still = prev ? data.groups.find((group) => group.id === prev.id) : undefined;
+          return still ?? data.groups[0] ?? null;
+        });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setGroups([]);
+        setCounts(EMPTY_COUNTS);
+        setSelectedGroup(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const categories = [
-    { id: 'ALL', label: 'All (98)' },
-    { id: 'SOS', label: '🔴 SOS active (3)' },
+    { id: 'ALL', label: `All (${counts.all})` },
+    { id: 'SOS', label: `🔴 SOS active (${counts.sos})` },
     { id: 'FIRE', label: 'Fire' },
     { id: 'MEDICAL', label: 'Medical' },
     { id: 'POLICE', label: 'Police / Security' },
@@ -188,7 +132,7 @@ export const LiveGroupStatusPage: React.FC = () => {
         {/* Left Column: Group Cards (5 cols) */}
         <div className="lg:col-span-5 space-y-3 max-h-[min(22rem,50vh)] lg:max-h-[calc(100vh-190px)] overflow-y-auto pr-1">
           {filteredGroups.map((grp) => {
-            const isSelected = selectedGroup.id === grp.id;
+            const isSelected = selectedGroup?.id === grp.id;
 
             return (
               <div
@@ -255,6 +199,7 @@ export const LiveGroupStatusPage: React.FC = () => {
 
         {/* Right Column: Selected Group View & Dark Map & Member List (7 cols) */}
         <div className="lg:col-span-7">
+          {selectedGroup && (
           <div className="bg-white border border-gray-200 rounded-2xl p-4 sm:p-6 shadow-sm space-y-5 min-w-0">
             {/* Header Title & Badges */}
             <div>
@@ -269,8 +214,14 @@ export const LiveGroupStatusPage: React.FC = () => {
                 </span>
                 <span className="text-xs text-gray-400 font-mono">{selectedGroup.code}</span>
                 <span className="text-gray-300">•</span>
-                <span className="text-xs font-bold text-red-500">
-                  ● SOS active
+                <span className={`text-xs font-bold ${
+                  selectedGroup.status === 'SOS active'
+                    ? 'text-red-500'
+                    : selectedGroup.status === 'Monitoring'
+                    ? 'text-blue-600'
+                    : 'text-gray-400'
+                }`}>
+                  ● {selectedGroup.status}
                 </span>
               </div>
             </div>
@@ -334,6 +285,7 @@ export const LiveGroupStatusPage: React.FC = () => {
               </div>
             </div>
           </div>
+          )}
         </div>
       </div>
     </div>

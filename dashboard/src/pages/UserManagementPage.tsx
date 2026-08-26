@@ -1,116 +1,36 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Search, MoreVertical, X, Check, Shield, MapPin, Mail, Phone, Calendar } from 'lucide-react';
 import { UserItem } from '../types';
+import { api } from '../services/api';
 
 export const UserManagementPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedUser, setSelectedUser] = useState<UserItem | null>(null);
+  const [users, setUsers] = useState<UserItem[]>([]);
+  const [totalUsers, setTotalUsers] = useState(0);
 
-  const initialUsers: UserItem[] = [
-    {
-      id: 'usr-1',
-      name: 'Sarah Mitchell',
-      email: 'smitchell@example.com',
-      initials: 'SM',
-      avatarColor: '#2563EB',
-      plan: 'Premium',
-      status: 'Active',
-      location: 'Austin, TX',
-      joined: 'Jan 15, 2025',
-      alerts: 1,
-    },
-    {
-      id: 'usr-2',
-      name: 'James Okafor',
-      email: 'jokafor@example.com',
-      initials: 'JO',
-      avatarColor: '#2563EB',
-      plan: 'Free',
-      status: 'Active',
-      location: 'Houston, TX',
-      joined: 'Feb 3, 2025',
-      alerts: 0,
-    },
-    {
-      id: 'usr-3',
-      name: 'Priya Sharma',
-      email: 'psharma@example.com',
-      initials: 'PS',
-      avatarColor: '#2563EB',
-      plan: 'Free',
-      status: 'Active',
-      location: 'Dallas, TX',
-      joined: 'Mar 18, 2025',
-      alerts: 1,
-    },
-    {
-      id: 'usr-4',
-      name: 'Carlos Rivera',
-      email: 'crivera@example.com',
-      initials: 'CR',
-      avatarColor: '#2563EB',
-      plan: 'Premium',
-      status: 'Suspended',
-      location: 'San Antonio, TX',
-      joined: 'Nov 5, 2024',
-      alerts: 4,
-    },
-    {
-      id: 'usr-5',
-      name: 'Emily Chen',
-      email: 'echen@example.com',
-      initials: 'EC',
-      avatarColor: '#2563EB',
-      plan: 'Premium',
-      status: 'Active',
-      location: 'Fort Worth, TX',
-      joined: 'Apr 1, 2025',
-      alerts: 0,
-    },
-    {
-      id: 'usr-6',
-      name: 'Marcus Webb',
-      email: 'mwebb@example.com',
-      initials: 'MW',
-      avatarColor: '#2563EB',
-      plan: 'Free',
-      status: 'Active',
-      location: 'El Paso, TX',
-      joined: 'Dec 22, 2024',
-      alerts: 0,
-    },
-    {
-      id: 'usr-7',
-      name: 'Aisha Johnson',
-      email: 'ajohnson@example.com',
-      initials: 'AJ',
-      avatarColor: '#2563EB',
-      plan: 'Premium',
-      status: 'Active',
-      location: 'Arlington, TX',
-      joined: 'Jan 30, 2025',
-      alerts: 1,
-    },
-    {
-      id: 'usr-8',
-      name: 'Ryan Park',
-      email: 'rpark@example.com',
-      initials: 'RP',
-      avatarColor: '#2563EB',
-      plan: 'Free',
-      status: 'Active',
-      location: 'Seattle, WA',
-      joined: 'Feb 14, 2025',
-      alerts: 0,
-    },
-  ];
+  useEffect(() => {
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      api.getUsers(searchQuery.trim() || undefined)
+        .then((data) => {
+          if (cancelled) return;
+          setUsers(data.users);
+          setTotalUsers(data.total);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setUsers([]);
+        });
+    }, searchQuery ? 300 : 0);
 
-  const filteredUsers = initialUsers.filter(
-    (u) =>
-      u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.location.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [searchQuery]);
+
+  const filteredUsers = users;
 
   return (
     <div className="space-y-6">
@@ -121,7 +41,7 @@ export const UserManagementPage: React.FC = () => {
             User Management
           </h2>
           <p className="text-xs text-gray-500 mt-0.5">
-            48 registered users
+            {totalUsers} registered users
           </p>
         </div>
 

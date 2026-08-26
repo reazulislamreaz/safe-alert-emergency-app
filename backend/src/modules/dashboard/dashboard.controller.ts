@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   NotFoundException,
   Param,
@@ -19,7 +20,9 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from "@nestjs/swagger";
-import { CreateEmergencyTypeDto } from "./dto/emergency-type.dto";
+import { CreateEmergencyTypeDto, UpdateEmergencyTypeDto } from "./dto/emergency-type.dto";
+import { CreateSubscriptionPlanDto, UpdateSubscriptionPlanDto } from "./dto/subscription.dto";
+import { UpdateLegalPageDto } from "./dto/legal.dto";
 import { DashboardService } from "./dashboard.service";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { DashboardAdminGuard } from "../../common/guards/dashboard-admin.guard";
@@ -74,6 +77,30 @@ export class DashboardController {
     return { success: true, data };
   }
 
+  @Patch("emergency-types/:id")
+  @ApiOperation({ summary: "Update an emergency type" })
+  @ApiParam({ name: "id", example: "et-assault" })
+  @ApiNotFoundResponse({ description: "Type not found" })
+  async updateEmergencyType(@Param("id") id: string, @Body() dto: UpdateEmergencyTypeDto) {
+    const updated = await this.dashboardService.updateEmergencyType(id, dto);
+    if (!updated) {
+      throw new NotFoundException("Type not found");
+    }
+    return { success: true, data: updated };
+  }
+
+  @Delete("emergency-types/:id")
+  @ApiOperation({ summary: "Delete an unused emergency type" })
+  @ApiParam({ name: "id", example: "et-assault" })
+  @ApiNotFoundResponse({ description: "Type not found" })
+  async deleteEmergencyType(@Param("id") id: string) {
+    const deleted = await this.dashboardService.deleteEmergencyType(id);
+    if (!deleted) {
+      throw new NotFoundException("Type not found");
+    }
+    return { success: true, data: deleted };
+  }
+
   @Patch("emergency-types/:id/toggle")
   @ApiOperation({ summary: "Toggle emergency type active flag" })
   @ApiParam({ name: "id", example: "et-assault" })
@@ -87,9 +114,56 @@ export class DashboardController {
   }
 
   @Get("subscriptions")
-  @ApiOperation({ summary: "List subscription plans" })
+  @ApiOperation({ summary: "List subscription plans and derived transactions" })
   async subscriptions() {
     const data = await this.dashboardService.getSubscriptions();
+    return { success: true, data };
+  }
+
+  @Post("subscriptions")
+  @ApiOperation({ summary: "Create a subscription plan" })
+  async createSubscription(@Body() dto: CreateSubscriptionPlanDto) {
+    const data = await this.dashboardService.createSubscriptionPlan(dto);
+    return { success: true, data };
+  }
+
+  @Patch("subscriptions/:id")
+  @ApiOperation({ summary: "Update a subscription plan" })
+  @ApiParam({ name: "id", example: "plan-pro" })
+  @ApiNotFoundResponse({ description: "Plan not found" })
+  async updateSubscription(@Param("id") id: string, @Body() dto: UpdateSubscriptionPlanDto) {
+    const updated = await this.dashboardService.updateSubscriptionPlan(id, dto);
+    if (!updated) {
+      throw new NotFoundException("Plan not found");
+    }
+    return { success: true, data: updated };
+  }
+
+  @Delete("subscriptions/:id")
+  @ApiOperation({ summary: "Delete a subscription plan" })
+  @ApiParam({ name: "id", example: "plan-pro" })
+  @ApiNotFoundResponse({ description: "Plan not found" })
+  async deleteSubscription(@Param("id") id: string) {
+    const deleted = await this.dashboardService.deleteSubscriptionPlan(id);
+    if (!deleted) {
+      throw new NotFoundException("Plan not found");
+    }
+    return { success: true, data: deleted };
+  }
+
+  @Get("live-groups")
+  @ApiOperation({ summary: "Live contact groups with SOS status and members" })
+  async liveGroups() {
+    const data = await this.dashboardService.getLiveGroups();
+    return { success: true, data };
+  }
+
+  @Patch("legal/:slug")
+  @ApiOperation({ summary: "Update a legal page (about, privacy, terms)" })
+  @ApiParam({ name: "slug", example: "about", enum: ["about", "privacy", "terms"] })
+  @ApiNotFoundResponse({ description: "Page not found" })
+  async updateLegal(@Param("slug") slug: string, @Body() dto: UpdateLegalPageDto) {
+    const data = await this.dashboardService.updateLegalPage(slug, dto);
     return { success: true, data };
   }
 

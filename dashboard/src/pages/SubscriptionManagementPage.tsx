@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   Plus, 
   Check, 
@@ -8,47 +8,11 @@ import {
   Download 
 } from 'lucide-react';
 import { SubscriptionItem, TransactionItem } from '../types';
+import { api } from '../services/api';
 
 export const SubscriptionManagementPage: React.FC = () => {
-  const [plans, setPlans] = useState<SubscriptionItem[]>([
-    {
-      id: 'sub-free',
-      name: 'Free',
-      price: 0,
-      period: 'forever',
-      features: [
-        { text: '2 emergency groups', included: true },
-        { text: 'Up to 5 contacts per group', included: true },
-        { text: 'SOS alerts', included: true },
-        { text: 'Video calls', included: false },
-        { text: 'Unlimited contacts', included: false },
-        { text: 'Incident journal', included: false },
-      ],
-    },
-    {
-      id: 'sub-premium',
-      name: 'Premium',
-      price: 5.0,
-      period: 'month',
-      features: [
-        { text: 'Unlimited groups', included: true },
-        { text: 'Unlimited Contacts per groups', included: true },
-        { text: 'SOS alerts', included: true },
-        { text: 'Group video calls', included: true },
-        { text: 'Incident journal', included: true },
-        { text: 'Wearable integration (coming soon)', included: true },
-      ],
-    },
-  ]);
-
-  const transactions: TransactionItem[] = [
-    { id: 'tx-1', userName: 'Sarah Mitchell', plan: 'Premium', amount: '$10.00', date: 'Aug 1, 2025', status: 'Paid' },
-    { id: 'tx-2', userName: 'James Okafor', plan: 'Free', amount: '$5.00', date: 'Aug 1, 2025', status: 'Paid' },
-    { id: 'tx-3', userName: 'Emily Chen', plan: 'Free', amount: '$5.00', date: 'Jul 31, 2025', status: 'Paid' },
-    { id: 'tx-4', userName: 'Carlos Rivera', plan: 'Premium', amount: '$10.00', date: 'Jul 30, 2025', status: 'Failed' },
-    { id: 'tx-5', userName: 'Aisha Johnson', plan: 'Premium', amount: '$10.00', date: 'Jul 29, 2025', status: 'Paid' },
-    { id: 'tx-6', userName: 'Ryan Park', plan: 'Free', amount: '$5.00', date: 'Jul 28, 2025', status: 'Refunded' },
-  ];
+  const [plans, setPlans] = useState<SubscriptionItem[]>([]);
+  const [transactions, setTransactions] = useState<TransactionItem[]>([]);
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingPlan, setEditingPlan] = useState<SubscriptionItem | null>(null);
@@ -57,6 +21,19 @@ export const SubscriptionManagementPage: React.FC = () => {
   const [modalName, setModalName] = useState('');
   const [modalPrice, setModalPrice] = useState('');
   const [modalFeatures, setModalFeatures] = useState<string[]>(['']);
+
+  const loadSubscriptions = async () => {
+    const data = await api.getSubscriptions();
+    setPlans(data.plans);
+    setTransactions(data.transactions);
+  };
+
+  useEffect(() => {
+    loadSubscriptions().catch(() => {
+      setPlans([]);
+      setTransactions([]);
+    });
+  }, []);
 
   const handleOpenAdd = () => {
     setModalName('');
@@ -86,40 +63,45 @@ export const SubscriptionManagementPage: React.FC = () => {
     setModalFeatures(updated);
   };
 
-  const handleSaveAdd = (e: React.FormEvent) => {
+  const handleSaveAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!modalName.trim()) return;
-    const newPlan: SubscriptionItem = {
-      id: `sub-${Date.now()}`,
-      name: modalName.trim(),
-      price: parseFloat(modalPrice) || 0,
-      period: 'month',
-      features: modalFeatures.filter((f) => f.trim().length > 0).map((f) => ({ text: f, included: true })),
-    };
-    setPlans([...plans, newPlan]);
-    setIsAddModalOpen(false);
+    try {
+      await api.createSubscription({
+        name: modalName.trim(),
+        price: parseFloat(modalPrice) || 0,
+        features: modalFeatures.filter((f) => f.trim().length > 0),
+      });
+      await loadSubscriptions();
+      setIsAddModalOpen(false);
+    } catch {
+      // Keep the existing modal so the admin can retry.
+    }
   };
 
-  const handleSaveEdit = (e: React.FormEvent) => {
+  const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingPlan || !modalName.trim()) return;
-    setPlans(
-      plans.map((p) =>
-        p.id === editingPlan.id
-          ? {
-              ...p,
-              name: modalName.trim(),
-              price: parseFloat(modalPrice) || 0,
-              features: modalFeatures.filter((f) => f.trim().length > 0).map((f) => ({ text: f, included: true })),
-            }
-          : p
-      )
-    );
-    setEditingPlan(null);
+    try {
+      await api.updateSubscription(editingPlan.id, {
+        name: modalName.trim(),
+        price: parseFloat(modalPrice) || 0,
+        features: modalFeatures.filter((f) => f.trim().length > 0),
+      });
+      await loadSubscriptions();
+      setEditingPlan(null);
+    } catch {
+      // Keep the existing modal so the admin can retry.
+    }
   };
 
-  const handleDelete = (id: string) => {
-    setPlans(plans.filter((p) => p.id !== id));
+  const handleDelete = async (id: string) => {
+    try {
+      await api.deleteSubscription(id);
+      await loadSubscriptions();
+    } catch {
+      await loadSubscriptions();
+    }
   };
 
   const exportCSV = () => {
