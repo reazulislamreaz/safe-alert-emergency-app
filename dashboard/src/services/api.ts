@@ -837,6 +837,76 @@ export const api = {
     }
     return data.data;
   },
+
+  async triggerDirectAlert(payload: {
+    userId?: string;
+    emergencyTypeId?: string;
+    latitude?: number;
+    longitude?: number;
+    address?: string;
+    source?: "QUICK" | "SOS" | "DIRECT";
+  }): Promise<ActiveAlert> {
+    const res = await fetch(`${API_BASE}/alerts/direct`, {
+      method: 'POST',
+      headers: this.authHeaders(),
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to send direct emergency alert'));
+    }
+    return data.data;
+  },
+
+  async getAlertMessages(alertId: string, groupId?: string) {
+    const suffix = groupId ? `?groupId=${encodeURIComponent(groupId)}` : "";
+    const res = await fetch(`${API_BASE}/alerts/${alertId}/messages${suffix}`, {
+      headers: this.authHeaders(false),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to load emergency chat'));
+    }
+    return data.data;
+  },
+
+  async sendAlertMessage(alertId: string, text: string, groupId?: string) {
+    const res = await fetch(`${API_BASE}/alerts/${alertId}/messages`, {
+      method: 'POST',
+      headers: this.authHeaders(),
+      body: JSON.stringify({ text, groupId }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to send message'));
+    }
+    return data.data;
+  },
+
+  async getNotifications(query?: string) {
+    const suffix = query ? `?q=${encodeURIComponent(query)}` : "";
+    const res = await fetch(`${API_BASE}/notifications${suffix}`, {
+      headers: this.authHeaders(false),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to load notifications'));
+    }
+    return data.data;
+  },
+
+  async markNotificationRead(id: string) {
+    const res = await fetch(`${API_BASE}/notifications/${id}/read`, {
+      method: 'PATCH',
+      headers: this.authHeaders(),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to mark notification read'));
+    }
+    return data.data;
+  },
+
   async getEmergencyTypes(): Promise<EmergencyType[]> {
     try {
       const res = await fetch(`${API_BASE}/dashboard/emergency-types`, {

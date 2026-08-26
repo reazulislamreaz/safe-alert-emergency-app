@@ -16,6 +16,7 @@ const prisma_service_1 = require("../../prisma/prisma.service");
 const phone_1 = require("../../common/utils/phone");
 const contact_mapper_1 = require("../../common/mappers/contact.mapper");
 const contact_constants_1 = require("./contact.constants");
+const notification_service_1 = require("../notifications/notification.service");
 const contactInclude = {
     memberships: { include: { group: true }, orderBy: { groupId: "asc" } },
 };
@@ -24,8 +25,10 @@ const groupInclude = {
 };
 let ContactService = class ContactService {
     prisma;
-    constructor(prisma) {
+    notifications;
+    constructor(prisma, notifications) {
         this.prisma = prisma;
+        this.notifications = notifications;
     }
     getStatuses() {
         return { statuses: [...contact_constants_1.CONTACT_STATUSES] };
@@ -101,6 +104,10 @@ let ContactService = class ContactService {
                 include: contactInclude,
             });
         });
+        const adder = await this.prisma.user.findUnique({ where: { id: userId } });
+        if (adder) {
+            await this.notifications.notifyContactAdded(adder.fullName.split(" ")[0], contact.phone, contact.id, userId);
+        }
         return (0, contact_mapper_1.toContactDto)(contact);
     }
     async updateContact(userId, contactId, dto) {
@@ -465,6 +472,7 @@ let ContactService = class ContactService {
 exports.ContactService = ContactService;
 exports.ContactService = ContactService = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService])
+    __metadata("design:paramtypes", [prisma_service_1.PrismaService,
+        notification_service_1.NotificationService])
 ], ContactService);
 //# sourceMappingURL=contact.service.js.map

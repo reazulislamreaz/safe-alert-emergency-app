@@ -39,7 +39,9 @@ export function formatDuration(from: Date, to: Date = new Date()): string {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
-export function modeLabel(mode: string): string {
+export function modeLabel(mode: string, source?: string): string {
+  if (source === "QUICK") return "Quick Emergency";
+  if (source === "SOS") return "Direct Emergency";
   return ALERT_MODES.find((item) => item.key === mode)?.shortLabel ?? "Emergency";
 }
 
@@ -54,7 +56,7 @@ export function toAlertDto(alert: AlertRecord) {
     emergencyType: alert.emergencyTypeLabel,
     severity: alert.severity,
     mode: alert.mode,
-    modeLabel: modeLabel(alert.mode),
+    modeLabel: modeLabel(alert.mode, alert.source),
     source: alert.source,
     status: alert.status,
     statusLabel: alert.status === "BROADCASTING" ? "Active Alert" : alert.status === "CANCELLED" ? "Alert Cancelled" : alert.status,
@@ -93,6 +95,7 @@ export function toAlertDto(alert: AlertRecord) {
     liveMessages: alert.liveMessages.map((message) => ({
       id: message.id,
       sender: message.sender,
+      senderUserId: message.senderUserId,
       text: message.text,
       timestamp: message.timestamp,
       type: message.type,

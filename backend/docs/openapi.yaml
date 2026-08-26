@@ -446,6 +446,23 @@ paths:
       summary: Create Emergency Alert / Quick / SOS / Test
       tags:
         - Alerts
+  /api/alerts/direct:
+    post:
+      operationId: AlertsController_direct
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TriggerAlertDto'
+      responses:
+        '201':
+          description: Alert Sent — contacts notified, skip confirmation
+      security:
+        - access-token: []
+      summary: Direct Emergency Alert (SOS hold or Quick Emergency)
+      tags:
+        - Alerts
   /api/alerts/{id}/telemetry:
     post:
       operationId: AlertsController_telemetry
@@ -532,6 +549,53 @@ paths:
       security:
         - access-token: []
       summary: Start Group Video Call
+      tags:
+        - Alerts
+  /api/alerts/{id}/messages:
+    get:
+      operationId: AlertsController_messages
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            example: alt-active-991
+            type: string
+        - name: groupId
+          required: false
+          in: query
+          schema:
+            example: grp-family-01
+            type: string
+      responses:
+        '200':
+          description: Family thread, Online status, chat bubbles
+      security:
+        - access-token: []
+      summary: Emergency group chat
+      tags:
+        - Alerts
+    post:
+      operationId: AlertsController_sendMessage
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            example: alt-active-991
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendAlertMessageDto'
+      responses:
+        '201':
+          description: Message sent
+      security:
+        - access-token: []
+      summary: Send a group chat message
       tags:
         - Alerts
   /api/alerts/{id}/quick-response:
@@ -1164,6 +1228,61 @@ paths:
       summary: Delete a journal entry
       tags:
         - Journal
+  /api/notifications:
+    get:
+      operationId: NotificationsController_list
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+            example: alert
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            example: 20
+      responses:
+        '200':
+          description: Inbox or empty 'No Notification Yet'
+      security:
+        - access-token: []
+      summary: Notification inbox
+      tags:
+        - Notifications
+  /api/notifications/read-all:
+    post:
+      operationId: NotificationsController_readAll
+      responses:
+        '200':
+          description: All marked read
+      security:
+        - access-token: []
+      summary: Mark all notifications read
+      tags:
+        - Notifications
+  /api/notifications/{id}/read:
+    patch:
+      operationId: NotificationsController_read
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: ntf-direct-01
+      responses:
+        '200':
+          description: Notification marked read
+        '404':
+          description: Notification not found
+      security:
+        - access-token: []
+      summary: Mark one notification read
+      tags:
+        - Notifications
 info:
   title: SafeAlert Emergency API
   description: >-
@@ -1432,6 +1551,7 @@ components:
             - MANUAL
             - QUICK
             - SOS
+            - DIRECT
           type: string
           example: MANUAL
         alertAllGroups:
@@ -1502,6 +1622,17 @@ components:
             - CONNECTED
             - CALLING
           type: string
+    SendAlertMessageDto:
+      type: object
+      properties:
+        text:
+          type: string
+          example: I see your location, heading towards you now!
+        groupId:
+          type: string
+          example: grp-family-01
+      required:
+        - text
     UpdateProfileDto:
       type: object
       properties:

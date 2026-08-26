@@ -10,6 +10,7 @@ import { digitsOnly } from "../../common/utils/phone";
 import { toContactDto, toGroupDto, toMemberDto } from "../../common/mappers/contact.mapper";
 import { AddMemberDto, CreateContactDto, CreateGroupDto, UpdateContactDto, UpdateGroupDto } from "./dto/contact.dto";
 import { CONTACT_STATUSES, REFERRAL_COPY } from "./contact.constants";
+import { NotificationService } from "../notifications/notification.service";
 
 export type ListContactsOptions = {
   query?: string;
@@ -27,7 +28,10 @@ const groupInclude = {
 
 @Injectable()
 export class ContactService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationService,
+  ) {}
 
   getStatuses() {
     return { statuses: [...CONTACT_STATUSES] };
@@ -115,6 +119,16 @@ export class ContactService {
         include: contactInclude,
       });
     });
+
+    const adder = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (adder) {
+      await this.notifications.notifyContactAdded(
+        adder.fullName.split(" ")[0],
+        contact.phone,
+        contact.id,
+        userId,
+      );
+    }
 
     return toContactDto(contact);
   }

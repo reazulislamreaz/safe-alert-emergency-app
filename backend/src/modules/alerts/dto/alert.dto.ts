@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { Type } from "class-transformer";
-import { IsBoolean, IsEnum, IsNumber, IsOptional, IsString, Min } from "class-validator";
+import { IsBoolean, IsEnum, IsNumber, IsOptional, IsString, MaxLength, Min, MinLength } from "class-validator";
 import { AlertMode } from "@prisma/client";
 
 export class TriggerAlertDto {
@@ -19,7 +19,7 @@ export class TriggerAlertDto {
   @IsEnum(AlertMode)
   mode?: AlertMode;
 
-  @ApiPropertyOptional({ enum: ["MANUAL", "QUICK", "SOS"], example: "MANUAL" })
+  @ApiPropertyOptional({ enum: ["MANUAL", "QUICK", "SOS", "DIRECT"], example: "MANUAL" })
   @IsOptional()
   @IsString()
   source?: string;
@@ -131,4 +131,17 @@ export class UpdateParticipantDto {
   @IsOptional()
   @IsString()
   status?: "CONNECTED" | "CALLING";
+}
+
+export class SendAlertMessageDto {
+  @ApiProperty({ example: "I see your location, heading towards you now!" })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(2000)
+  text!: string;
+
+  @ApiPropertyOptional({ example: "grp-family-01", description: "Chat thread group (Figma: Family)" })
+  @IsOptional()
+  @IsString()
+  groupId?: string;
 }

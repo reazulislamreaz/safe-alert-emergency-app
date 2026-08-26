@@ -11,6 +11,7 @@ import {
   JournalEntryType,
   JournalSource,
   AlertSource,
+  NotificationType,
 } from "@prisma/client";
 import { hashSync } from "bcryptjs";
 import { digitsOnly } from "../common/utils/phone";
@@ -173,6 +174,71 @@ async function ensureFigmaJournals(prisma: PrismaClient): Promise<void> {
         body: entry.body,
         source: JournalSource.MANUAL,
         triggeredAt: FIGMA_JOURNAL_AT,
+      },
+    });
+  }
+}
+
+async function ensureFigmaNotifications(prisma: PrismaClient): Promise<void> {
+  const sarah = await prisma.user.findUnique({ where: { id: "usr-sarah-101" } });
+  if (!sarah) {
+    return;
+  }
+
+  const now = Date.now();
+  const rows = [
+    {
+      id: "ntf-direct-01",
+      type: NotificationType.DIRECT_ALERT,
+      title: "Direct Alert",
+      body: "Your emergency alert was sent to Family and Work Emergency.",
+      refLabel: "Family",
+      createdAt: new Date(now - 2 * 60 * 1000),
+    },
+    {
+      id: "ntf-received-01",
+      type: NotificationType.ALERT_RECEIVED,
+      title: "Alert Received",
+      body: "A contact in your circle triggered an emergency alert.",
+      refLabel: "Live now",
+      createdAt: new Date(now - 18 * 60 * 1000),
+    },
+    {
+      id: "ntf-added-01",
+      type: NotificationType.CONTACT_ADDED,
+      title: "Someone added you",
+      body: "James Johnson added you as an emergency contact.",
+      refLabel: "James Johnson",
+      createdAt: new Date(now - 3 * 60 * 60 * 1000),
+    },
+    {
+      id: "ntf-sub-01",
+      type: NotificationType.SUBSCRIPTION,
+      title: "Subscription Alert",
+      body: "Your subscription is expired. Renew to keep premium features.",
+      refLabel: "Premium",
+      createdAt: new Date(now - 26 * 60 * 60 * 1000),
+    },
+  ] as const;
+
+  for (const row of rows) {
+    await prisma.notification.upsert({
+      where: { id: row.id },
+      update: {
+        type: row.type,
+        title: row.title,
+        body: row.body,
+        refLabel: row.refLabel,
+        createdAt: row.createdAt,
+      },
+      create: {
+        id: row.id,
+        userId: "usr-sarah-101",
+        type: row.type,
+        title: row.title,
+        body: row.body,
+        refLabel: row.refLabel,
+        createdAt: row.createdAt,
       },
     });
   }
@@ -341,6 +407,7 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
     await ensureFigmaEmergencyTypes(prisma);
     await ensureFigmaContacts(prisma);
     await ensureFigmaJournals(prisma);
+    await ensureFigmaNotifications(prisma);
     return;
   }
 
@@ -475,6 +542,7 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
 
   await ensureFigmaContacts(prisma);
   await ensureFigmaJournals(prisma);
+  await ensureFigmaNotifications(prisma);
 
   await prisma.alert.create({
     data: {

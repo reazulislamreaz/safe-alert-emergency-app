@@ -57,6 +57,9 @@ export class AlertsGateway
     }
 
     const user = socket.data?.user as JwtPayload | undefined;
+    if (user?.sub) {
+      socket.join(`user:${user.sub}`);
+    }
     this.logger.log(
       `Client connected: ${socket.id}${user ? ` (User: ${user.email} [${user.role}])` : " (Guest/Demo)"}`,
     );
@@ -110,6 +113,7 @@ export class AlertsGateway
       senderName,
       data.text,
       MessageType.USER,
+      user?.sub,
     );
     if (updated) {
       this.server.to(`room:${data.alertId}`).emit("alert:messages:update", updated.liveMessages);
@@ -133,6 +137,7 @@ export class AlertsGateway
       senderName,
       text,
       MessageType.QUICK_REPLY,
+      user?.sub,
     );
     if (updated) {
       this.server.to(`room:${data.alertId}`).emit("alert:messages:update", updated.liveMessages);

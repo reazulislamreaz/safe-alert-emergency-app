@@ -18,7 +18,7 @@ export function setupSwagger(app: INestApplication): void {
         "",
         "**Socket.io** (`ws://localhost:5000`, same origin as REST)",
         "- Client → server: `alert:join`, `alert:telemetry`, `alert:message:send`, `alert:quick_response`, `admin:subscribe`",
-        "- Server → client: `alert:state`, `alert:telemetry:update`, `alert:messages:update`, `alert:resolved`, `admin:alert:new`, `admin:alert:resolved`, `admin:alert:telemetry`, `admin:metrics`",
+        "- Server → client: `alert:state`, `alert:telemetry:update`, `alert:messages:update`, `alert:resolved`, `notification:new`, `admin:alert:new`, `admin:alert:resolved`, `admin:alert:telemetry`, `admin:metrics`",
       ].join("\n"),
     )
     .setVersion("1.0.0")
@@ -33,12 +33,13 @@ export function setupSwagger(app: INestApplication): void {
     )
     .addTag("Health", "Process liveness")
     .addTag("Auth", "Register, login, OTP, PIN, password reset")
-    .addTag("Alerts", "Manual Emergency Alert: home, modes, types, live call, cancel")
+    .addTag("Alerts", "Direct + Manual Emergency Alert: SOS hold, Quick, live call, chat, cancel")
     .addTag("Contacts", "Address book, groups, plan limits, and referral invite")
     .addTag("Profile", "Citizen profile, photos, and delete account")
     .addTag("Subscriptions", "Free vs Premium plans")
     .addTag("Legal", "About Us, Privacy Policy, Terms & Conditions")
     .addTag("Journal", "Citizen Incident Journal (Incident, Test, Update)")
+    .addTag("Notifications", "Inbox: Direct Alert, Alert Received, Someone added you")
     .addTag("Catalog", "Public emergency types")
     .addTag("Dashboard", "Admin metrics, users, types, subscriptions, journals")
     .build();

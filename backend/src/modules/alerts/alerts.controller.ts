@@ -7,6 +7,7 @@ import {
   NotFoundException,
   Param,
   Post,
+  Query,
   UseGuards,
 } from "@nestjs/common";
 import {
@@ -14,12 +15,14 @@ import {
   ApiNotFoundResponse,
   ApiOperation,
   ApiParam,
+  ApiQuery,
   ApiTags,
 } from "@nestjs/swagger";
 import { AlertService } from "./alert.service";
 import {
   QuickResponseDto,
   ResolveAlertDto,
+  SendAlertMessageDto,
   TelemetryDto,
   TriggerAlertDto,
   UpdateParticipantDto,
@@ -93,6 +96,21 @@ export class AlertsController {
     return { success: true, data };
   }
 
+  @Post("direct")
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: "Direct Emergency Alert — SOS hold or Quick Emergency, skip confirmation",
+  })
+  async direct(@Body() dto: TriggerAlertDto, @CurrentUser() user: JwtPayload) {
+    const isAdmin = user.role === "OPS_ADMIN" || user.role === "SUPER_ADMIN";
+    const data = await this.alertService.triggerDirect({
+      ...dto,
+      userId: isAdmin && dto.userId ? dto.userId : user.sub,
+    });
+    return { success: true, data };
+  }
+
   @Get(":id/live")
   @ApiOperation({ summary: "View Live Session — map, type, mode, responding contacts" })
   @ApiParam({ name: "id", example: "alt-active-991" })
@@ -108,6 +126,34 @@ export class AlertsController {
   @ApiParam({ name: "id", example: "alt-active-991" })
   async call(@Param("id") id: string, @CurrentUser() user: JwtPayload) {
     const data = await this.alertService.getCallSession(id, user.sub);
+    return { success: true, data };
+  }
+
+  @Get(":id/messages")
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: "Emergency group chat (Figma Message — Family, Online)" })
+  @ApiParam({ name: "id", example: "alt-active-991" })
+  @ApiQuery({ name: "groupId", required: false, example: "grp-family-01" })
+  async messages(
+    @Param("id") id: string,
+    @CurrentUser() user: JwtPayload,
+    @Query("groupId") groupId?: string,
+  ) {
+    const data = await this.alertService.getMessages(id, user.sub, groupId);
+    return { success: true, data };
+  }
+
+  @Post(":id/messages")
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: "Send a group chat message" })
+  @ApiParam({ name: "id", example: "alt-active-991" })
+  async sendMessage(
+    @Param("id") id: string,
+    @Body() dto: SendAlertMessageDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    const data = await this.alertService.sendMessage(id, user.sub, dto);
     return { success: true, data };
   }
 

@@ -67,10 +67,13 @@ export interface ActiveAlert {
   liveMessages: {
     id: string;
     sender: string;
+    senderUserId?: string | null;
     text: string;
     timestamp: string;
     type: "SOS" | "QUICK_REPLY" | "USER";
   }[];
+  sentTitle?: string;
+  sentBody?: string;
   triggeredAt: string;
   resolvedAt?: string;
   resolutionReason?: "SAFE" | "FALSE_ALARM" | "TEST";

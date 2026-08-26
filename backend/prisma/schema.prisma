@@ -66,6 +66,14 @@ enum JournalSource {
   ALERT
 }
 
+enum NotificationType {
+  DIRECT_ALERT
+  ALERT_RECEIVED
+  ALERT_CANCELLED
+  CONTACT_ADDED
+  SUBSCRIPTION
+}
+
 model User {
   id                        String            @id @default(uuid())
   fullName                  String
@@ -96,6 +104,7 @@ model User {
   contacts                  Contact[]
   alerts                    Alert[]
   journals                  Journal[]
+  notifications             Notification[]
 
   @@index([phoneDigits])
   @@index([role])
@@ -244,17 +253,35 @@ model AlertNotifiedGroup {
 }
 
 model LiveMessage {
-  id        String      @id @default(uuid())
-  alertId   String
-  alert     Alert       @relation(fields: [alertId], references: [id], onDelete: Cascade)
-  sender    String
-  text      String
-  timestamp String
-  type      MessageType @default(USER)
-  createdAt DateTime    @default(now())
+  id            String      @id @default(uuid())
+  alertId       String
+  alert         Alert       @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  sender        String
+  senderUserId  String?
+  text          String
+  timestamp     String
+  type          MessageType @default(USER)
+  createdAt     DateTime    @default(now())
 
   @@index([alertId])
   @@map("live_messages")
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  body      String
+  refLabel  String?
+  alertId   String?
+  contactId String?
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  @@index([userId, createdAt])
+  @@map("notifications")
 }
 
 model Journal {

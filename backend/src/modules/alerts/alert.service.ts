@@ -21,6 +21,7 @@ import { RealtimeService } from "../../realtime/realtime.service";
 import { env } from "../../config/env";
 import {
   alertInclude,
+  AlertRecord,
   CallParticipant,
   toAlertDto,
 } from "../../common/mappers/alert.mapper";
@@ -33,11 +34,14 @@ import {
 } from "./alert.constants";
 import {
   QuickResponseDto,
+  SendAlertMessageDto,
   TelemetryDto,
   TriggerAlertDto,
   UpdateParticipantDto,
 } from "./dto/alert.dto";
 import { generateZegoToken04 } from "./zego.util";
+import { NotificationService } from "../notifications/notification.service";
+import { digitsOnly } from "../../common/utils/phone";
 
 const groupWithMembers = {
   members: { orderBy: { name: "asc" as const } },
@@ -48,6 +52,7 @@ export class AlertService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly realtime: RealtimeService,
+    private readonly notifications: NotificationService,
   ) {}
 
   getModes() {
@@ -76,7 +81,7 @@ export class AlertService {
 
   async getHome(userId: string) {
     const user = await this.requireUser(userId);
-    const [contactCount, active, recentJournals] = await Promise.all([
+    const [contactCount, active, recentJournals, unreadCount] = await Promise.all([
       this.prisma.contact.count({ where: { userId } }),
       this.findActive(userId),
       this.prisma.journal.findMany({
@@ -84,6 +89,7 @@ export class AlertService {
         orderBy: { triggeredAt: "desc" },
         take: 3,
       }),
+      this.notifications.unreadCount(userId),
     ]);
 
     const hour = new Date().getHours();
@@ -103,6 +109,11 @@ export class AlertService {
         label: "SOS",
         hint: "Tap or hold",
         holdHint: "Hold for 1.5s to skip confirmation",
+        holdMs: 1500,
+        skipConfirmation: true,
+        source: "SOS",
+        alertAllGroups: true,
+        mode: "EMERGENCY",
       },
       confirmation: {
         title: "Activate Emergency Alert?",
@@ -112,10 +123,35 @@ export class AlertService {
         cancelLabel: "Cancel — I'm Safe",
       },
       actions: [
-        { key: "QUICK", label: "Quick Emergency — Alert All Groups", alertAllGroups: true, mode: "EMERGENCY" },
-        { key: "MANUAL", label: "Create Emergency Alert", alertAllGroups: false, mode: "EMERGENCY" },
-        { key: "TEST", label: "Test Emergency Alert", alertAllGroups: true, mode: "TEST" },
+        {
+          key: "QUICK",
+          label: "Quick Emergency — Alert All Groups",
+          alertAllGroups: true,
+          mode: "EMERGENCY",
+          source: "QUICK",
+          skipConfirmation: true,
+        },
+        {
+          key: "MANUAL",
+          label: "Create Emergency Alert",
+          alertAllGroups: false,
+          mode: "EMERGENCY",
+          source: "MANUAL",
+          skipConfirmation: false,
+        },
+        {
+          key: "TEST",
+          label: "Test Emergency Alert",
+          alertAllGroups: true,
+          mode: "TEST",
+          source: "MANUAL",
+          skipConfirmation: false,
+        },
       ],
+      notifications: {
+        title: "Notification",
+        unreadCount,
+      },
       status: active
         ? {
             key: "ACTIVE",
@@ -155,12 +191,13 @@ export class AlertService {
     const user = await this.requireUser(params.userId);
     const existing = await this.findActive(user.id);
     if (existing) {
-      return toAlertDto(existing);
+      return withSentScreen(toAlertDto(existing));
     }
 
     const source = parseSource(params.source);
     const mode = params.mode ?? AlertMode.EMERGENCY;
-    const alertAllGroups = params.alertAllGroups ?? source === AlertSource.QUICK;
+    const alertAllGroups =
+      params.alertAllGroups ?? (source === AlertSource.QUICK || source === AlertSource.SOS);
 
     const emergencyType =
       (await this.prisma.emergencyType.findUnique({
@@ -242,9 +279,27 @@ export class AlertService {
       include: alertInclude,
     });
 
-    const dto = toAlertDto(alert);
+    const dto = withSentScreen(toAlertDto(alert));
     this.realtime.emit("admin:alert:new", dto);
+    await this.notifications.notifyAlertOpened({
+      ownerId: user.id,
+      ownerName: firstName,
+      alertId: alert.id,
+      source,
+      groupNames: groups.map((group) => group.name),
+      memberPhones: groups.flatMap((group) => group.members.map((member) => member.phone)),
+    });
     return dto;
+  }
+
+  async triggerDirect(params: TriggerAlertDto & { userId: string }) {
+    const source = parseSource(params.source);
+    return this.triggerAlert({
+      ...params,
+      source: source === AlertSource.QUICK ? AlertSource.QUICK : AlertSource.SOS,
+      alertAllGroups: true,
+      mode: AlertMode.EMERGENCY,
+    });
   }
 
   async getActiveAlertById(id: string) {
@@ -364,6 +419,7 @@ export class AlertService {
     sender: string,
     text: string,
     type: MessageType = MessageType.USER,
+    senderUserId?: string,
   ) {
     const existing = await this.prisma.alert.findUnique({ where: { id: alertId } });
     if (!existing) {
@@ -376,6 +432,7 @@ export class AlertService {
         liveMessages: {
           create: {
             sender,
+            senderUserId,
             text,
             timestamp: clockLabel(),
             type,
@@ -386,6 +443,34 @@ export class AlertService {
     });
 
     return toAlertDto(alert);
+  }
+
+  async getMessages(alertId: string, userId: string, groupId?: string) {
+    const alert = await this.requireAccessible(alertId, userId);
+    return this.toChatThread(alert, userId, groupId);
+  }
+
+  async sendMessage(alertId: string, userId: string, dto: SendAlertMessageDto) {
+    const alert = await this.requireAccessible(alertId, userId);
+    const text = dto.text.trim();
+    if (!text) {
+      throw new BadRequestException("Type your message...");
+    }
+
+    const sender = await this.requireUser(userId);
+    const updated = await this.addMessage(
+      alert.id,
+      sender.fullName.split(" ")[0],
+      text,
+      MessageType.USER,
+      sender.id,
+    );
+    if (updated) {
+      this.realtime.emitToRoom(`room:${alertId}`, "alert:messages:update", updated.liveMessages);
+    }
+
+    const fresh = await this.requireAlert(alertId);
+    return this.toChatThread(fresh, userId, dto.groupId);
   }
 
   async quickResponse(alertId: string, userId: string, dto: QuickResponseDto) {
@@ -401,6 +486,7 @@ export class AlertService {
       user.fullName.split(" ")[0],
       action.text,
       MessageType.QUICK_REPLY,
+      user.id,
     );
     if (updated) {
       this.realtime.emitToRoom(`room:${alertId}`, "alert:messages:update", updated.liveMessages);
@@ -522,6 +608,19 @@ export class AlertService {
     };
     this.realtime.emitToRoom(`room:${alertId}`, "alert:resolved", payload);
     this.realtime.emit("admin:alert:resolved", payload);
+
+    const notified = await this.prisma.alertNotifiedGroup.findMany({ where: { alertId } });
+    const groups = await this.prisma.contactGroup.findMany({
+      where: { id: { in: notified.map((group) => group.groupId) } },
+      include: { members: true },
+    });
+    await this.notifications.notifyAlertCancelled({
+      ownerId: owner.id,
+      ownerName: firstName,
+      alertId,
+      reasonLabel: reasonMeta.label,
+      memberPhones: groups.flatMap((group) => group.members.map((member) => member.phone)),
+    });
     return payload;
   }
 
@@ -552,6 +651,68 @@ export class AlertService {
     return alert;
   }
 
+  private async requireAccessible(alertId: string, userId: string) {
+    const alert = await this.requireAlert(alertId);
+    const viewer = await this.requireUser(userId);
+    if (alert.userId === userId || viewer.role !== Role.USER) {
+      return alert;
+    }
+
+    const phones = new Set(
+      (
+        await this.prisma.contactMember.findMany({
+          where: { groupId: { in: alert.notifiedGroups.map((group) => group.groupId) } },
+          select: { phone: true },
+        })
+      ).map((member) => digitsOnly(member.phone)),
+    );
+    if (!phones.has(viewer.phoneDigits)) {
+      throw new ForbiddenException("You cannot access this emergency chat.");
+    }
+    return alert;
+  }
+
+  private async toChatThread(alert: AlertRecord, viewerId: string, groupId?: string) {
+    const viewer = await this.requireUser(viewerId);
+    const requested = groupId?.trim();
+    const selected =
+      alert.notifiedGroups.find((group) => group.groupId === requested) ?? alert.notifiedGroups[0];
+
+    const members = selected
+      ? await this.prisma.contactMember.findMany({
+          where: { groupId: selected.groupId },
+          orderBy: { name: "asc" },
+        })
+      : [];
+
+    return {
+      alertId: alert.id,
+      title: selected?.groupName ?? "Emergency Group",
+      statusLabel: alert.status === AlertStatus.BROADCASTING ? "Online" : "Offline",
+      placeholder: "Type your message...",
+      groupId: selected?.groupId ?? null,
+      groups: alert.notifiedGroups.map((group) => ({
+        groupId: group.groupId,
+        groupName: group.groupName,
+        memberCount: group.memberCount,
+      })),
+      avatars: members.slice(0, 3).map((member) => ({
+        id: member.contactId ?? member.id,
+        name: member.name,
+        initials: initialsFrom(member.name),
+      })),
+      messages: alert.liveMessages.map((message) => ({
+        id: message.id,
+        sender: message.sender,
+        senderUserId: message.senderUserId,
+        text: message.text,
+        timestamp: message.timestamp,
+        type: message.type,
+        isMine: isOwnMessage(message.senderUserId, message.sender, message.type, viewer),
+      })),
+    };
+  }
+
   private async requireUser(userId: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
@@ -564,8 +725,40 @@ export class AlertService {
 function parseSource(value?: string): AlertSource {
   const normalized = (value || "").trim().toUpperCase();
   if (normalized === "QUICK") return AlertSource.QUICK;
-  if (normalized === "SOS") return AlertSource.SOS;
+  if (normalized === "SOS" || normalized === "DIRECT") return AlertSource.SOS;
   return AlertSource.MANUAL;
+}
+
+function withSentScreen<T extends object>(dto: T) {
+  return {
+    ...dto,
+    sentTitle: "Alert Sent!",
+    sentBody: "Your contacts are being notified",
+    liveLocationLabel: "Live Location Active",
+    notifiedGroupsHeading: "NOTIFIED GROUPS",
+    actions: {
+      startCallLabel: "Start Group Video Call",
+      viewLiveLabel: "View Live Session",
+      messageLabel: "Message",
+      cancelLabel: "Cancel Alert",
+    },
+  };
+}
+
+function isOwnMessage(
+  senderUserId: string | null,
+  sender: string,
+  type: MessageType,
+  viewer: { id: string; fullName: string },
+) {
+  if (senderUserId) {
+    return senderUserId === viewer.id;
+  }
+  if (type === MessageType.SOS) {
+    return false;
+  }
+  const firstName = viewer.fullName.split(" ")[0];
+  return sender === viewer.fullName || sender === firstName || sender.startsWith(`You (${firstName})`);
 }
 
 function normalizeReason(value?: string): "SAFE" | "FALSE_ALARM" | "TEST" {
