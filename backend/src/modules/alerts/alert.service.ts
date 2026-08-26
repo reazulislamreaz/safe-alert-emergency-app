@@ -1,187 +1,286 @@
-import { v4 as uuidv4 } from "uuid";
-import { db, ActiveAlert, TelemetryPoint } from "../../core/database.js";
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
+import { compare } from "bcryptjs";
+import {
+  AlertMode,
+  AlertStatus,
+  DeliveryStatus,
+  MessageType,
+  Prisma,
+} from "@prisma/client";
+import { PrismaService } from "../../prisma/prisma.service";
+import { RealtimeService } from "../../realtime/realtime.service";
+import {
+  alertInclude,
+  CallParticipant,
+  toAlertDto,
+} from "../../common/mappers/alert.mapper";
+import { TriggerAlertDto, TelemetryDto } from "./dto/alert.dto";
 
+@Injectable()
 export class AlertService {
-  triggerAlert(params: {
-    userId: string;
-    emergencyTypeId: string;
-    mode?: "EMERGENCY" | "SILENT" | "TEST";
-    latitude: number;
-    longitude: number;
-    address?: string;
-  }): ActiveAlert {
-    const user = db.users.find((u) => u.id === params.userId) || db.users[0];
-    const et =
-      db.emergencyTypes.find((t) => t.id === params.emergencyTypeId) ||
-      db.emergencyTypes[0];
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly realtime: RealtimeService,
+  ) {}
 
-    const groups = db.contactGroups.filter((g) => g.userId === user.id);
+  async triggerAlert(params: TriggerAlertDto & { userId: string }) {
+    const user =
+      (await this.prisma.user.findUnique({ where: { id: params.userId } })) ??
+      (await this.prisma.user.findUnique({ where: { id: "usr-sarah-101" } }));
 
-    const newAlert: ActiveAlert = {
-      id: `alt-${Date.now()}`,
-      userId: user.id,
-      userName: user.fullName,
-      userPhone: user.phone,
-      emergencyTypeId: et.id,
-      emergencyType: et.label,
-      severity: et.severity,
-      mode: params.mode || "EMERGENCY",
-      status: "BROADCASTING",
-      location: {
-        latitude: params.latitude,
-        longitude: params.longitude,
-        address: params.address || "123 Main St, New York, NY 10001",
+    if (!user) {
+      throw new NotFoundException("User not found");
+    }
+
+    const emergencyType =
+      (await this.prisma.emergencyType.findUnique({
+        where: { id: params.emergencyTypeId || "et-assault" },
+      })) ?? (await this.prisma.emergencyType.findFirst());
+
+    if (!emergencyType) {
+      throw new NotFoundException("Emergency type not found");
+    }
+
+    const groups = await this.prisma.contactGroup.findMany({
+      where: { userId: user.id },
+    });
+
+    const latitude = params.latitude ?? 40.712776;
+    const longitude = params.longitude ?? -74.005974;
+    const address = params.address || "123 Main St, New York, NY 10001";
+    const firstName = user.fullName.split(" ")[0];
+    const initials = user.fullName
+      .split(" ")
+      .map((part) => part[0])
+      .join("");
+
+    const participants: CallParticipant[] = [
+      {
+        id: `part-${user.id}`,
+        name: `You (${firstName})`,
+        initials,
+        status: "CONNECTED",
+        color: "#3A67D5",
+        isSender: true,
       },
-      telemetryHistory: [
-        {
-          latitude: params.latitude,
-          longitude: params.longitude,
-          accuracy: 3.0,
-          speed: 1.0,
-          heading: 0,
-          batteryLevel: 92,
-          timestamp: new Date().toISOString(),
-        },
-      ],
-      notifiedGroups: groups.map((g) => ({
-        groupId: g.id,
-        groupName: g.name,
-        memberCount: g.memberCount,
-        deliveryStatus: "DELIVERED",
-      })),
-      activeCallParticipants: [
-        {
-          id: `part-${user.id}`,
-          name: `You (${user.fullName.split(" ")[0]})`,
-          initials: user.fullName
-            .split(" ")
-            .map((n) => n[0])
-            .join(""),
-          status: "CONNECTED",
-          color: "#3A67D5",
-          isSender: true,
-        },
-        {
-          id: "part-james",
-          name: "James",
-          initials: "JJ",
-          status: "CONNECTED",
-          color: "#3B82F6",
-        },
-        {
-          id: "part-emma",
-          name: "Emma",
-          initials: "ES",
-          status: "CONNECTED",
-          color: "#8B5CF6",
-        },
-      ],
-      liveMessages: [
-        {
-          id: `msg-${Date.now()}`,
-          sender: "SafeAlert System",
-          text: `🚨 SOS broadcast started for ${et.label}. Emergency circle alerted.`,
-          timestamp: new Date().toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-          type: "SOS",
-        },
-      ],
-      triggeredAt: new Date().toISOString(),
-    };
+      {
+        id: "part-james",
+        name: "James",
+        initials: "JJ",
+        status: "CONNECTED",
+        color: "#3B82F6",
+      },
+      {
+        id: "part-emma",
+        name: "Emma",
+        initials: "ES",
+        status: "CONNECTED",
+        color: "#8B5CF6",
+      },
+    ];
 
-    // Prepend to active alerts
-    db.activeAlerts.unshift(newAlert);
-    return newAlert;
+    const alert = await this.prisma.alert.create({
+      data: {
+        id: `alt-${Date.now()}`,
+        userId: user.id,
+        userName: user.fullName,
+        userPhone: user.phone,
+        emergencyTypeId: emergencyType.id,
+        emergencyTypeLabel: emergencyType.label,
+        severity: emergencyType.severity,
+        mode: params.mode ?? AlertMode.EMERGENCY,
+        status: AlertStatus.BROADCASTING,
+        latitude,
+        longitude,
+        address,
+        participants: participants as unknown as Prisma.InputJsonValue,
+        telemetryHistory: {
+          create: {
+            latitude,
+            longitude,
+            accuracy: 3,
+            speed: 1,
+            heading: 0,
+            batteryLevel: 92,
+          },
+        },
+        notifiedGroups: {
+          create: groups.map((group) => ({
+            groupId: group.id,
+            groupName: group.name,
+            memberCount: group.memberCount,
+            deliveryStatus: DeliveryStatus.DELIVERED,
+          })),
+        },
+        liveMessages: {
+          create: {
+            sender: "SafeAlert System",
+            text: `🚨 SOS broadcast started for ${emergencyType.label}. Emergency circle alerted.`,
+            timestamp: new Date().toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+            type: MessageType.SOS,
+          },
+        },
+      },
+      include: alertInclude,
+    });
+
+    const dto = toAlertDto(alert);
+    this.realtime.emit("admin:alert:new", dto);
+    return dto;
   }
 
-  getActiveAlertById(id: string): ActiveAlert | undefined {
-    return db.activeAlerts.find((a) => a.id === id);
+  async getActiveAlertById(id: string) {
+    const alert = await this.prisma.alert.findUnique({
+      where: { id },
+      include: alertInclude,
+    });
+    return alert ? toAlertDto(alert) : null;
   }
 
-  getActiveAlerts(): ActiveAlert[] {
-    return db.activeAlerts.filter((a) => a.status === "BROADCASTING");
+  async getActiveAlerts() {
+    const alerts = await this.prisma.alert.findMany({
+      where: { status: AlertStatus.BROADCASTING },
+      include: alertInclude,
+      orderBy: { triggeredAt: "desc" },
+    });
+    return alerts.map(toAlertDto);
   }
 
-  updateTelemetry(
-    alertId: string,
-    point: Omit<TelemetryPoint, "timestamp">
-  ): ActiveAlert | null {
-    const alert = db.activeAlerts.find((a) => a.id === alertId);
-    if (!alert) return null;
+  async updateTelemetry(alertId: string, point: TelemetryDto) {
+    const existing = await this.prisma.alert.findUnique({ where: { id: alertId } });
+    if (!existing) {
+      return null;
+    }
 
-    const fullPoint: TelemetryPoint = {
-      ...point,
-      timestamp: new Date().toISOString(),
-    };
+    const alert = await this.prisma.alert.update({
+      where: { id: alertId },
+      data: {
+        latitude: point.latitude,
+        longitude: point.longitude,
+        telemetryHistory: {
+          create: {
+            latitude: point.latitude,
+            longitude: point.longitude,
+            speed: point.speed ?? 0,
+            heading: point.heading ?? 0,
+            accuracy: point.accuracy ?? 3,
+            batteryLevel: point.batteryLevel ?? 85,
+          },
+        },
+      },
+      include: alertInclude,
+    });
 
-    alert.location.latitude = point.latitude;
-    alert.location.longitude = point.longitude;
-    alert.telemetryHistory.push(fullPoint);
-    return alert;
+    const dto = toAlertDto(alert);
+    this.realtime.emitToRoom(`room:${alertId}`, "alert:telemetry:update", {
+      alertId,
+      location: dto.location,
+      latestPoint: dto.telemetryHistory[dto.telemetryHistory.length - 1],
+    });
+    this.realtime.emitToRoom("room:admin", "admin:alert:telemetry", {
+      alertId,
+      location: dto.location,
+    });
+    return dto;
   }
 
-  addMessage(
+  async addMessage(
     alertId: string,
     sender: string,
     text: string,
-    type: "SOS" | "QUICK_REPLY" | "USER" = "USER"
-  ): ActiveAlert | null {
-    const alert = db.activeAlerts.find((a) => a.id === alertId);
-    if (!alert) return null;
+    type: MessageType = MessageType.USER,
+  ) {
+    const existing = await this.prisma.alert.findUnique({ where: { id: alertId } });
+    if (!existing) {
+      return null;
+    }
 
-    alert.liveMessages.push({
-      id: `msg-${Date.now()}`,
-      sender,
-      text,
-      timestamp: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      type,
+    const alert = await this.prisma.alert.update({
+      where: { id: alertId },
+      data: {
+        liveMessages: {
+          create: {
+            sender,
+            text,
+            timestamp: new Date().toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+            type,
+          },
+        },
+      },
+      include: alertInclude,
     });
-    return alert;
+
+    return toAlertDto(alert);
   }
 
-  resolveAlert(
+  async resolveAlert(
     alertId: string,
     reason: "SAFE" | "FALSE_ALARM" | "TEST",
     notes: string,
     pin: string,
-    userId: string
-  ): ActiveAlert {
-    const alert = db.activeAlerts.find((a) => a.id === alertId);
-    if (!alert) throw new Error("Alert not found");
-
-    const user = db.users.find((u) => u.id === userId) || db.users[0];
-    if (user.pin !== pin && pin !== "1234") {
-      throw new Error("Incorrect Security PIN");
+    userId: string,
+  ) {
+    const alert = await this.prisma.alert.findUnique({
+      where: { id: alertId },
+      include: alertInclude,
+    });
+    if (!alert) {
+      throw new NotFoundException("Alert not found");
     }
 
-    alert.status = "RESOLVED";
-    alert.resolvedAt = new Date().toISOString();
-    alert.resolutionReason = reason;
-    alert.resolutionNotes = notes;
+    const user =
+      (await this.prisma.user.findUnique({ where: { id: userId } })) ??
+      (await this.prisma.user.findUnique({ where: { id: "usr-sarah-101" } }));
 
-    // Archive to journals
-    db.historicalJournals.unshift({
-      id: `jrn-${Date.now()}`,
-      userId: alert.userId,
-      emergencyType: alert.emergencyType,
-      severity: alert.severity,
-      status: "RESOLVED",
-      resolutionReason: reason,
-      resolutionNotes: notes,
-      location: alert.location.address,
-      triggeredAt: alert.triggeredAt,
-      duration: `${Math.round(
-        (Date.now() - new Date(alert.triggeredAt).getTime()) / 60000
-      )} mins`,
-    });
+    if (!user || !(await compare(pin, user.pinHash))) {
+      throw new BadRequestException("Incorrect Security PIN");
+    }
 
-    return alert;
+    const durationMins = Math.max(
+      1,
+      Math.round((Date.now() - alert.triggeredAt.getTime()) / 60000),
+    );
+
+    const [resolved] = await this.prisma.$transaction([
+      this.prisma.alert.update({
+        where: { id: alertId },
+        data: {
+          status: AlertStatus.RESOLVED,
+          resolvedAt: new Date(),
+          resolutionReason: reason,
+          resolutionNotes: notes,
+        },
+        include: alertInclude,
+      }),
+      this.prisma.journal.create({
+        data: {
+          id: `jrn-${Date.now()}`,
+          userId: alert.userId,
+          emergencyType: alert.emergencyTypeLabel,
+          severity: alert.severity,
+          status: "RESOLVED",
+          resolutionReason: reason,
+          resolutionNotes: notes,
+          location: alert.address,
+          triggeredAt: alert.triggeredAt,
+          duration: `${durationMins} mins`,
+        },
+      }),
+    ]);
+
+    const dto = toAlertDto(resolved);
+    this.realtime.emitToRoom(`room:${alertId}`, "alert:resolved", dto);
+    this.realtime.emit("admin:alert:resolved", dto);
+    return dto;
   }
 }
-
-export const alertService = new AlertService();

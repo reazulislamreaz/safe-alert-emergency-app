@@ -3,10 +3,12 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      target: builder
     container_name: safealert-backend-dev
-    command: pnpm dev
+    command: sh -c "npx prisma db push --skip-generate && pnpm dev"
     volumes:
       - ./backend/src:/app/src
+      - ./backend/prisma:/app/prisma
     ports:
       - "5000:5000"
     environment:

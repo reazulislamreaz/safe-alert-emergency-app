@@ -33,7 +33,7 @@ export const SettingsPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Settings Navigation Tabs */}
-      <div className="flex items-center gap-2 border-b border-gray-200 pb-3">
+      <div className="flex items-center gap-2 border-b border-gray-200 pb-3 overflow-x-auto scrollbar-none -mx-1 px-1">
         {[
           { id: 'profile', label: 'Profile', icon: User },
           { id: 'about', label: 'About Us', icon: Info },
@@ -46,7 +46,7 @@ export const SettingsPage: React.FC = () => {
             <button
               key={tab.id}
               onClick={() => setActiveSubTab(tab.id as any)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 touch-manipulation ${
                 isActive
                   ? 'bg-[#2563EB] text-white shadow-sm'
                   : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
@@ -68,7 +68,7 @@ export const SettingsPage: React.FC = () => {
 
       {/* Sub Tab: Profile */}
       {activeSubTab === 'profile' && (
-        <div className="figma-card p-6 max-w-2xl">
+        <div className="figma-card p-4 sm:p-6 max-w-2xl">
           <h3 className="text-sm font-bold text-gray-900 mb-4">Profile</h3>
           <form onSubmit={handleSave} className="space-y-4">
             <div>
@@ -122,7 +122,7 @@ export const SettingsPage: React.FC = () => {
             <div className="pt-2 flex justify-end">
               <button
                 type="submit"
-                className="px-5 py-2.5 bg-[#2563EB] hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all shadow-md"
+                className="w-full sm:w-auto px-5 py-2.5 bg-[#2563EB] hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all shadow-md"
               >
                 Save Changes
               </button>
@@ -133,7 +133,7 @@ export const SettingsPage: React.FC = () => {
 
       {/* Sub Tab: About Us */}
       {activeSubTab === 'about' && (
-        <div className="figma-card p-6 max-w-3xl">
+        <div className="figma-card p-4 sm:p-6 max-w-3xl">
           <h3 className="text-sm font-bold text-gray-900 mb-4">About Us</h3>
           <form onSubmit={handleSave} className="space-y-4">
             <textarea
@@ -145,7 +145,7 @@ export const SettingsPage: React.FC = () => {
             <div className="flex justify-end">
               <button
                 type="submit"
-                className="px-5 py-2.5 bg-[#2563EB] hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all shadow-md"
+                className="w-full sm:w-auto px-5 py-2.5 bg-[#2563EB] hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all shadow-md"
               >
                 Save About Us
               </button>
@@ -156,7 +156,7 @@ export const SettingsPage: React.FC = () => {
 
       {/* Sub Tab: Terms & Conditions */}
       {activeSubTab === 'terms' && (
-        <div className="figma-card p-6 max-w-3xl">
+        <div className="figma-card p-4 sm:p-6 max-w-3xl">
           <h3 className="text-sm font-bold text-gray-900 mb-4">Terms & Conditions</h3>
           <form onSubmit={handleSave} className="space-y-4">
             <textarea
@@ -168,7 +168,7 @@ export const SettingsPage: React.FC = () => {
             <div className="flex justify-end">
               <button
                 type="submit"
-                className="px-5 py-2.5 bg-[#2563EB] hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all shadow-md"
+                className="w-full sm:w-auto px-5 py-2.5 bg-[#2563EB] hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all shadow-md"
               >
                 Save Terms & Conditions
               </button>
@@ -179,7 +179,7 @@ export const SettingsPage: React.FC = () => {
 
       {/* Sub Tab: Privacy Policy */}
       {activeSubTab === 'privacy' && (
-        <div className="figma-card p-6 max-w-3xl">
+        <div className="figma-card p-4 sm:p-6 max-w-3xl">
           <h3 className="text-sm font-bold text-gray-900 mb-4">Privacy Policy</h3>
           <form onSubmit={handleSave} className="space-y-4">
             <textarea
@@ -191,7 +191,7 @@ export const SettingsPage: React.FC = () => {
             <div className="flex justify-end">
               <button
                 type="submit"
-                className="px-5 py-2.5 bg-[#2563EB] hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all shadow-md"
+                className="w-full sm:w-auto px-5 py-2.5 bg-[#2563EB] hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all shadow-md"
               >
                 Save Privacy Policy
               </button>

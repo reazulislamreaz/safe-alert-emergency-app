@@ -1,302 +1,372 @@
-import jwt from "jsonwebtoken";
-import { z } from "zod";
-import { v4 as uuidv4 } from "uuid";
-import { config } from "../../config/env.js";
-import { db, User, OtpRecord } from "../../core/database.js";
-import { AuthenticatedUserPayload } from "./auth.middleware.js";
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from "@nestjs/common";
+import { JwtService } from "@nestjs/jwt";
+import { compare, hash } from "bcryptjs";
+import { AlertStatus } from "@prisma/client";
+import { PrismaService } from "../../prisma/prisma.service";
+import { env, JwtPayload } from "../../config/env";
+import { digitsOnly } from "../../common/utils/phone";
+import { toPublicUser } from "../../common/mappers/user.mapper";
+import { alertInclude, toAlertDto } from "../../common/mappers/alert.mapper";
+import { RegisterDto } from "./dto/register.dto";
+import { LoginDto } from "./dto/login.dto";
 
-// Validation Schemas
-export const RegisterSchema = z.object({
-  fullName: z.string().min(2, "Full name must be at least 2 characters"),
-  email: z.string().email("Invalid email address"),
-  phone: z.string().min(7, "Invalid phone number format"),
-  dob: z.string().optional(),
-  race: z.string().optional(),
-  location: z.string().optional(),
-  emergencyContactName: z.string().min(2, "Emergency contact name required"),
-  emergencyContactPhone: z.string().min(7, "Emergency contact phone required"),
-  emergencyContactRelation: z.string().min(2, "Relationship required"),
-  profilePhotos: z.array(z.string()).optional(),
-  pin: z.string().regex(/^\d{4}$/, "PIN must be a 4-digit number").optional(),
-  password: z.string().min(6, "Password must be at least 6 characters").optional(),
-});
-
-export const LoginSchema = z.object({
-  emailOrPhone: z.string().min(3, "Email or phone number is required"),
-  pin: z.string().regex(/^\d{4}$/, "PIN must be 4 digits").optional(),
-  password: z.string().min(4).optional(),
-});
-
-export const SendOtpSchema = z.object({
-  phone: z.string().min(7, "Valid phone number is required"),
-});
-
-export const VerifyOtpSchema = z.object({
-  phone: z.string().min(7, "Valid phone number is required"),
-  code: z.string().length(6, "Verification code must be 6 digits"),
-});
-
-export const SetupPinSchema = z.object({
-  userId: z.string().min(1, "User ID is required"),
-  pin: z.string().regex(/^\d{4}$/, "Security PIN must be exactly 4 digits"),
-});
-
-export const VerifyPinSchema = z.object({
-  userId: z.string().min(1, "User ID is required"),
-  pin: z.string().regex(/^\d{4}$/, "Security PIN must be exactly 4 digits"),
-});
-
-export type RegisterDto = z.infer<typeof RegisterSchema>;
-export type LoginDto = z.infer<typeof LoginSchema>;
-
+@Injectable()
 export class AuthService {
-  /**
-   * Register a new Citizen user account matching the Mobile onboarding flow
-   */
-  register(dto: RegisterDto): { user: Omit<User, "pin" | "password">; token: string; otpCode: string } {
-    const validated = RegisterSchema.parse(dto);
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly jwt: JwtService,
+  ) {}
 
-    // Check if email or phone already exists
-    const existing = db.users.find(
-      (u) =>
-        u.email.toLowerCase() === validated.email.toLowerCase() ||
-        u.phone.replace(/\D/g, "") === validated.phone.replace(/\D/g, "")
-    );
+  async register(dto: RegisterDto) {
+    const email = dto.email.toLowerCase();
+    const phoneDigits = digitsOnly(dto.phone);
 
-    if (existing) {
-      throw new Error("An account with this email or phone number already exists.");
-    }
-
-    const newUser: User = {
-      id: `usr-${uuidv4().substring(0, 8)}`,
-      fullName: validated.fullName,
-      email: validated.email.toLowerCase(),
-      phone: validated.phone,
-      role: "USER",
-      subscriptionTier: "FREE",
-      isVerified: false,
-      isPhoneVerified: false,
-      pin: validated.pin || "0000",
-      password: validated.password,
-      dob: validated.dob,
-      race: validated.race,
-      location: validated.location,
-      emergencyContactName: validated.emergencyContactName,
-      emergencyContactPhone: validated.emergencyContactPhone,
-      emergencyContactRelation: validated.emergencyContactRelation,
-      profilePhotos: validated.profilePhotos || [],
-      avatar: validated.profilePhotos?.[0] || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
-      createdAt: new Date().toISOString(),
-    };
-
-    db.users.push(newUser);
-
-    // Auto-create default Family Emergency Contact Group
-    const defaultGroup = {
-      id: `grp-${uuidv4().substring(0, 8)}`,
-      userId: newUser.id,
-      name: "Family (Primary)",
-      color: "#2563EB",
-      isDefaultSOS: true,
-      memberCount: 1,
-    };
-    db.contactGroups.push(defaultGroup);
-
-    db.contactMembers.push({
-      id: `mem-${uuidv4().substring(0, 8)}`,
-      groupId: defaultGroup.id,
-      name: validated.emergencyContactName,
-      phone: validated.emergencyContactPhone,
-      relationship: validated.emergencyContactRelation,
+    const existing = await this.prisma.user.findFirst({
+      where: {
+        OR: [{ email }, { phoneDigits }],
+      },
     });
 
-    // Generate initial OTP for verification step
-    const otp = this.sendPhoneOtp(newUser.phone);
-    const token = this.generateToken(newUser);
+    if (existing) {
+      throw new BadRequestException(
+        "An account with this email or phone number already exists.",
+      );
+    }
 
-    const { pin: _pin, password: _pwd, ...safeUser } = newUser;
-    return { user: safeUser, token, otpCode: otp.code };
+    const pinHash = await hash(dto.pin || "0000", 10);
+    const passwordHash = dto.password ? await hash(dto.password, 10) : null;
+    const userId = `usr-${crypto.randomUUID().slice(0, 8)}`;
+
+    const user = await this.prisma.user.create({
+      data: {
+        id: userId,
+        fullName: dto.fullName,
+        email,
+        phone: dto.phone,
+        phoneDigits,
+        pinHash,
+        passwordHash,
+        dob: dto.dob,
+        race: dto.race,
+        location: dto.location,
+        emergencyContactName: dto.emergencyContactName,
+        emergencyContactPhone: dto.emergencyContactPhone,
+        emergencyContactRelation: dto.emergencyContactRelation,
+        profilePhotos: dto.profilePhotos ?? [],
+        avatar:
+          dto.profilePhotos?.[0] ||
+          "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
+        contactGroups: {
+          create: {
+            id: `grp-${crypto.randomUUID().slice(0, 8)}`,
+            name: "Family (Primary)",
+            color: "#2563EB",
+            isDefaultSOS: true,
+            memberCount: 1,
+            members: {
+              create: {
+                id: `mem-${crypto.randomUUID().slice(0, 8)}`,
+                name: dto.emergencyContactName,
+                phone: dto.emergencyContactPhone,
+                relationship: dto.emergencyContactRelation,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const otp = await this.sendPhoneOtp(user.phone);
+    const token = this.signToken(user.id, user.email, user.phone, user.role, user.subscriptionTier);
+
+    return { user: toPublicUser(user), token, otpCode: otp.code };
   }
 
-  /**
-   * Generates a 6-digit phone verification OTP
-   */
-  sendPhoneOtp(phone: string): { phone: string; code: string; expiresInMinutes: number } {
-    const cleanPhone = phone.replace(/\D/g, "");
-    
-    // Generate deterministic demo code '123456' for known test phones or random 6-digit
-    const code = cleanPhone.endsWith("0000") || cleanPhone.endsWith("5678")
-      ? "123456"
-      : Math.floor(100000 + Math.random() * 900000).toString();
+  async sendPhoneOtp(phone: string) {
+    const cleanPhone = digitsOnly(phone);
+    const code =
+      cleanPhone.endsWith("0000") || cleanPhone.endsWith("5678")
+        ? "123456"
+        : Math.floor(100000 + Math.random() * 900000).toString();
 
-    const expiresAt = Date.now() + config.otpExpiryMinutes * 60 * 1000;
+    const expiresAt = new Date(Date.now() + env.otpExpiryMinutes * 60 * 1000);
 
-    const record: OtpRecord = {
-      phone: cleanPhone,
-      code,
-      expiresAt,
-      attempts: 0,
-    };
-
-    db.otpStore.set(cleanPhone, record);
+    await this.prisma.phoneOtp.upsert({
+      where: { phone: cleanPhone },
+      create: { phone: cleanPhone, code, expiresAt, attempts: 0 },
+      update: { code, expiresAt, attempts: 0 },
+    });
 
     return {
       phone,
-      code, // In production SMS gateway delivers this
-      expiresInMinutes: config.otpExpiryMinutes,
+      code,
+      expiresInMinutes: env.otpExpiryMinutes,
     };
   }
 
-  /**
-   * Verifies the 6-digit phone OTP
-   */
-  verifyPhoneOtp(phone: string, code: string): { verified: boolean; message: string; token?: string; user?: Omit<User, "pin" | "password"> } {
-    const cleanPhone = phone.replace(/\D/g, "");
-    const record = db.otpStore.get(cleanPhone);
+  async verifyPhoneOtp(phone: string, code: string) {
+    const cleanPhone = digitsOnly(phone);
+    const record = await this.prisma.phoneOtp.findUnique({ where: { phone: cleanPhone } });
 
     if (!record) {
-      throw new Error("No pending verification found for this phone number. Please request a new code.");
+      throw new BadRequestException(
+        "No pending verification found for this phone number. Please request a new code.",
+      );
     }
 
-    if (Date.now() > record.expiresAt) {
-      db.otpStore.delete(cleanPhone);
-      throw new Error("Verification code has expired. Please request a new code.");
+    if (Date.now() > record.expiresAt.getTime()) {
+      await this.prisma.phoneOtp.delete({ where: { phone: cleanPhone } });
+      throw new BadRequestException(
+        "Verification code has expired. Please request a new code.",
+      );
     }
 
     if (record.code !== code) {
-      record.attempts += 1;
-      if (record.attempts >= 5) {
-        db.otpStore.delete(cleanPhone);
-        throw new Error("Too many failed attempts. Verification code invalidated.");
+      const attempts = record.attempts + 1;
+      if (attempts >= 5) {
+        await this.prisma.phoneOtp.delete({ where: { phone: cleanPhone } });
+        throw new BadRequestException(
+          "Too many failed attempts. Verification code invalidated.",
+        );
       }
-      throw new Error("Invalid verification code. Please check and try again.");
+      await this.prisma.phoneOtp.update({
+        where: { phone: cleanPhone },
+        data: { attempts },
+      });
+      throw new BadRequestException("Invalid verification code. Please check and try again.");
     }
 
-    // Mark successful verification
-    db.otpStore.delete(cleanPhone);
+    await this.prisma.phoneOtp.delete({ where: { phone: cleanPhone } });
 
-    const user = db.users.find((u) => u.phone.replace(/\D/g, "") === cleanPhone);
+    const user = await this.prisma.user.findFirst({ where: { phoneDigits: cleanPhone } });
     if (user) {
-      user.isPhoneVerified = true;
-      user.isVerified = true;
-      const token = this.generateToken(user);
-      const { pin: _p, password: _pw, ...safeUser } = user;
-      return { verified: true, message: "Phone successfully verified.", token, user: safeUser };
+      const verified = await this.prisma.user.update({
+        where: { id: user.id },
+        data: { isPhoneVerified: true, isVerified: true },
+      });
+      const token = this.signToken(
+        verified.id,
+        verified.email,
+        verified.phone,
+        verified.role,
+        verified.subscriptionTier,
+      );
+      return {
+        verified: true,
+        message: "Phone successfully verified.",
+        token,
+        user: toPublicUser(verified),
+      };
     }
 
     return { verified: true, message: "Phone verified successfully." };
   }
 
-  /**
-   * Setup or Update 4-Digit De-escalation Security PIN
-   */
-  setupPin(userId: string, pin: string): { success: boolean; message: string } {
+  async setupPin(userId: string, pin: string) {
     if (!/^\d{4}$/.test(pin)) {
-      throw new Error("PIN must be a 4-digit number.");
+      throw new BadRequestException("PIN must be a 4-digit number.");
     }
 
-    const user = db.users.find((u) => u.id === userId);
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
-      throw new Error("User not found.");
+      throw new NotFoundException("User not found.");
     }
 
-    user.pin = pin;
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { pinHash: await hash(pin, 10) },
+    });
+
     return { success: true, message: "Security PIN updated successfully." };
   }
 
-  /**
-   * Verify 4-Digit PIN (Used for SOS Cancellation and Quick Access)
-   */
-  verifyPin(userId: string, pin: string): { valid: boolean; isDuressPin?: boolean } {
-    const user = db.users.find((u) => u.id === userId);
-    if (!user) return { valid: false };
-
-    // Standard PIN match
-    const isValid = user.pin === pin;
-    return { valid: isValid };
-  }
-
-  /**
-   * Authenticate user / admin by email/phone + PIN or Password
-   */
-  login(dto: LoginDto): { user: Omit<User, "pin" | "password">; token: string } {
-    const { emailOrPhone, pin, password } = LoginSchema.parse(dto);
-
-    const cleanInput = emailOrPhone.toLowerCase().trim();
-    const cleanPhone = emailOrPhone.replace(/\D/g, "");
-
-    const user = db.users.find(
-      (u) =>
-        u.email.toLowerCase() === cleanInput ||
-        (cleanPhone.length >= 7 && u.phone.replace(/\D/g, "") === cleanPhone)
-    );
-
+  async verifyPin(userId: string, pin: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
-      throw new Error("Invalid credentials. Account not found.");
+      return { valid: false };
     }
 
-    // Verify Password (if provided or admin) or PIN
-    if (password) {
-      if (user.password && user.password !== password) {
-        throw new Error("Incorrect password.");
+    const valid = await compare(pin, user.pinHash);
+    return { valid };
+  }
+
+  async login(dto: LoginDto) {
+    const cleanInput = dto.emailOrPhone.toLowerCase().trim();
+    const cleanPhone = digitsOnly(dto.emailOrPhone);
+
+    const user = await this.prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: cleanInput },
+          ...(cleanPhone.length >= 7 ? [{ phoneDigits: cleanPhone }] : []),
+        ],
+      },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException("Invalid credentials. Account not found.");
+    }
+
+    if (dto.password) {
+      if (!user.passwordHash || !(await compare(dto.password, user.passwordHash))) {
+        throw new UnauthorizedException("Incorrect password.");
       }
-    } else if (pin) {
-      if (user.pin !== pin) {
-        throw new Error("Incorrect 4-digit security PIN.");
+    } else if (dto.pin) {
+      if (!(await compare(dto.pin, user.pinHash))) {
+        throw new UnauthorizedException("Incorrect 4-digit security PIN.");
       }
     } else {
-      // If neither pin nor password is provided, require one
-      throw new Error("Please provide your 4-digit PIN or password to log in.");
+      throw new UnauthorizedException(
+        "Please provide your 4-digit PIN or password to log in.",
+      );
     }
 
-    const token = this.generateToken(user);
-    const { pin: _pin, password: _pwd, ...safeUser } = user;
-
-    return { user: safeUser, token };
+    const token = this.signToken(user.id, user.email, user.phone, user.role, user.subscriptionTier);
+    return { user: toPublicUser(user), token };
   }
 
-  /**
-   * Fetch authenticated user's profile with active groups & active alerts
-   */
-  getMe(userId: string): {
-    user: Omit<User, "pin" | "password">;
-    groups: any[];
-    activeAlerts: any[];
-  } {
-    const user = db.users.find((u) => u.id === userId);
+  async requestPasswordReset(email: string) {
+    const normalizedEmail = email.toLowerCase().trim();
+    const user = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
+
     if (!user) {
-      throw new Error("User account not found.");
+      throw new NotFoundException("No account found with this email address.");
     }
 
-    const groups = db.contactGroups.filter((g) => g.userId === userId);
-    const activeAlerts = db.activeAlerts.filter(
-      (a) => a.userId === userId && (a.status === "TRIGGERED" || a.status === "BROADCASTING")
-    );
+    const code = "123456";
+    const expiresAt = new Date(Date.now() + env.otpExpiryMinutes * 60 * 1000);
 
-    const { pin: _pin, password: _pwd, ...safeUser } = user;
+    await this.prisma.emailOtp.upsert({
+      where: { email: normalizedEmail },
+      create: { email: normalizedEmail, code, expiresAt, attempts: 0, verified: false },
+      update: { code, expiresAt, attempts: 0, verified: false },
+    });
+
     return {
-      user: safeUser,
-      groups,
-      activeAlerts,
+      email: normalizedEmail,
+      code,
+      expiresInMinutes: env.otpExpiryMinutes,
     };
   }
 
-  /**
-   * Generate signed JWT token
-   */
-  private generateToken(user: User): string {
-    const payload: AuthenticatedUserPayload = {
-      sub: user.id,
-      email: user.email,
-      phone: user.phone,
-      role: user.role,
-      tier: user.subscriptionTier,
-    };
+  async verifyPasswordResetOtp(email: string, code: string) {
+    const record = await this.getActiveEmailOtp(email);
 
-    return jwt.sign(payload, config.jwtSecret, {
-      expiresIn: config.jwtExpiresIn as any,
+    if (record.code !== code) {
+      await this.recordFailedOtpAttempt(record.email);
+      throw new BadRequestException("Invalid verification code. Please check and try again.");
+    }
+
+    await this.prisma.emailOtp.update({
+      where: { email: record.email },
+      data: { verified: true },
+    });
+
+    return { verified: true, message: "Email verified. You may now set a new password." };
+  }
+
+  async resetPassword(email: string, code: string, newPassword: string) {
+    const record = await this.getActiveEmailOtp(email);
+
+    if (record.code !== code) {
+      throw new BadRequestException("Invalid verification code. Please request a new code.");
+    }
+
+    if (!record.verified) {
+      throw new BadRequestException("Please verify the code before resetting your password.");
+    }
+
+    const user = await this.prisma.user.findUnique({ where: { email: record.email } });
+    if (!user) {
+      throw new NotFoundException("User account not found.");
+    }
+
+    const passwordHash = await hash(newPassword, 10);
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: user.id },
+        data: { passwordHash },
+      }),
+      this.prisma.emailOtp.delete({ where: { email: record.email } }),
+    ]);
+
+    return { message: "Password updated successfully." };
+  }
+
+  private async getActiveEmailOtp(email: string) {
+    const normalizedEmail = email.toLowerCase().trim();
+    const record = await this.prisma.emailOtp.findUnique({ where: { email: normalizedEmail } });
+
+    if (!record) {
+      throw new BadRequestException(
+        "No pending verification found for this email. Please request a new code.",
+      );
+    }
+
+    if (Date.now() > record.expiresAt.getTime()) {
+      await this.prisma.emailOtp.delete({ where: { email: normalizedEmail } });
+      throw new BadRequestException("Verification code has expired. Please request a new code.");
+    }
+
+    return record;
+  }
+
+  private async recordFailedOtpAttempt(email: string) {
+    const record = await this.prisma.emailOtp.findUnique({ where: { email } });
+    if (!record) return;
+
+    const attempts = record.attempts + 1;
+    if (attempts >= 5) {
+      await this.prisma.emailOtp.delete({ where: { email } });
+      throw new BadRequestException("Too many failed attempts. Verification code invalidated.");
+    }
+
+    await this.prisma.emailOtp.update({
+      where: { email },
+      data: { attempts },
     });
   }
-}
 
-export const authService = new AuthService();
+  async getMe(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException("User account not found.");
+    }
+
+    const groups = await this.prisma.contactGroup.findMany({
+      where: { userId },
+      include: { members: true },
+    });
+
+    const activeAlerts = await this.prisma.alert.findMany({
+      where: {
+        userId,
+        status: { in: [AlertStatus.TRIGGERED, AlertStatus.BROADCASTING] },
+      },
+      include: alertInclude,
+    });
+
+    return {
+      user: toPublicUser(user),
+      groups,
+      activeAlerts: activeAlerts.map(toAlertDto),
+    };
+  }
+
+  private signToken(
+    userId: string,
+    email: string,
+    phone: string,
+    role: JwtPayload["role"],
+    tier: JwtPayload["tier"],
+  ): string {
+    const payload: JwtPayload = { sub: userId, email, phone, role, tier };
+    return this.jwt.sign(payload);
+  }
+}

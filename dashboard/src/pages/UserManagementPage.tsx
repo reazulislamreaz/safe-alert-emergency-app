@@ -126,8 +126,8 @@ export const UserManagementPage: React.FC = () => {
         </div>
 
         {/* Search & Filter Controls */}
-        <div className="flex items-center gap-3">
-          <div className="relative w-64 sm:w-80">
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <div className="relative w-full sm:w-80">
             <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
@@ -140,8 +140,52 @@ export const UserManagementPage: React.FC = () => {
         </div>
       </div>
 
-      {/* User Table Card */}
-      <div className="figma-card overflow-hidden">
+      <div className="md:hidden space-y-3">
+        {filteredUsers.map((user) => (
+          <button
+            key={user.id}
+            type="button"
+            onClick={() => setSelectedUser(user)}
+            className="figma-card w-full p-4 text-left touch-manipulation"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div
+                  className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-[11px] text-white shadow-sm shrink-0"
+                  style={{ backgroundColor: user.avatarColor }}
+                >
+                  {user.initials}
+                </div>
+                <div className="min-w-0">
+                  <p className="font-bold text-sm text-gray-900 truncate">{user.name}</p>
+                  <p className="text-[11px] text-gray-400 truncate">{user.email}</p>
+                </div>
+              </div>
+              <span
+                className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
+                  user.status === 'Active'
+                    ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                    : 'bg-red-50 text-red-600 border border-red-200'
+                }`}
+              >
+                {user.status}
+              </span>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-gray-500">
+              <span className={user.plan === 'Premium' ? 'text-amber-500 font-semibold' : 'font-medium'}>
+                {user.plan}
+              </span>
+              <span>{user.location}</span>
+              <span>{user.joined}</span>
+              <span className={user.alerts > 0 ? 'text-red-500 font-bold' : ''}>
+                {user.alerts} alerts
+              </span>
+            </div>
+          </button>
+        ))}
+      </div>
+
+      <div className="figma-card overflow-hidden hidden md:block">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="bg-gray-50/75 text-gray-400 uppercase text-[10px] tracking-wider font-bold border-b border-gray-100">
@@ -236,8 +280,8 @@ export const UserManagementPage: React.FC = () => {
 
       {/* User Details Modal */}
       {selectedUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl w-full max-w-md overflow-hidden animate-scale-up">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl border border-gray-200 shadow-2xl w-full max-w-md overflow-y-auto max-h-[90dvh]">
             {/* Modal Header */}
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
               <h3 className="font-bold text-gray-900 text-sm">User Details</h3>

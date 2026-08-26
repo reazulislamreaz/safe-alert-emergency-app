@@ -1,0 +1,246 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  OPS_ADMIN
+  SUPER_ADMIN
+}
+
+enum SubscriptionTier {
+  FREE
+  PREMIUM
+}
+
+enum Severity {
+  LOW
+  URGENT
+  HIGH
+  CRITICAL
+}
+
+enum AlertMode {
+  EMERGENCY
+  SILENT
+  TEST
+}
+
+enum AlertStatus {
+  TRIGGERED
+  BROADCASTING
+  RESOLVED
+  CANCELLED
+}
+
+enum MessageType {
+  SOS
+  QUICK_REPLY
+  USER
+}
+
+enum DeliveryStatus {
+  DELIVERED
+  PENDING
+}
+
+enum ParticipantStatus {
+  CONNECTED
+  CALLING
+}
+
+model User {
+  id                        String            @id @default(uuid())
+  fullName                  String
+  email                     String            @unique
+  phone                     String            @unique
+  phoneDigits               String
+  role                      Role              @default(USER)
+  subscriptionTier          SubscriptionTier  @default(FREE)
+  isVerified                Boolean           @default(false)
+  isPhoneVerified           Boolean           @default(false)
+  pinHash                   String
+  passwordHash              String?
+  avatar                    String?
+  profilePhotos             String[]          @default([])
+  dob                       String?
+  race                      String?
+  location                  String?
+  emergencyContactName      String?
+  emergencyContactPhone     String?
+  emergencyContactRelation  String?
+  createdAt                 DateTime          @default(now())
+  contactGroups             ContactGroup[]
+  alerts                    Alert[]
+  journals                  Journal[]
+
+  @@index([phoneDigits])
+  @@index([role])
+  @@map("users")
+}
+
+model PhoneOtp {
+  phone      String   @id
+  code       String
+  expiresAt  DateTime
+  attempts   Int      @default(0)
+
+  @@map("phone_otps")
+}
+
+model EmailOtp {
+  email      String   @id
+  code       String
+  expiresAt  DateTime
+  attempts   Int      @default(0)
+  verified   Boolean  @default(false)
+
+  @@map("email_otps")
+}
+
+model ContactGroup {
+  id           String          @id @default(uuid())
+  userId       String
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  color        String          @default("#3A67D5")
+  isDefaultSOS Boolean         @default(true)
+  memberCount  Int             @default(0)
+  members      ContactMember[]
+
+  @@index([userId])
+  @@map("contact_groups")
+}
+
+model ContactMember {
+  id           String       @id @default(uuid())
+  groupId      String
+  group        ContactGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  name         String
+  phone        String
+  relationship String
+  isJoinedCall Boolean      @default(false)
+
+  @@index([groupId])
+  @@map("contact_members")
+}
+
+model EmergencyType {
+  id          String    @id @default(uuid())
+  key         String    @unique
+  label       String
+  severity    Severity
+  icon        String
+  description String
+  isActive    Boolean   @default(true)
+  alerts      Alert[]
+
+  @@map("emergency_types")
+}
+
+model Alert {
+  id                   String               @id @default(uuid())
+  userId               String
+  user                 User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userName             String
+  userPhone            String
+  emergencyTypeId      String
+  emergencyType        EmergencyType        @relation(fields: [emergencyTypeId], references: [id])
+  emergencyTypeLabel   String
+  severity             Severity
+  mode                 AlertMode            @default(EMERGENCY)
+  status               AlertStatus          @default(BROADCASTING)
+  latitude             Float
+  longitude            Float
+  address              String
+  telemetryHistory     TelemetryPoint[]
+  notifiedGroups       AlertNotifiedGroup[]
+  participants         Json                 @default("[]")
+  liveMessages         LiveMessage[]
+  triggeredAt          DateTime             @default(now())
+  resolvedAt           DateTime?
+  resolutionReason     String?
+  resolutionNotes      String?
+
+  @@index([userId])
+  @@index([status])
+  @@map("alerts")
+}
+
+model TelemetryPoint {
+  id           String   @id @default(uuid())
+  alertId      String
+  alert        Alert    @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  latitude     Float
+  longitude    Float
+  accuracy     Float    @default(3)
+  speed        Float    @default(0)
+  heading      Float    @default(0)
+  batteryLevel Float    @default(85)
+  timestamp    DateTime @default(now())
+
+  @@index([alertId])
+  @@map("telemetry_points")
+}
+
+model AlertNotifiedGroup {
+  id             String         @id @default(uuid())
+  alertId        String
+  alert          Alert          @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  groupId        String
+  groupName      String
+  memberCount    Int
+  deliveryStatus DeliveryStatus @default(DELIVERED)
+
+  @@index([alertId])
+  @@map("alert_notified_groups")
+}
+
+model LiveMessage {
+  id        String      @id @default(uuid())
+  alertId   String
+  alert     Alert       @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  sender    String
+  text      String
+  timestamp String
+  type      MessageType @default(USER)
+  createdAt DateTime    @default(now())
+
+  @@index([alertId])
+  @@map("live_messages")
+}
+
+model Journal {
+  id               String   @id @default(uuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emergencyType    String
+  severity         String
+  status           String   @default("RESOLVED")
+  resolutionReason String
+  resolutionNotes  String
+  location         String
+  triggeredAt      DateTime
+  duration         String
+
+  @@index([userId])
+  @@map("journals")
+}
+
+model SubscriptionPlan {
+  id              String   @id
+  name            String
+  priceMonthly    Float
+  priceYearly     Float
+  maxContacts     Int
+  maxGroups       Int
+  features        String[]
+  subscriberCount Int      @default(0)
+
+  @@map("subscription_plans")
+}

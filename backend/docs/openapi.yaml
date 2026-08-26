@@ -1,0 +1,837 @@
+openapi: 3.0.0
+paths:
+  /health:
+    get:
+      operationId: HealthController_health
+      parameters: []
+      responses:
+        '200':
+          description: Service is up
+          content:
+            application/json:
+              schema:
+                example:
+                  status: ok
+                  service: SafeAlert Emergency Backend
+                  timestamp: '2026-08-26T02:42:00.000Z'
+                  uptime: 12.5
+      summary: Liveness probe
+      tags:
+        - Health
+  /api/auth/register:
+    post:
+      operationId: AuthController_register
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterDto'
+      responses:
+        '201':
+          description: Account created; OTP dispatched
+      summary: Register a citizen account
+      tags:
+        - Auth
+  /api/auth/otp/send:
+    post:
+      operationId: AuthController_sendOtp
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendOtpDto'
+      responses:
+        '200':
+          description: OTP generated (returned in data for demo)
+      summary: Send a 6-digit phone verification OTP
+      tags:
+        - Auth
+  /api/auth/otp/verify:
+    post:
+      operationId: AuthController_verifyOtp
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyOtpDto'
+      responses:
+        '200':
+          description: ''
+      summary: Verify phone OTP
+      tags:
+        - Auth
+  /api/auth/pin/setup:
+    post:
+      operationId: AuthController_setupPin
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetupPinDto'
+      responses:
+        '200':
+          description: ''
+      summary: Set or update a 4-digit security PIN
+      tags:
+        - Auth
+  /api/auth/pin/verify:
+    post:
+      operationId: AuthController_verifyPin
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyPinDto'
+      responses:
+        '200':
+          description: ''
+      security:
+        - access-token: []
+      summary: Verify PIN (optional JWT)
+      tags:
+        - Auth
+  /api/auth/login:
+    post:
+      operationId: AuthController_login
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginDto'
+      responses:
+        '200':
+          description: ''
+        '401':
+          description: Invalid credentials
+      summary: Login with email/phone + password or PIN
+      tags:
+        - Auth
+  /api/auth/password/forgot:
+    post:
+      operationId: AuthController_forgotPassword
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForgotPasswordDto'
+      responses:
+        '200':
+          description: ''
+      summary: Request a password-reset OTP
+      tags:
+        - Auth
+  /api/auth/password/verify-otp:
+    post:
+      operationId: AuthController_verifyResetOtp
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyResetOtpDto'
+      responses:
+        '200':
+          description: ''
+      summary: Verify password-reset OTP
+      tags:
+        - Auth
+  /api/auth/password/reset:
+    post:
+      operationId: AuthController_resetPassword
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordDto'
+      responses:
+        '200':
+          description: ''
+      summary: Set a new password with a verified OTP
+      tags:
+        - Auth
+  /api/auth/me:
+    get:
+      operationId: AuthController_me
+      parameters: []
+      responses:
+        '200':
+          description: ''
+        '401':
+          description: Missing or invalid Bearer token
+      security:
+        - access-token: []
+      summary: Current user, groups, and active alerts
+      tags:
+        - Auth
+  /api/alerts/active:
+    get:
+      operationId: AlertsController_getActive
+      parameters: []
+      responses:
+        '200':
+          description: ''
+      security:
+        - access-token: []
+      summary: List broadcasting SOS alerts
+      tags:
+        - Alerts
+  /api/alerts/{id}:
+    get:
+      operationId: AlertsController_getById
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            example: alt-active-991
+            type: string
+      responses:
+        '200':
+          description: ''
+        '404':
+          description: Alert not found
+      security:
+        - access-token: []
+      summary: Get one alert by id
+      tags:
+        - Alerts
+  /api/alerts/trigger:
+    post:
+      operationId: AlertsController_trigger
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TriggerAlertDto'
+      responses:
+        '201':
+          description: ''
+      security:
+        - access-token: []
+      summary: Trigger an SOS broadcast
+      tags:
+        - Alerts
+  /api/alerts/{id}/telemetry:
+    post:
+      operationId: AlertsController_telemetry
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            example: alt-active-991
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TelemetryDto'
+      responses:
+        '201':
+          description: ''
+        '404':
+          description: Alert not found
+      security:
+        - access-token: []
+      summary: Push a GPS / battery telemetry point
+      tags:
+        - Alerts
+  /api/alerts/{id}/resolve:
+    post:
+      operationId: AlertsController_resolve
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            example: alt-active-991
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolveAlertDto'
+      responses:
+        '201':
+          description: ''
+      security:
+        - access-token: []
+      summary: Resolve an alert with the user's PIN
+      tags:
+        - Alerts
+  /api/contacts/groups:
+    get:
+      operationId: ContactsController_getGroups
+      parameters:
+        - name: userId
+          required: false
+          in: query
+          description: Defaults to JWT subject, then Sarah's demo user
+          schema:
+            example: usr-sarah-101
+            type: string
+      responses:
+        '200':
+          description: ''
+      security:
+        - access-token: []
+      summary: List contact groups (with members)
+      tags:
+        - Contacts
+    post:
+      operationId: ContactsController_createGroup
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateGroupDto'
+      responses:
+        '201':
+          description: ''
+      security:
+        - access-token: []
+      summary: Create a contact group
+      tags:
+        - Contacts
+  /api/contacts/members:
+    post:
+      operationId: ContactsController_addMember
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddMemberDto'
+      responses:
+        '201':
+          description: ''
+      security:
+        - access-token: []
+      summary: Add a member to a group
+      tags:
+        - Contacts
+  /api/contacts/members/{id}:
+    delete:
+      operationId: ContactsController_deleteMember
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            example: mem-06
+            type: string
+      responses:
+        '200':
+          description: ''
+      security:
+        - access-token: []
+      summary: Remove a group member
+      tags:
+        - Contacts
+  /api/dashboard/metrics:
+    get:
+      operationId: DashboardController_metrics
+      parameters: []
+      responses:
+        '200':
+          description: ''
+      summary: Overview KPIs, subscription split, recent alerts
+      tags:
+        - Dashboard
+  /api/dashboard/users:
+    get:
+      operationId: DashboardController_users
+      parameters:
+        - name: q
+          required: false
+          in: query
+          schema:
+            example: sarah
+            type: string
+      responses:
+        '200':
+          description: ''
+      summary: List users (optional search)
+      tags:
+        - Dashboard
+  /api/dashboard/users/{id}/verify:
+    patch:
+      operationId: DashboardController_toggleVerify
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            example: usr-sarah-101
+            type: string
+      responses:
+        '200':
+          description: ''
+        '404':
+          description: User not found
+      summary: Toggle user verification
+      tags:
+        - Dashboard
+  /api/dashboard/emergency-types:
+    get:
+      operationId: DashboardController_emergencyTypes
+      parameters: []
+      responses:
+        '200':
+          description: ''
+      summary: List emergency types for admin
+      tags:
+        - Dashboard
+    post:
+      operationId: DashboardController_createEmergencyType
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateEmergencyTypeDto'
+      responses:
+        '201':
+          description: ''
+      summary: Create an emergency type
+      tags:
+        - Dashboard
+  /api/dashboard/emergency-types/{id}/toggle:
+    patch:
+      operationId: DashboardController_toggleEmergencyType
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            example: et-assault
+            type: string
+      responses:
+        '200':
+          description: ''
+        '404':
+          description: Type not found
+      summary: Toggle emergency type active flag
+      tags:
+        - Dashboard
+  /api/dashboard/subscriptions:
+    get:
+      operationId: DashboardController_subscriptions
+      parameters: []
+      responses:
+        '200':
+          description: ''
+      summary: List subscription plans
+      tags:
+        - Dashboard
+  /api/emergency-types:
+    get:
+      operationId: CatalogController_emergencyTypes
+      parameters: []
+      responses:
+        '200':
+          description: ''
+      summary: Public emergency type catalog
+      tags:
+        - Catalog
+  /api/journals:
+    get:
+      operationId: CatalogController_journals
+      parameters: []
+      responses:
+        '200':
+          description: ''
+      summary: Historical incident journals
+      tags:
+        - Catalog
+info:
+  title: SafeAlert Emergency API
+  description: >-
+    REST + Socket.io API for the SafeAlert emergency response system.
+
+
+    **Demo accounts**
+
+    - Super Admin: `admin@safealert.app` / `adminpassword`
+
+    - Ops: `ops@safealert.app` / `opspassword`
+
+    - Citizen (Sarah): `sarah.johnson@example.com` / PIN `1234`
+
+    - Phone OTP for Sarah: `123456`
+
+
+    Use **Authorize** after login and paste the JWT as a Bearer token for
+    `/api/auth/me`.
+
+
+    **Socket.io** (`ws://localhost:5000`, same origin as REST)
+
+    - Client → server: `alert:join`, `alert:telemetry`, `alert:message:send`,
+    `alert:quick_response`, `admin:subscribe`
+
+    - Server → client: `alert:state`, `alert:telemetry:update`,
+    `alert:messages:update`, `alert:resolved`, `admin:alert:new`,
+    `admin:alert:resolved`, `admin:alert:telemetry`, `admin:metrics`
+  version: 1.0.0
+  contact: {}
+tags:
+  - name: Health
+    description: Process liveness
+  - name: Auth
+    description: Register, login, OTP, PIN, password reset
+  - name: Alerts
+    description: SOS trigger, telemetry, resolve
+  - name: Contacts
+    description: Emergency groups and members
+  - name: Catalog
+    description: Public emergency types and incident journals
+  - name: Dashboard
+    description: Admin metrics, users, types, subscriptions
+servers: []
+components:
+  securitySchemes:
+    access-token:
+      scheme: bearer
+      bearerFormat: JWT
+      type: http
+      description: JWT from POST /api/auth/login
+  schemas:
+    RegisterDto:
+      type: object
+      properties:
+        fullName:
+          type: string
+          minLength: 2
+          example: Jordan Lee
+        email:
+          type: string
+          format: email
+          example: jordan.lee@example.com
+        phone:
+          type: string
+          minLength: 7
+          example: +1 (555) 321-0987
+        dob:
+          type: string
+          example: '1998-05-14'
+        race:
+          type: string
+          example: White
+        location:
+          type: string
+          example: New York, NY
+        emergencyContactName:
+          type: string
+          minLength: 2
+          example: James Johnson
+        emergencyContactPhone:
+          type: string
+          minLength: 7
+          example: +1 (555) 987-6543
+        emergencyContactRelation:
+          type: string
+          minLength: 2
+          example: Father
+        profilePhotos:
+          example:
+            - https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=300
+          type: array
+          items:
+            type: string
+        pin:
+          type: string
+          pattern: ^\d{4}$
+          example: '1234'
+          description: 4-digit de-escalation PIN
+        password:
+          type: string
+          minLength: 6
+          example: password123
+      required:
+        - fullName
+        - email
+        - phone
+        - emergencyContactName
+        - emergencyContactPhone
+        - emergencyContactRelation
+    SendOtpDto:
+      type: object
+      properties:
+        phone:
+          type: string
+          minLength: 7
+          example: +1 (555) 234-5678
+      required:
+        - phone
+    VerifyOtpDto:
+      type: object
+      properties:
+        phone:
+          type: string
+          minLength: 7
+          example: +1 (555) 234-5678
+        code:
+          type: string
+          minLength: 6
+          maxLength: 6
+          example: '123456'
+          description: Demo code for Sarah's phone is 123456
+      required:
+        - phone
+        - code
+    SetupPinDto:
+      type: object
+      properties:
+        userId:
+          type: string
+          example: usr-sarah-101
+        pin:
+          type: string
+          pattern: ^\d{4}$
+          example: '1234'
+      required:
+        - userId
+        - pin
+    VerifyPinDto:
+      type: object
+      properties:
+        userId:
+          type: string
+          example: usr-sarah-101
+          description: Defaults to the JWT subject, then Sarah's demo user.
+        pin:
+          type: string
+          pattern: ^\d{4}$
+          example: '1234'
+      required:
+        - pin
+    LoginDto:
+      type: object
+      properties:
+        emailOrPhone:
+          type: string
+          minLength: 3
+          example: admin@safealert.app
+          description: Email address or phone number
+        pin:
+          type: string
+          pattern: ^\d{4}$
+          example: '1234'
+          description: Citizen 4-digit PIN. Send this or password, not both required.
+        password:
+          type: string
+          minLength: 4
+          example: adminpassword
+          description: >-
+            Admin / password login. Use adminpassword or opspassword for demo
+            admins.
+      required:
+        - emailOrPhone
+    ForgotPasswordDto:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          example: admin@safealert.app
+      required:
+        - email
+    VerifyResetOtpDto:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          example: admin@safealert.app
+        code:
+          type: string
+          minLength: 6
+          maxLength: 6
+          pattern: ^\d{6}$
+          example: '123456'
+      required:
+        - email
+        - code
+    ResetPasswordDto:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          example: admin@safealert.app
+        code:
+          type: string
+          minLength: 6
+          maxLength: 6
+          pattern: ^\d{6}$
+          example: '123456'
+        newPassword:
+          type: string
+          minLength: 6
+          example: adminpassword
+      required:
+        - email
+        - code
+        - newPassword
+    TriggerAlertDto:
+      type: object
+      properties:
+        userId:
+          type: string
+          example: usr-sarah-101
+        emergencyTypeId:
+          type: string
+          example: et-assault
+        mode:
+          enum:
+            - EMERGENCY
+            - SILENT
+            - TEST
+          type: string
+          example: EMERGENCY
+        latitude:
+          type: number
+          example: 40.712776
+        longitude:
+          type: number
+          example: -74.005974
+        address:
+          type: string
+          example: 123 Main St, New York, NY 10001
+    TelemetryDto:
+      type: object
+      properties:
+        latitude:
+          type: number
+          example: 40.71285
+        longitude:
+          type: number
+          example: -74.00602
+        speed:
+          type: number
+          minimum: 0
+          example: 1.5
+        heading:
+          type: number
+          example: 95
+        accuracy:
+          type: number
+          example: 3
+        batteryLevel:
+          type: number
+          example: 84
+      required:
+        - latitude
+        - longitude
+    ResolveAlertDto:
+      type: object
+      properties:
+        reason:
+          enum:
+            - SAFE
+            - FALSE_ALARM
+            - TEST
+          type: string
+          example: SAFE
+        notes:
+          type: string
+          example: Reached a safe location.
+        pin:
+          type: string
+          example: '1234'
+          description: User's 4-digit PIN
+        userId:
+          type: string
+          example: usr-sarah-101
+    CreateGroupDto:
+      type: object
+      properties:
+        userId:
+          type: string
+          example: usr-sarah-101
+        name:
+          type: string
+          example: Close Friends
+        color:
+          type: string
+          example: '#3A67D5'
+      required:
+        - name
+    AddMemberDto:
+      type: object
+      properties:
+        groupId:
+          type: string
+          example: grp-family-01
+        name:
+          type: string
+          example: Alex Rivera
+        phone:
+          type: string
+          example: +1 (555) 222-1111
+        relationship:
+          type: string
+          example: Friend
+      required:
+        - groupId
+        - name
+        - phone
+        - relationship
+    CreateEmergencyTypeDto:
+      type: object
+      properties:
+        key:
+          type: string
+          example: FLOOD
+        label:
+          type: string
+          example: Flood / Water Rescue
+        severity:
+          enum:
+            - LOW
+            - URGENT
+            - HIGH
+            - CRITICAL
+          type: string
+          example: HIGH
+        icon:
+          type: string
+          example: Waves
+        description:
+          type: string
+          example: Rapid water rise or trapped occupants
+        isActive:
+          type: boolean
+          example: true
+      required:
+        - key
+        - label
+        - severity
+        - icon
+        - description

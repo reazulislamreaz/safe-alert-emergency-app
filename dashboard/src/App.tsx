@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
 import { LoginPage } from './pages/LoginPage';
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { UserManagementPage } from './pages/UserManagementPage';
 import { EmergencyTypesPage } from './pages/EmergencyTypesPage';
@@ -18,6 +19,8 @@ export const App: React.FC = () => {
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState<boolean>(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
+  const [authView, setAuthView] = useState<'login' | 'forgot'>('login');
+  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
 
   // Check existing session on mount
   useEffect(() => {
@@ -43,53 +46,86 @@ export const App: React.FC = () => {
     checkAuth();
   }, []);
 
+  useEffect(() => {
+    const media = window.matchMedia('(min-width: 1024px)');
+    const onChange = () => {
+      if (media.matches) setIsSidebarOpen(false);
+    };
+    media.addEventListener('change', onChange);
+    return () => media.removeEventListener('change', onChange);
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsSidebarOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  useEffect(() => {
+    const shouldLock = isSidebarOpen && window.matchMedia('(min-width: 1024px)').matches === false;
+    document.body.style.overflow = shouldLock ? 'hidden' : '';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isSidebarOpen]);
+
   const handleLoginSuccess = (user: User) => {
     setCurrentUser(user);
     setCurrentTab('dashboard');
+    setAuthView('login');
   };
 
   const handleLogout = () => {
     api.logout();
     setCurrentUser(null);
+    setAuthView('login');
     setIsLogoutModalOpen(false);
   };
 
   if (isAuthChecking) {
     return (
-      <div className="h-screen w-full bg-[#0B1528] flex items-center justify-center text-white">
+      <div className="min-h-dvh w-full bg-[#F3F4F6] flex items-center justify-center px-4">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-xs text-slate-400 font-medium">Verifying SafeAlert Security Session...</p>
+          <div className="w-8 h-8 border-[3px] border-[#3B82F6] border-t-transparent rounded-full animate-spin" />
+          <p className="text-xs text-gray-400 font-medium">Verifying session...</p>
         </div>
       </div>
     );
   }
 
-  // Render Login Page if unauthenticated
   if (!currentUser) {
-    return <LoginPage onLoginSuccess={handleLoginSuccess} />;
+    if (authView === 'forgot') {
+      return <ForgotPasswordPage onBackToLogin={() => setAuthView('login')} />;
+    }
+    return (
+      <LoginPage
+        onLoginSuccess={handleLoginSuccess}
+        onForgotPassword={() => setAuthView('forgot')}
+      />
+    );
   }
 
   return (
-    <div className="flex h-screen bg-[#F4F6FA] text-slate-800 overflow-hidden font-sans antialiased">
-      {/* Deep Navy Sidebar */}
+    <div className="flex h-dvh bg-[#F4F6FA] text-slate-800 overflow-hidden font-sans antialiased">
       <Sidebar
         currentTab={currentTab}
-        onSelectTab={(tab) => setCurrentTab(tab)}
+        onSelectTab={setCurrentTab}
         onOpenLogoutModal={() => setIsLogoutModalOpen(true)}
         activeSOSCount={5}
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
       />
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
-        {/* Top Pure White Header */}
+      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
         <Header
           currentTab={currentTab}
           onOpenLogoutModal={() => setIsLogoutModalOpen(true)}
+          onToggleSidebar={() => setIsSidebarOpen((open) => !open)}
         />
 
-        {/* Dynamic Views wrapped with ErrorBoundary */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 bg-[#F4F6FA]">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 lg:p-8 bg-[#F4F6FA]">
           <ErrorBoundary>
             {currentTab === 'dashboard' && (
               <DashboardPage onNavigateToTab={(tab) => setCurrentTab(tab)} />
@@ -110,8 +146,8 @@ export const App: React.FC = () => {
 
       {/* Log out Confirmation Modal (Matching Figma Frame) */}
       {isLogoutModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl w-full max-w-sm overflow-hidden p-6 text-center animate-scale-up">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl w-full max-w-sm overflow-hidden p-6 text-center">
             {/* Red Warning Icon */}
             <div className="w-12 h-12 rounded-full bg-red-50 text-red-500 border border-red-100 flex items-center justify-center mx-auto mb-3">
               <AlertCircle className="w-6 h-6" />
@@ -124,7 +160,7 @@ export const App: React.FC = () => {
               Are you sure you want to log out from <strong>{currentUser.email}</strong>?
             </p>
 
-            <div className="flex items-center justify-center gap-3">
+            <div className="flex items-center justify-center gap-3 w-full">
               <button
                 type="button"
                 onClick={() => setIsLogoutModalOpen(false)}

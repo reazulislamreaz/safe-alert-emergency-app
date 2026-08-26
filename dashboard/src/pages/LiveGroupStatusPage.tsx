@@ -157,7 +157,7 @@ export const LiveGroupStatusPage: React.FC = () => {
         </div>
 
         {/* Filter Tabs / Rounded Pills */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
           {categories.map((cat) => {
             const isAll = cat.id === 'ALL';
             const isSelected = selectedCategory === cat.id;
@@ -186,7 +186,7 @@ export const LiveGroupStatusPage: React.FC = () => {
       {/* 2 Columns Layout Matching Figma */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-2">
         {/* Left Column: Group Cards (5 cols) */}
-        <div className="lg:col-span-5 space-y-3 max-h-[calc(100vh-190px)] overflow-y-auto pr-1">
+        <div className="lg:col-span-5 space-y-3 max-h-[min(22rem,50vh)] lg:max-h-[calc(100vh-190px)] overflow-y-auto pr-1">
           {filteredGroups.map((grp) => {
             const isSelected = selectedGroup.id === grp.id;
 
@@ -201,10 +201,10 @@ export const LiveGroupStatusPage: React.FC = () => {
                 }`}
               >
                 {/* Line 1: Title & Category Badge */}
-                <div className="flex items-start justify-between">
-                  <h4 className="text-xs font-bold text-gray-900">{grp.name}</h4>
+                <div className="flex items-start justify-between gap-2">
+                  <h4 className="text-xs font-bold text-gray-900 min-w-0 pr-2">{grp.name}</h4>
                   <span
-                    className={`text-[10px] font-bold px-2 py-0.5 rounded ${getCategoryBadgeClass(
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded shrink-0 ${getCategoryBadgeClass(
                       grp.category
                     )}`}
                   >
@@ -255,11 +255,11 @@ export const LiveGroupStatusPage: React.FC = () => {
 
         {/* Right Column: Selected Group View & Dark Map & Member List (7 cols) */}
         <div className="lg:col-span-7">
-          <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm space-y-5">
+          <div className="bg-white border border-gray-200 rounded-2xl p-4 sm:p-6 shadow-sm space-y-5 min-w-0">
             {/* Header Title & Badges */}
             <div>
               <h3 className="text-base font-bold text-gray-900">{selectedGroup.name}</h3>
-              <div className="flex items-center gap-2 mt-1.5">
+              <div className="flex flex-wrap items-center gap-2 mt-1.5">
                 <span
                   className={`text-[10px] font-bold px-2 py-0.5 rounded ${getCategoryBadgeClass(
                     selectedGroup.category
@@ -285,11 +285,11 @@ export const LiveGroupStatusPage: React.FC = () => {
 
             {/* Group Members Header */}
             <div>
-              <div className="flex items-center justify-between pb-3 border-b border-gray-100 mb-2">
+              <div className="flex items-center justify-between pb-3 border-b border-gray-100 mb-2 gap-3">
                 <h4 className="text-xs font-bold text-gray-900">
                   Group members ({selectedGroup.members.length})
                 </h4>
-                <button className="text-xs font-semibold text-blue-600 hover:text-blue-700">
+                <button className="text-xs font-semibold text-blue-600 hover:text-blue-700 shrink-0">
                   View location history
                 </button>
               </div>
@@ -297,8 +297,8 @@ export const LiveGroupStatusPage: React.FC = () => {
               {/* Members List */}
               <div className="divide-y divide-gray-100">
                 {selectedGroup.members.map((mem) => (
-                  <div key={mem.id} className="py-3 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
+                  <div key={mem.id} className="py-3 flex items-start sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
                       <div
                         className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs text-white shadow-sm flex-shrink-0"
                         style={{ backgroundColor: mem.color }}
@@ -306,12 +306,12 @@ export const LiveGroupStatusPage: React.FC = () => {
                         {mem.initials}
                       </div>
                       <div>
-                        <p className="text-xs font-bold text-gray-900 leading-tight">{mem.name}</p>
+                        <p className="text-xs font-bold text-gray-900 leading-tight truncate">{mem.name}</p>
                         <p className="text-[11px] text-gray-400">{mem.role}</p>
                       </div>
                     </div>
 
-                    <div className="text-right">
+                    <div className="text-right shrink-0">
                       <p
                         className={`text-xs font-bold ${
                           mem.status === 'SOS triggered'

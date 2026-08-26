@@ -16,25 +16,29 @@ export const api = {
   // --- Auth & Session ---
   getAuthToken(): string | null {
     try {
-      return localStorage.getItem(TOKEN_KEY);
+      return localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
     } catch {
       return null;
     }
   },
 
-  setAuthToken(token: string | null) {
+  setAuthToken(token: string | null, remember: boolean = true) {
     try {
-      if (token) {
-        localStorage.setItem(TOKEN_KEY, token);
-      } else {
-        localStorage.removeItem(TOKEN_KEY);
-      }
+      localStorage.removeItem(TOKEN_KEY);
+      sessionStorage.removeItem(TOKEN_KEY);
+      if (!token) return;
+      const store = remember ? localStorage : sessionStorage;
+      store.setItem(TOKEN_KEY, token);
     } catch (e) {
-      console.warn("Could not access localStorage", e);
+      console.warn("Could not access browser storage", e);
     }
   },
 
-  async login(emailOrPhone: string, passwordOrPin: string): Promise<{ user: User; token: string }> {
+  async login(
+    emailOrPhone: string,
+    passwordOrPin: string,
+    remember: boolean = true,
+  ): Promise<{ user: User; token: string }> {
     const isPin = /^\d{4}$/.test(passwordOrPin);
     const body = isPin
       ? { emailOrPhone, pin: passwordOrPin }
@@ -51,7 +55,7 @@ export const api = {
       throw new Error(data.error || 'Authentication failed. Please verify credentials.');
     }
 
-    this.setAuthToken(data.data.token);
+    this.setAuthToken(data.data.token, remember);
     return data.data;
   },
 
@@ -112,6 +116,45 @@ export const api = {
     }
     if (data.data?.token) {
       this.setAuthToken(data.data.token);
+    }
+    return data.data;
+  },
+
+  async requestPasswordReset(email: string): Promise<{ email: string; code?: string; expiresInMinutes: number }> {
+    const res = await fetch(`${API_BASE}/auth/password/forgot`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Failed to send verification code.');
+    }
+    return data.data;
+  },
+
+  async verifyPasswordResetOtp(email: string, code: string): Promise<{ verified: boolean }> {
+    const res = await fetch(`${API_BASE}/auth/password/verify-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, code }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Invalid verification code.');
+    }
+    return data.data;
+  },
+
+  async resetPassword(email: string, code: string, newPassword: string): Promise<{ message: string }> {
+    const res = await fetch(`${API_BASE}/auth/password/reset`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, code, newPassword }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Failed to update password.');
     }
     return data.data;
   },

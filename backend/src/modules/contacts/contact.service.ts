@@ -1,59 +1,71 @@
-import { v4 as uuidv4 } from "uuid";
-import { db, ContactGroup, ContactMember } from "../../core/database.js";
+import { Injectable, NotFoundException } from "@nestjs/common";
+import { PrismaService } from "../../prisma/prisma.service";
 
+@Injectable()
 export class ContactService {
-  getGroups(userId: string): (ContactGroup & { members: ContactMember[] })[] {
-    const groups = db.contactGroups.filter((g) => g.userId === userId);
-    return groups.map((g) => ({
-      ...g,
-      members: db.contactMembers.filter((m) => m.groupId === g.id),
-    }));
+  constructor(private readonly prisma: PrismaService) {}
+
+  async getGroups(userId: string) {
+    return this.prisma.contactGroup.findMany({
+      where: { userId },
+      include: { members: true },
+      orderBy: { name: "asc" },
+    });
   }
 
-  createGroup(userId: string, name: string, color: string): ContactGroup {
-    const newGroup: ContactGroup = {
-      id: `grp-${Date.now()}`,
-      userId,
-      name,
-      color: color || "#3A67D5",
-      isDefaultSOS: true,
-      memberCount: 0,
-    };
-    db.contactGroups.push(newGroup);
-    return newGroup;
+  async createGroup(userId: string, name: string, color?: string) {
+    return this.prisma.contactGroup.create({
+      data: {
+        id: `grp-${Date.now()}`,
+        userId,
+        name,
+        color: color || "#3A67D5",
+        isDefaultSOS: true,
+        memberCount: 0,
+      },
+    });
   }
 
-  addMember(
-    groupId: string,
-    name: string,
-    phone: string,
-    relationship: string
-  ): ContactMember {
-    const newMember: ContactMember = {
-      id: `mem-${Date.now()}`,
-      groupId,
-      name,
-      phone,
-      relationship,
-      isJoinedCall: false,
-    };
-    db.contactMembers.push(newMember);
+  async addMember(groupId: string, name: string, phone: string, relationship: string) {
+    const group = await this.prisma.contactGroup.findUnique({ where: { id: groupId } });
+    if (!group) {
+      throw new NotFoundException("Group not found");
+    }
 
-    const group = db.contactGroups.find((g) => g.id === groupId);
-    if (group) group.memberCount++;
+    const [member] = await this.prisma.$transaction([
+      this.prisma.contactMember.create({
+        data: {
+          id: `mem-${Date.now()}`,
+          groupId,
+          name,
+          phone,
+          relationship,
+          isJoinedCall: false,
+        },
+      }),
+      this.prisma.contactGroup.update({
+        where: { id: groupId },
+        data: { memberCount: { increment: 1 } },
+      }),
+    ]);
 
-    return newMember;
+    return member;
   }
 
-  deleteMember(memberId: string): boolean {
-    const idx = db.contactMembers.findIndex((m) => m.id === memberId);
-    if (idx === -1) return false;
-    const member = db.contactMembers[idx];
-    const group = db.contactGroups.find((g) => g.id === member.groupId);
-    if (group) group.memberCount = Math.max(0, group.memberCount - 1);
-    db.contactMembers.splice(idx, 1);
+  async deleteMember(memberId: string) {
+    const member = await this.prisma.contactMember.findUnique({ where: { id: memberId } });
+    if (!member) {
+      return false;
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.contactMember.delete({ where: { id: memberId } }),
+      this.prisma.contactGroup.update({
+        where: { id: member.groupId },
+        data: { memberCount: { decrement: 1 } },
+      }),
+    ]);
+
     return true;
   }
 }
-
-export const contactService = new ContactService();

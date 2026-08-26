@@ -1,65 +1,53 @@
-import { db, User, EmergencyType, SubscriptionPlan } from "../../core/database.js";
+import { Injectable } from "@nestjs/common";
+import { AlertStatus, Prisma, SubscriptionTier } from "@prisma/client";
+import { PrismaService } from "../../prisma/prisma.service";
+import { toPublicUser } from "../../common/mappers/user.mapper";
+import { CreateEmergencyTypeDto } from "./dto/emergency-type.dto";
 
+function initialsFromName(name: string): string {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("")
+    .slice(0, 2);
+}
+
+function timeAgo(date: Date): string {
+  const minutes = Math.max(1, Math.round((Date.now() - date.getTime()) / 60000));
+  if (minutes < 60) {
+    return `${minutes} min ago`;
+  }
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) {
+    return `${hours}h ago`;
+  }
+  return `${Math.round(hours / 24)}d ago`;
+}
+
+function titleCase(value: string): string {
+  return value.charAt(0) + value.slice(1).toLowerCase();
+}
+
+@Injectable()
 export class DashboardService {
-  getOverviewMetrics() {
-    const totalUsers = 4821; // Synced with Figma 64:7125
-    const activeAlerts = db.activeAlerts.filter((a) => a.status === "BROADCASTING").length + 16; // 17
-    const premiumUsers = 1294;
-    const groupsActive = 342;
-    const monthlyRevenue = 21885;
+  constructor(private readonly prisma: PrismaService) {}
 
-    const recentAlerts = [
-      {
-        id: "rec-1",
-        userName: "Sarah Mitchell",
-        userInitials: "SM",
-        color: "#2563EB",
-        category: "Assault",
-        severity: "Critical",
-        timeAgo: "14 min ago",
-        status: "Active",
-      },
-      {
-        id: "rec-2",
-        userName: "Priya Sharma",
-        userInitials: "PS",
-        color: "#2563EB",
-        category: "Medical Emergency",
-        severity: "Critical",
-        timeAgo: "31 min ago",
-        status: "Active",
-      },
-      {
-        id: "rec-3",
-        userName: "Aisha Johnson",
-        userInitials: "AJ",
-        color: "#2563EB",
-        category: "Car Accident",
-        severity: "High",
-        timeAgo: "1h ago",
-        status: "Resolved",
-      },
-      {
-        id: "rec-4",
-        userName: "Devon Brooks",
-        userInitials: "DB",
-        color: "#2563EB",
-        category: "Vehicle Breakdown",
-        severity: "Urgent",
-        timeAgo: "2h ago",
-        status: "Resolved",
-      },
-      {
-        id: "rec-5",
-        userName: "Nina Torres",
-        userInitials: "NT",
-        color: "#2563EB",
-        category: "Suspicious Person",
-        severity: "Urgent",
-        timeAgo: "3h ago",
-        status: "Resolved",
-      },
-    ];
+  async getOverviewMetrics() {
+    const [totalUsers, activeAlerts, premiumUsers, freeUsers, groupsActive, recent] =
+      await Promise.all([
+        this.prisma.user.count(),
+        this.prisma.alert.count({ where: { status: AlertStatus.BROADCASTING } }),
+        this.prisma.user.count({ where: { subscriptionTier: SubscriptionTier.PREMIUM } }),
+        this.prisma.user.count({ where: { subscriptionTier: SubscriptionTier.FREE } }),
+        this.prisma.contactGroup.count(),
+        this.prisma.alert.findMany({
+          orderBy: { triggeredAt: "desc" },
+          take: 5,
+        }),
+      ]);
+
+    const monthlyRevenue = Math.round(premiumUsers * 7.99);
 
     return {
       kpis: {
@@ -69,56 +57,94 @@ export class DashboardService {
         groupsActive: { value: groupsActive, change: "+5% this month" },
       },
       subscriptionSplit: {
-        premium: 1294,
-        free: 1340,
-        monthlyRevenue: monthlyRevenue,
+        premium: premiumUsers,
+        free: freeUsers,
+        monthlyRevenue,
         revenueGrowth: "+14% from last month",
       },
-      recentAlerts,
+      recentAlerts: recent.map((alert) => ({
+        id: alert.id,
+        userName: alert.userName,
+        userInitials: initialsFromName(alert.userName),
+        color: "#2563EB",
+        category: alert.emergencyTypeLabel,
+        severity: titleCase(alert.severity),
+        timeAgo: timeAgo(alert.triggeredAt),
+        status: alert.status === AlertStatus.BROADCASTING ? "Active" : titleCase(alert.status),
+      })),
     };
   }
 
-  getUsers(query?: string) {
-    if (!query) return db.users;
-    const q = query.toLowerCase();
-    return db.users.filter(
-      (u) =>
-        u.fullName.toLowerCase().includes(q) ||
-        u.email.toLowerCase().includes(q) ||
-        u.phone.includes(q)
-    );
+  async getUsers(query?: string) {
+    const where: Prisma.UserWhereInput = query
+      ? {
+          OR: [
+            { fullName: { contains: query, mode: "insensitive" } },
+            { email: { contains: query, mode: "insensitive" } },
+            { phone: { contains: query, mode: "insensitive" } },
+          ],
+        }
+      : {};
+
+    const users = await this.prisma.user.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+    });
+    return users.map(toPublicUser);
   }
 
-  toggleUserVerification(userId: string): User | null {
-    const user = db.users.find((u) => u.id === userId);
-    if (!user) return null;
-    user.isVerified = !user.isVerified;
-    return user;
+  async toggleUserVerification(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      return null;
+    }
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: { isVerified: !user.isVerified },
+    });
+    return toPublicUser(updated);
   }
 
-  getEmergencyTypes(): EmergencyType[] {
-    return db.emergencyTypes;
+  async getEmergencyTypes() {
+    return this.prisma.emergencyType.findMany({ orderBy: { label: "asc" } });
   }
 
-  createEmergencyType(type: Omit<EmergencyType, "id">): EmergencyType {
-    const newType: EmergencyType = {
-      id: `et-${Date.now()}`,
-      ...type,
-    };
-    db.emergencyTypes.push(newType);
-    return newType;
+  async createEmergencyType(dto: CreateEmergencyTypeDto) {
+    return this.prisma.emergencyType.create({
+      data: {
+        id: `et-${Date.now()}`,
+        key: dto.key,
+        label: dto.label,
+        severity: dto.severity,
+        icon: dto.icon,
+        description: dto.description,
+        isActive: dto.isActive ?? true,
+      },
+    });
   }
 
-  toggleEmergencyType(id: string): EmergencyType | null {
-    const et = db.emergencyTypes.find((t) => t.id === id);
-    if (!et) return null;
-    et.isActive = !et.isActive;
-    return et;
+  async toggleEmergencyType(id: string) {
+    const type = await this.prisma.emergencyType.findUnique({ where: { id } });
+    if (!type) {
+      return null;
+    }
+    return this.prisma.emergencyType.update({
+      where: { id },
+      data: { isActive: !type.isActive },
+    });
   }
 
-  getSubscriptions(): SubscriptionPlan[] {
-    return db.subscriptionPlans;
+  async getSubscriptions() {
+    return this.prisma.subscriptionPlan.findMany({ orderBy: { priceMonthly: "asc" } });
+  }
+
+  async getJournals() {
+    const journals = await this.prisma.journal.findMany({
+      orderBy: { triggeredAt: "desc" },
+    });
+    return journals.map((journal) => ({
+      ...journal,
+      triggeredAt: journal.triggeredAt.toISOString(),
+    }));
   }
 }
-
-export const dashboardService = new DashboardService();

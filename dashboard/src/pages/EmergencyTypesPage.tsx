@@ -92,7 +92,7 @@ export const EmergencyTypesPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Top Header & Add Button */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-bold text-gray-900 tracking-tight">
           Emergency Type
         </h2>
@@ -102,7 +102,7 @@ export const EmergencyTypesPage: React.FC = () => {
             setTypeName('');
             setIsAddModalOpen(true);
           }}
-          className="flex items-center gap-2 px-4 py-2 bg-[#2563EB] hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm hover:scale-102"
+          className="flex items-center gap-2 px-4 py-2 bg-[#2563EB] hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm shrink-0"
         >
           <Plus className="w-4 h-4" />
           Add Type
@@ -154,8 +154,8 @@ export const EmergencyTypesPage: React.FC = () => {
 
       {/* Frame 2147230177: Add Type Modal */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl w-full max-w-sm overflow-hidden animate-scale-up">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl border border-gray-200 shadow-2xl w-full max-w-sm overflow-y-auto max-h-[90dvh]">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
               <h3 className="font-bold text-gray-900 text-sm">Add Type</h3>
               <button
@@ -197,8 +197,8 @@ export const EmergencyTypesPage: React.FC = () => {
 
       {/* Frame 2147230178: Edit Type Modal */}
       {editingType && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl w-full max-w-sm overflow-hidden animate-scale-up">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl border border-gray-200 shadow-2xl w-full max-w-sm overflow-y-auto max-h-[90dvh]">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
               <h3 className="font-bold text-gray-900 text-sm">Edit Type</h3>
               <button

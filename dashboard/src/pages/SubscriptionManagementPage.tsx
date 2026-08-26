@@ -161,12 +161,12 @@ export const SubscriptionManagementPage: React.FC = () => {
         {plans.map((plan) => {
           const isPremium = plan.name.toLowerCase().includes('premium');
           return (
-            <div key={plan.id} className="figma-card p-6 flex flex-col justify-between">
+            <div key={plan.id} className="figma-card p-4 sm:p-6 flex flex-col justify-between">
               <div>
                 {/* Header row: Plan Name & Price */}
-                <div className="flex items-start justify-between pb-4 border-b border-gray-100">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between pb-4 border-b border-gray-100">
                   <h3 className="text-base font-bold text-gray-900">{plan.name}</h3>
-                  <div className="text-right">
+                  <div className="sm:text-right">
                     <span className="text-2xl font-extrabold text-[#2563EB]">
                       ${plan.price.toFixed(2)}
                     </span>
@@ -221,7 +221,7 @@ export const SubscriptionManagementPage: React.FC = () => {
 
       {/* Bottom Table: Recent Transactions */}
       <div className="figma-card overflow-hidden">
-        <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+        <div className="p-4 sm:p-5 border-b border-gray-100 flex items-center justify-between gap-3">
           <h3 className="text-sm font-bold text-gray-900">Recent Transactions</h3>
           <button
             onClick={exportCSV}
@@ -231,7 +231,38 @@ export const SubscriptionManagementPage: React.FC = () => {
           </button>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="md:hidden divide-y divide-gray-100">
+          {transactions.map((tx) => (
+            <div key={tx.id} className="px-4 py-3.5 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-bold text-xs text-gray-900 truncate">{tx.userName}</p>
+                <p className="text-[11px] text-gray-500 mt-0.5">
+                  <span className={tx.plan === 'Premium' ? 'text-amber-500 font-semibold' : ''}>
+                    {tx.plan}
+                  </span>
+                  {' · '}
+                  {tx.date}
+                </p>
+              </div>
+              <div className="text-right shrink-0">
+                <p className="font-bold text-xs text-gray-800">{tx.amount}</p>
+                <p
+                  className={`text-[11px] font-bold mt-0.5 ${
+                    tx.status === 'Paid'
+                      ? 'text-emerald-600'
+                      : tx.status === 'Failed'
+                      ? 'text-red-500'
+                      : 'text-gray-400'
+                  }`}
+                >
+                  {tx.status}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="overflow-x-auto hidden md:block">
           <table className="w-full text-left text-sm">
             <thead className="bg-gray-50/75 text-gray-400 uppercase text-[10px] tracking-wider font-bold border-b border-gray-100">
               <tr>
@@ -279,8 +310,8 @@ export const SubscriptionManagementPage: React.FC = () => {
 
       {/* Add Subscription Modal Container */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl w-full max-w-md overflow-hidden animate-scale-up">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl border border-gray-200 shadow-2xl w-full max-w-md overflow-y-auto max-h-[90dvh]">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
               <h3 className="font-bold text-gray-900 text-sm">Add Subscription</h3>
               <button
@@ -320,7 +351,7 @@ export const SubscriptionManagementPage: React.FC = () => {
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                   <label className="text-xs font-bold text-gray-700">Features</label>
                   <button
                     type="button"
@@ -378,8 +409,8 @@ export const SubscriptionManagementPage: React.FC = () => {
 
       {/* Edit Subscription Modal Container */}
       {editingPlan && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl w-full max-w-md overflow-hidden animate-scale-up">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl border border-gray-200 shadow-2xl w-full max-w-md overflow-y-auto max-h-[90dvh]">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
               <h3 className="font-bold text-gray-900 text-sm">Edit Subscription</h3>
               <button
@@ -419,7 +450,7 @@ export const SubscriptionManagementPage: React.FC = () => {
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                   <label className="text-xs font-bold text-gray-700">Features</label>
                   <button
                     type="button"
