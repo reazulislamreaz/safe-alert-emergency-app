@@ -9,6 +9,7 @@ import { ProfileModule } from "./modules/profile/profile.module";
 import { JournalsModule } from "./modules/journals/journals.module";
 import { NotificationsModule } from "./modules/notifications/notifications.module";
 import { DashboardModule } from "./modules/dashboard/dashboard.module";
+import { UploadsModule } from "./modules/uploads/uploads.module";
 import { AlertsGateway } from "./gateways/alerts.gateway";
 import { HealthController } from "./health.controller";
 
@@ -24,6 +25,7 @@ import { HealthController } from "./health.controller";
     JournalsModule,
     NotificationsModule,
     DashboardModule,
+    UploadsModule,
   ],
   controllers: [HealthController],
   providers: [AlertsGateway],

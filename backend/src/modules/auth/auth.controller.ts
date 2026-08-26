@@ -10,6 +10,7 @@ import {
 import { AuthService } from "./auth.service";
 import { RegisterDto } from "./dto/register.dto";
 import { LoginDto } from "./dto/login.dto";
+import { DashboardLoginDto } from "./dto/dashboard-login.dto";
 import { SendOtpDto, VerifyOtpDto } from "./dto/otp.dto";
 import { ForgotPinDto, ResetPinDto, SetupPinDto, VerifyPinDto, VerifyPinResetDto, BiometricDto } from "./dto/pin.dto";
 import { ForgotPasswordDto, ResetPasswordDto, VerifyResetOtpDto } from "./dto/password-reset.dto";
@@ -17,6 +18,7 @@ import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { JwtPayload } from "../../config/env";
 import { RACE_OPTIONS } from "./auth.constants";
+import { isDashboardSession, tokenAudience } from "../../common/auth/dashboard-admin";
 
 @ApiTags("Auth")
 @Controller("api/auth")
@@ -123,18 +125,26 @@ export class AuthController {
   @ApiBearerAuth("access-token")
   @ApiOperation({ summary: "Verify PIN for delete account / logout" })
   async verifyPin(@Body() dto: VerifyPinDto, @CurrentUser() user: JwtPayload) {
-    const isAdmin = user.role === "OPS_ADMIN" || user.role === "SUPER_ADMIN";
-    const userId = isAdmin && dto.userId ? dto.userId : user.sub;
+    const userId = isDashboardSession(user) && dto.userId ? dto.userId : user.sub;
     const data = await this.authService.verifyPin(userId, dto.pin);
     return { success: true, data };
   }
 
   @Post("login")
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Login with email/phone + password or PIN" })
+  @ApiOperation({ summary: "Citizen login with email/phone + PIN or password" })
   @ApiUnauthorizedResponse({ description: "Invalid credentials" })
   async login(@Body() dto: LoginDto) {
     const data = await this.authService.login(dto);
+    return { success: true, data };
+  }
+
+  @Post("dashboard/login")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Dashboard Admin login — designated Admin account only" })
+  @ApiUnauthorizedResponse({ description: "Invalid credentials" })
+  async dashboardLogin(@Body() dto: DashboardLoginDto) {
+    const data = await this.authService.loginDashboard(dto);
     return { success: true, data };
   }
 
@@ -183,7 +193,7 @@ export class AuthController {
   @ApiOperation({ summary: "Current user, groups, and active alerts" })
   @ApiUnauthorizedResponse({ description: "Missing or invalid Bearer token" })
   async me(@CurrentUser() user: JwtPayload) {
-    const data = await this.authService.getMe(user.sub);
+    const data = await this.authService.getMe(user.sub, tokenAudience(user));
     return { success: true, data };
   }
 }

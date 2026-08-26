@@ -11,6 +11,7 @@ import { toContactDto, toGroupDto, toMemberDto } from "../../common/mappers/cont
 import { AddMemberDto, CreateContactDto, CreateGroupDto, UpdateContactDto, UpdateGroupDto } from "./dto/contact.dto";
 import { CONTACT_STATUSES, CONTACTS_EMPTY, GROUPS_EMPTY, GROUP_COLORS, REFERRAL_COPY } from "./contact.constants";
 import { NotificationService } from "../notifications/notification.service";
+import { RealtimeService } from "../../realtime/realtime.service";
 
 export type ListContactsOptions = {
   query?: string;
@@ -31,6 +32,7 @@ export class ContactService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationService,
+    private readonly realtime: RealtimeService,
   ) {}
 
   getStatuses() {
@@ -222,8 +224,14 @@ export class ContactService {
       orderBy: { name: "asc" },
     });
 
+    const viewer = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { phoneDigits: true },
+    });
     return {
-      groups: groups.map((group) => toGroupDto(group, plan.maxMembersPerGroup)),
+      groups: groups.map((group) =>
+        this.toGroupWithPresence(group, plan.maxMembersPerGroup, userId, viewer?.phoneDigits ?? ""),
+      ),
       plan,
       colors: GROUP_COLORS.map((item) => ({ ...item })),
       emptyState: groups.length ? null : { ...GROUPS_EMPTY },
@@ -233,7 +241,7 @@ export class ContactService {
   async getGroup(userId: string, groupId: string) {
     const plan = await this.getPlanUsage(userId);
     const group = await this.requireGroup(userId, groupId);
-    return toGroupDto(group, plan.maxMembersPerGroup);
+    return this.toGroupWithPresence(group, plan.maxMembersPerGroup, userId);
   }
 
   async createGroup(userId: string, dto: CreateGroupDto) {
@@ -272,7 +280,7 @@ export class ContactService {
       include: groupInclude,
     });
 
-    return toGroupDto(group, plan.maxMembersPerGroup);
+    return this.toGroupWithPresence(group, plan.maxMembersPerGroup, userId);
   }
 
   async updateGroup(userId: string, groupId: string, dto: UpdateGroupDto) {
@@ -338,7 +346,7 @@ export class ContactService {
       });
     });
 
-    return toGroupDto(group, plan.maxMembersPerGroup);
+    return this.toGroupWithPresence(group, plan.maxMembersPerGroup, userId);
   }
 
   async deleteGroup(userId: string, groupId: string) {
@@ -574,6 +582,29 @@ export class ContactService {
         : null,
       upgradeCta: "Upgrade",
       addGroupCta: canCreateGroup ? "+ Add New Group" : "+ Add New Group (Upgrade Required)",
+    };
+  }
+
+  private toGroupWithPresence(
+    group: Parameters<typeof toGroupDto>[0],
+    maxMembersPerGroup: number,
+    userId: string,
+    phoneDigits?: string,
+  ) {
+    const viewerPhone = phoneDigits ?? "";
+    const memberOnline = group.members.filter((member) =>
+      this.realtime.isPhoneOnline(member.phoneDigits),
+    ).length;
+    const ownerCounted =
+      group.userId === userId &&
+      this.realtime.isUserOnline(userId) &&
+      !group.members.some((member) => member.phoneDigits === viewerPhone);
+    const onlineCount = memberOnline + (ownerCounted ? 1 : 0);
+    return {
+      ...toGroupDto(group, maxMembersPerGroup, onlineCount),
+      members: group.members.map((member) =>
+        toMemberDto(member, this.realtime.isPhoneOnline(member.phoneDigits)),
+      ),
     };
   }
 

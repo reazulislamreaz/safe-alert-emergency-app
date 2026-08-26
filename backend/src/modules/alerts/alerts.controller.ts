@@ -17,7 +17,6 @@ import {
   ApiQuery,
   ApiTags,
 } from "@nestjs/swagger";
-import { Role } from "@prisma/client";
 import { AlertService } from "./alert.service";
 import {
   QuickResponseDto,
@@ -30,10 +29,10 @@ import {
 } from "./dto/alert.dto";
 import { OptionalJwtGuard } from "../../common/guards/optional-jwt.guard";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
-import { RolesGuard } from "../../common/guards/roles.guard";
-import { Roles } from "../../common/decorators/roles.decorator";
+import { DashboardAdminGuard } from "../../common/guards/dashboard-admin.guard";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { JwtPayload } from "../../config/env";
+import { isDashboardSession } from "../../common/auth/dashboard-admin";
 
 @ApiTags("Alerts")
 @ApiBearerAuth("access-token")
@@ -80,9 +79,8 @@ export class AlertsController {
   }
 
   @Get("active")
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.OPS_ADMIN, Role.SUPER_ADMIN)
-  @ApiOperation({ summary: "Admin: list broadcasting SOS alerts" })
+  @UseGuards(JwtAuthGuard, DashboardAdminGuard)
+  @ApiOperation({ summary: "Dashboard Admin: list broadcasting SOS alerts" })
   async getActive() {
     const data = await this.alertService.getActiveAlerts();
     return { success: true, data };
@@ -102,10 +100,10 @@ export class AlertsController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: "Create Emergency Alert / Quick / SOS / Test — notify groups" })
   async trigger(@Body() dto: TriggerAlertDto, @CurrentUser() user: JwtPayload) {
-    const isAdmin = user.role === "OPS_ADMIN" || user.role === "SUPER_ADMIN";
+    const asAdmin = isDashboardSession(user);
     const data = await this.alertService.triggerAlert({
       ...dto,
-      userId: isAdmin && dto.userId ? dto.userId : user.sub,
+      userId: asAdmin && dto.userId ? dto.userId : user.sub,
     });
     return { success: true, data };
   }
@@ -117,10 +115,10 @@ export class AlertsController {
     summary: "Direct Emergency Alert — SOS hold or Quick Emergency, skip confirmation",
   })
   async direct(@Body() dto: TriggerAlertDto, @CurrentUser() user: JwtPayload) {
-    const isAdmin = user.role === "OPS_ADMIN" || user.role === "SUPER_ADMIN";
+    const asAdmin = isDashboardSession(user);
     const data = await this.alertService.triggerDirect({
       ...dto,
-      userId: isAdmin && dto.userId ? dto.userId : user.sub,
+      userId: asAdmin && dto.userId ? dto.userId : user.sub,
     });
     return { success: true, data };
   }

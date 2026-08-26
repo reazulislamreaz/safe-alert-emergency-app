@@ -25,34 +25,6 @@ interface CreateAccountPageProps {
   onRegistered: (session: { phone: string; token: string; otpCode?: string }) => void;
 }
 
-async function readPhoto(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    const url = URL.createObjectURL(file);
-    image.onload = () => {
-      const canvas = document.createElement('canvas');
-      const max = 320;
-      const scale = Math.min(1, max / Math.max(image.width, image.height));
-      canvas.width = Math.max(1, Math.round(image.width * scale));
-      canvas.height = Math.max(1, Math.round(image.height * scale));
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        URL.revokeObjectURL(url);
-        reject(new Error('Could not process photo.'));
-        return;
-      }
-      ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
-      URL.revokeObjectURL(url);
-      resolve(canvas.toDataURL('image/jpeg', 0.7));
-    };
-    image.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error('Could not read photo.'));
-    };
-    image.src = url;
-  });
-}
-
 function parseEmergencyContact(value: string): { name: string; relation: string } {
   const [name, ...rest] = value.split(' - ');
   return {
@@ -78,10 +50,15 @@ export const CreateAccountPage: React.FC<CreateAccountPageProps> = ({ onClose, o
 
   const handlePhoto = async (index: number, file?: File) => {
     if (!file) return;
+    setErrorMessage(null);
     try {
-      const dataUrl = await readPhoto(file);
+      const uploaded = await api.uploadImages([file]);
+      const url = uploaded.files[0]?.url;
+      if (!url) {
+        throw new Error('Could not upload photo.');
+      }
       const next = [...photos];
-      next[index] = dataUrl;
+      next[index] = url;
       setPhotos(next);
     } catch (err: unknown) {
       setErrorMessage(err instanceof Error ? err.message : 'Could not add photo.');

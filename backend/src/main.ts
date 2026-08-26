@@ -1,16 +1,21 @@
 import "reflect-metadata";
 import { ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
+import { NestExpressApplication } from "@nestjs/platform-express";
 import { IoAdapter } from "@nestjs/platform-socket.io";
+import { join } from "path";
 import { AppModule } from "./app.module";
 import { env } from "./config/env";
 import { setupSwagger } from "./config/swagger";
 import { HttpExceptionFilter } from "./common/filters/http-exception.filter";
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
   app.useWebSocketAdapter(new IoAdapter(app));
   app.enableCors({ origin: env.corsOrigin, credentials: true });
+  app.useStaticAssets(join(process.cwd(), "uploads"), {
+    prefix: "/api/uploads/files/",
+  });
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

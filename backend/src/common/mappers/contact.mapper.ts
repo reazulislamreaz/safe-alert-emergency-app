@@ -50,7 +50,7 @@ export function toContactDto(contact: ContactWithMemberships) {
   };
 }
 
-export function toMemberDto(member: ContactMember) {
+export function toMemberDto(member: ContactMember, online = false) {
   return {
     id: member.id,
     groupId: member.groupId,
@@ -62,12 +62,18 @@ export function toMemberDto(member: ContactMember) {
     relationship: member.relationship,
     initials: initialsFromName(member.name),
     isJoinedCall: member.isJoinedCall,
+    online,
   };
 }
 
-export function toGroupDto(group: GroupWithMembers, maxMembersPerGroup: number) {
+export function toGroupDto(
+  group: GroupWithMembers,
+  maxMembersPerGroup: number,
+  onlineCount = 0,
+) {
   const cap = maxMembersPerGroup === 0 ? null : maxMembersPerGroup;
   const canAddMember = cap === null || group.memberCount < cap;
+  const memberCount = group.memberCount || group.members.length;
   return {
     id: group.id,
     userId: group.userId,
@@ -75,13 +81,15 @@ export function toGroupDto(group: GroupWithMembers, maxMembersPerGroup: number) 
     tag: groupTagFromName(group.name),
     color: group.color,
     isDefaultSOS: group.isDefaultSOS,
-    memberCount: group.memberCount,
+    memberCount,
     memberLimit: cap,
-    memberLabel: cap ? `${group.memberCount}/${cap} members` : `${group.memberCount} members`,
-    memberCounter: cap ? `${group.memberCount}/${cap}` : `${group.memberCount}`,
-    fillRatio: cap ? Math.min(1, group.memberCount / cap) : 0,
+    memberLabel: cap ? `${memberCount}/${cap} members` : `${memberCount} members`,
+    memberCounter: cap ? `${memberCount}/${cap}` : `${memberCount}`,
+    presenceLabel: `${memberCount} members · ${onlineCount} online`,
+    onlineCount,
+    fillRatio: cap ? Math.min(1, memberCount / cap) : 0,
     canAddMember,
     inviteCta: "Invite",
-    members: group.members.map(toMemberDto),
+    members: group.members.map((member) => toMemberDto(member)),
   };
 }

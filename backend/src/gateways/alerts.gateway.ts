@@ -12,7 +12,9 @@ import {
 } from "@nestjs/websockets";
 import { Role } from "@prisma/client";
 import { Server, Socket } from "socket.io";
-import { env, JwtPayload } from "../config/env";
+import { env, JwtAudience, JwtPayload } from "../config/env";
+import { isDashboardSession } from "../common/auth/dashboard-admin";
+import { PrismaService } from "../prisma/prisma.service";
 import { AlertService } from "../modules/alerts/alert.service";
 import { DashboardService } from "../modules/dashboard/dashboard.service";
 import { RealtimeService } from "../realtime/realtime.service";
@@ -59,6 +61,8 @@ export class AlertsGateway
     const user = socket.data?.user as JwtPayload | undefined;
     if (user?.sub) {
       socket.join(`user:${user.sub}`);
+      socket.join("presence");
+      this.realtime.markOnline(socket.id, user.sub, user.phone);
     }
     this.logger.log(
       `Client connected: ${socket.id}${user ? ` (User: ${user.email} [${user.role}])` : " (Guest/Demo)"}`,
@@ -66,6 +70,7 @@ export class AlertsGateway
   }
 
   handleDisconnect(socket: Socket): void {
+    this.realtime.markOffline(socket.id);
     this.logger.log(`Client disconnected: ${socket.id}`);
   }
 

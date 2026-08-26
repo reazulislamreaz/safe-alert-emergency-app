@@ -20,6 +20,7 @@ const phone_1 = require("../../common/utils/phone");
 const token_hash_1 = require("../../common/utils/token-hash");
 const user_mapper_1 = require("../../common/mappers/user.mapper");
 const alert_mapper_1 = require("../../common/mappers/alert.mapper");
+const uploads_constants_1 = require("../uploads/uploads.constants");
 let AuthService = class AuthService {
     prisma;
     jwt;
@@ -61,7 +62,7 @@ let AuthService = class AuthService {
                 emergencyContactName: dto.emergencyContactName,
                 emergencyContactPhone: emergencyPhone,
                 emergencyContactRelation: emergencyRelation,
-                profilePhotos: dto.profilePhotos ?? [],
+                profilePhotos: (0, uploads_constants_1.requireStoredImageUrls)(dto.profilePhotos) ?? [],
                 avatar: dto.profilePhotos?.[0] ||
                     "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
                 contacts: {

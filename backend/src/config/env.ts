@@ -10,14 +10,27 @@ export const env = {
   databaseUrl: process.env.DATABASE_URL || "",
   zegoAppId: process.env.ZEGO_APP_ID ? parseInt(process.env.ZEGO_APP_ID, 10) : 0,
   zegoServerSecret: process.env.ZEGO_SERVER_SECRET || "",
+  s3: {
+    region: process.env.AWS_REGION || "us-east-1",
+    bucket: process.env.AWS_S3_BUCKET || "",
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
+    publicBaseUrl: process.env.AWS_S3_PUBLIC_BASE_URL || "",
+  },
+  dashboardAdminEmail: (process.env.DASHBOARD_ADMIN_EMAIL || "admin@safealert.app")
+    .trim()
+    .toLowerCase(),
 };
+
+export type JwtAudience = "app" | "dashboard";
 
 export type JwtPayload = {
   sub: string;
   email: string;
   phone: string;
-  role: "USER" | "OPS_ADMIN" | "SUPER_ADMIN";
+  role: "USER" | "ADMIN" | "OPS_ADMIN" | "SUPER_ADMIN";
   tier: "FREE" | "PREMIUM";
+  aud?: JwtAudience;
   iat?: number;
   exp?: number;
 };

@@ -31,7 +31,7 @@ export class RolesGuard implements CanActivate {
 
     if (!requiredRoles.includes(user.role as Role)) {
       throw new ForbiddenException(
-        "You are not authorized to access the operator console.",
+        "You are not authorized to access this resource.",
       );
     }
 

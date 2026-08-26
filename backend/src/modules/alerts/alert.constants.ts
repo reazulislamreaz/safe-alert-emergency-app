@@ -140,3 +140,17 @@ export const FIGMA_EMERGENCY_TYPES = [
 ] as const;
 
 export const DEFAULT_EMERGENCY_TYPE_ID = "et-unsafe";
+
+export function emergencyEmoji(typeIdOrLabel: string): string {
+  const value = typeIdOrLabel.toLowerCase();
+  if (value.includes("assault")) return "🥊";
+  if (value.includes("medical")) return "🩺";
+  if (value.includes("fire")) return "🔥";
+  if (value.includes("accident")) return "🚗";
+  if (value.includes("theft")) return "👜";
+  if (value.includes("stalk")) return "👁️";
+  if (value.includes("disaster")) return "🌊";
+  if (value.includes("mental")) return "🧠";
+  if (value.includes("child")) return "👶";
+  return "🚨";
+}

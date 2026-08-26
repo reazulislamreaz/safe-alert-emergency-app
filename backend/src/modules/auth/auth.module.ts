@@ -5,6 +5,8 @@ import { AuthController } from "./auth.controller";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { OptionalJwtGuard } from "../../common/guards/optional-jwt.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
+import { DashboardAdminGuard } from "../../common/guards/dashboard-admin.guard";
+import { DashboardAdminService } from "../../common/auth/dashboard-admin.service";
 import { env } from "../../config/env";
 
 @Module({
@@ -16,7 +18,7 @@ import { env } from "../../config/env";
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtAuthGuard, OptionalJwtGuard, RolesGuard],
-  exports: [AuthService, JwtAuthGuard, OptionalJwtGuard, RolesGuard],
+  providers: [AuthService, JwtAuthGuard, OptionalJwtGuard, RolesGuard, DashboardAdminService, DashboardAdminGuard],
+  exports: [AuthService, JwtAuthGuard, OptionalJwtGuard, RolesGuard, DashboardAdminService, DashboardAdminGuard],
 })
 export class AuthModule {}

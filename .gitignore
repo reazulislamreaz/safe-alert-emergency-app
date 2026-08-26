@@ -50,7 +50,8 @@ Thumbs.db
 *.swp
 *.swo
 
-# Temporary & cache
+# Uploaded images (local S3 fallback)
+backend/uploads/
 .cache/
 .tmp/
 tmp/

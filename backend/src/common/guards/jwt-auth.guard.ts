@@ -5,7 +5,7 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
-import { JwtPayload } from "../../config/env";
+import { JwtAudience, JwtPayload } from "../../config/env";
 import { PrismaService } from "../../prisma/prisma.service";
 import { hashToken } from "../utils/token-hash";
 
@@ -39,14 +39,31 @@ export class JwtAuthGuard implements CanActivate {
       if (revoked && revoked.expiresAt > new Date()) {
         throw new UnauthorizedException("Session ended. Please log in again.");
       }
-      const exists = await this.prisma.user.findUnique({
+      const record = await this.prisma.user.findUnique({
         where: { id: payload.sub },
-        select: { id: true },
+        select: {
+          id: true,
+          email: true,
+          phone: true,
+          role: true,
+          subscriptionTier: true,
+        },
       });
-      if (!exists) {
+      if (!record) {
         throw new UnauthorizedException("Session ended. Please log in again.");
       }
-      request.user = payload;
+      const aud: JwtAudience | undefined =
+        payload.aud === "dashboard" ? "dashboard" : payload.aud === "app" ? "app" : undefined;
+      request.user = {
+        sub: record.id,
+        email: record.email,
+        phone: record.phone,
+        role: record.role,
+        tier: record.subscriptionTier,
+        aud: aud ?? (payload.aud as JwtAudience | undefined),
+        iat: payload.iat,
+        exp: payload.exp,
+      };
       return true;
     } catch (error) {
       if (error instanceof UnauthorizedException) {

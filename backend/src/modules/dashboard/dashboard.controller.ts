@@ -17,18 +17,15 @@ import {
   ApiQuery,
   ApiTags,
 } from "@nestjs/swagger";
-import { Role } from "@prisma/client";
-import { DashboardService } from "./dashboard.service";
 import { CreateEmergencyTypeDto } from "./dto/emergency-type.dto";
+import { DashboardService } from "./dashboard.service";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
-import { RolesGuard } from "../../common/guards/roles.guard";
-import { Roles } from "../../common/decorators/roles.decorator";
+import { DashboardAdminGuard } from "../../common/guards/dashboard-admin.guard";
 
 @ApiTags("Dashboard")
 @ApiBearerAuth("access-token")
 @Controller("api/dashboard")
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.OPS_ADMIN, Role.SUPER_ADMIN)
+@UseGuards(JwtAuthGuard, DashboardAdminGuard)
 export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 

@@ -21,6 +21,8 @@ import {
   SUBSCRIPTION_COPY,
 } from "./profile.constants";
 import { CancelSubscriptionDto, SubscribeDto, UpdateProfileDto } from "./dto/profile.dto";
+import { requireStoredImageUrls } from "../uploads/uploads.constants";
+import { UploadsService } from "../uploads/uploads.service";
 
 const MS_DAY = 24 * 60 * 60 * 1000;
 
@@ -29,6 +31,7 @@ export class ProfileService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
+    private readonly uploads: UploadsService,
   ) {}
 
   async getProfile(userId: string) {
@@ -83,7 +86,7 @@ export class ProfileService {
       }
     }
 
-    const photos = dto.profilePhotos;
+    const photos = requireStoredImageUrls(dto.profilePhotos);
     if (photos && photos.filter(Boolean).length > PROFILE_PHOTO_LIMIT) {
       throw new BadRequestException(`You can add up to ${PROFILE_PHOTO_LIMIT} profile photos.`);
     }
@@ -119,8 +122,13 @@ export class ProfileService {
   }
 
   async updatePhotos(userId: string, photos: string[]) {
-    const cleaned = photos.filter(Boolean).slice(0, PROFILE_PHOTO_LIMIT);
+    const cleaned = requireStoredImageUrls(photos)?.slice(0, PROFILE_PHOTO_LIMIT) ?? [];
     return this.updateProfile(userId, { profilePhotos: cleaned, avatar: cleaned[0] });
+  }
+
+  async updatePhotosFromFiles(userId: string, files: Express.Multer.File[]) {
+    const stored = await this.uploads.uploadFiles(files ?? [], userId);
+    return this.updatePhotos(userId, stored.map((item) => item.url));
   }
 
   async deleteAccount(userId: string, pin: string, accessToken?: string) {

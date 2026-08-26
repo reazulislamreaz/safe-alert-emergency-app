@@ -346,6 +346,21 @@ export const api = {
     return data.data;
   },
 
+  async uploadImages(files: File[]) {
+    const form = new FormData();
+    files.forEach((file) => form.append('files', file));
+    const res = await fetch(`${API_BASE}/uploads/images`, {
+      method: 'POST',
+      headers: this.authHeaders(false),
+      body: form,
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to upload photos'));
+    }
+    return data.data as { files: { key: string; url: string; contentType: string; size: number }[]; countLabel: string };
+  },
+
   async updateProfilePhotos(photos: string[]) {
     const res = await fetch(`${API_BASE}/profile/photos`, {
       method: 'POST',
@@ -925,6 +940,17 @@ export const api = {
     const data = await res.json();
     if (!res.ok || !data.success) {
       throw new Error(readApiError(data, 'Failed to load alerts inbox'));
+    }
+    return data.data;
+  },
+
+  async getResponderView(alertId: string) {
+    const res = await fetch(`${API_BASE}/alerts/${alertId}/respond`, {
+      headers: this.authHeaders(false),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to load live alert'));
     }
     return data.data;
   },

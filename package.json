@@ -23,5 +23,8 @@
     "webrtc"
   ],
   "author": "SafeAlert Architecture Team",
-  "license": "ISC"
+  "license": "ISC",
+  "pnpm": {
+    "ignoredBuiltDependencies": ["@scarf/scarf"]
+  }
 }

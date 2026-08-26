@@ -83,18 +83,38 @@ export interface ActiveAlert {
 export interface AlertInboxCard {
   id: string;
   title?: string;
+  userName?: string;
+  initials?: string;
+  emoji?: string;
   headline?: string;
   subtitle?: string;
   statusLabel?: string;
   timeLabel?: string;
+  emergencyType?: string;
+  modeLabel?: string;
+  location?: {
+    latitude: number;
+    longitude: number;
+    address: string;
+  };
+  joinCallLabel?: string;
+  messageLabel?: string;
 }
 
 export interface AlertInbox {
   greeting: string;
+  user?: {
+    id: string;
+    fullName: string;
+    firstName: string;
+    avatar?: string | null;
+  };
+  notifications?: { title: string; unreadCount: number };
   liveBanner: {
     alertId: string;
     title: string;
     cta: string;
+    emoji?: string;
     headline: string;
     subtitle: string;
     statusLabel: string;
@@ -113,6 +133,20 @@ export interface AlertInbox {
     items: { id: string; groupId: string; groupName: string; invitedBy: string; timeLabel?: string }[];
   };
   myGroups: { id: string; name: string; memberCount: number; onlineCount: number; memberLabel: string }[];
+}
+
+export interface AlertResponderView extends ActiveAlert {
+  title: string;
+  groupLabel: string;
+  actions: {
+    joinCallLabel: string;
+    messageLabel: string;
+    respondLabel: string;
+    declineLabel: string;
+  };
+  responding: boolean;
+  respondingTitle?: string;
+  respondingBody?: string;
 }
 
 export interface EmergencyType {
@@ -137,6 +171,7 @@ export interface ContactMember {
   relationship: string;
   initials?: string;
   isJoinedCall?: boolean;
+  online?: boolean;
 }
 
 export interface ContactGroup {
@@ -149,6 +184,8 @@ export interface ContactGroup {
   memberCount: number;
   memberLimit?: number | null;
   memberLabel?: string;
+  presenceLabel?: string;
+  onlineCount?: number;
   memberCounter?: string;
   canAddMember?: boolean;
   inviteCta?: string;

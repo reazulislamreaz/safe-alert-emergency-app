@@ -322,6 +322,46 @@ paths:
       summary: Replace profile photos (max 3)
       tags:
         - Profile
+  /api/uploads/images:
+    post:
+      operationId: UploadsController_upload
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+              required:
+                - files
+      responses:
+        '201':
+          description: Images stored in S3 (or local disk when AWS_S3_BUCKET is unset)
+      summary: Upload profile photos to S3
+      tags:
+        - Uploads
+  /api/uploads/presign:
+    post:
+      operationId: UploadsController_presign
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PresignUploadDto'
+      responses:
+        '200':
+          description: Presigned PUT URL
+        '503':
+          description: S3 is not configured
+      summary: Presigned S3 PUT for direct upload
+      tags:
+        - Uploads
   /api/profile/subscription:
     get:
       operationId: ProfileController_subscription

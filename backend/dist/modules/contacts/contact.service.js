@@ -17,6 +17,7 @@ const phone_1 = require("../../common/utils/phone");
 const contact_mapper_1 = require("../../common/mappers/contact.mapper");
 const contact_constants_1 = require("./contact.constants");
 const notification_service_1 = require("../notifications/notification.service");
+const realtime_service_1 = require("../../realtime/realtime.service");
 const contactInclude = {
     memberships: { include: { group: true }, orderBy: { groupId: "asc" } },
 };
@@ -26,9 +27,11 @@ const groupInclude = {
 let ContactService = class ContactService {
     prisma;
     notifications;
-    constructor(prisma, notifications) {
+    realtime;
+    constructor(prisma, notifications, realtime) {
         this.prisma = prisma;
         this.notifications = notifications;
+        this.realtime = realtime;
     }
     getStatuses() {
         return { statuses: [...contact_constants_1.CONTACT_STATUSES] };
@@ -185,8 +188,12 @@ let ContactService = class ContactService {
             include: groupInclude,
             orderBy: { name: "asc" },
         });
+        const viewer = await this.prisma.user.findUnique({
+            where: { id: userId },
+            select: { phoneDigits: true },
+        });
         return {
-            groups: groups.map((group) => (0, contact_mapper_1.toGroupDto)(group, plan.maxMembersPerGroup)),
+            groups: groups.map((group) => this.toGroupWithPresence(group, plan.maxMembersPerGroup, userId, viewer?.phoneDigits ?? "")),
             plan,
             colors: contact_constants_1.GROUP_COLORS.map((item) => ({ ...item })),
             emptyState: groups.length ? null : { ...contact_constants_1.GROUPS_EMPTY },
@@ -195,7 +202,7 @@ let ContactService = class ContactService {
     async getGroup(userId, groupId) {
         const plan = await this.getPlanUsage(userId);
         const group = await this.requireGroup(userId, groupId);
-        return (0, contact_mapper_1.toGroupDto)(group, plan.maxMembersPerGroup);
+        return this.toGroupWithPresence(group, plan.maxMembersPerGroup, userId);
     }
     async createGroup(userId, dto) {
         const plan = await this.getPlanUsage(userId);
@@ -227,7 +234,7 @@ let ContactService = class ContactService {
             },
             include: groupInclude,
         });
-        return (0, contact_mapper_1.toGroupDto)(group, plan.maxMembersPerGroup);
+        return this.toGroupWithPresence(group, plan.maxMembersPerGroup, userId);
     }
     async updateGroup(userId, groupId, dto) {
         const plan = await this.getPlanUsage(userId);
@@ -280,7 +287,7 @@ let ContactService = class ContactService {
                 include: groupInclude,
             });
         });
-        return (0, contact_mapper_1.toGroupDto)(group, plan.maxMembersPerGroup);
+        return this.toGroupWithPresence(group, plan.maxMembersPerGroup, userId);
     }
     async deleteGroup(userId, groupId) {
         await this.requireGroup(userId, groupId);
@@ -492,6 +499,18 @@ let ContactService = class ContactService {
             addGroupCta: canCreateGroup ? "+ Add New Group" : "+ Add New Group (Upgrade Required)",
         };
     }
+    toGroupWithPresence(group, maxMembersPerGroup, userId, phoneDigits) {
+        const viewerPhone = phoneDigits ?? "";
+        const memberOnline = group.members.filter((member) => this.realtime.isPhoneOnline(member.phoneDigits)).length;
+        const ownerCounted = group.userId === userId &&
+            this.realtime.isUserOnline(userId) &&
+            !group.members.some((member) => member.phoneDigits === viewerPhone);
+        const onlineCount = memberOnline + (ownerCounted ? 1 : 0);
+        return {
+            ...(0, contact_mapper_1.toGroupDto)(group, maxMembersPerGroup, onlineCount),
+            members: group.members.map((member) => (0, contact_mapper_1.toMemberDto)(member, this.realtime.isPhoneOnline(member.phoneDigits))),
+        };
+    }
     async requireContact(userId, contactId) {
         const contact = await this.prisma.contact.findFirst({
             where: { id: contactId, userId },
@@ -617,6 +636,7 @@ exports.ContactService = ContactService;
 exports.ContactService = ContactService = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
-        notification_service_1.NotificationService])
+        notification_service_1.NotificationService,
+        realtime_service_1.RealtimeService])
 ], ContactService);
 //# sourceMappingURL=contact.service.js.map

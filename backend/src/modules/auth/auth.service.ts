@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
@@ -8,24 +9,33 @@ import { JwtService } from "@nestjs/jwt";
 import { compare, hash } from "bcryptjs";
 import { AlertStatus, Role } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
-import { env, JwtPayload } from "../../config/env";
+import { env, JwtAudience, JwtPayload } from "../../config/env";
 import { digitsOnly } from "../../common/utils/phone";
 import { hashToken } from "../../common/utils/token-hash";
 import { toPublicUser } from "../../common/mappers/user.mapper";
 import { alertInclude, toAlertDto } from "../../common/mappers/alert.mapper";
 import { RegisterDto } from "./dto/register.dto";
 import { LoginDto } from "./dto/login.dto";
+import { DashboardLoginDto } from "./dto/dashboard-login.dto";
+import { requireStoredImageUrls } from "../uploads/uploads.constants";
+import { DashboardAdminService } from "../../common/auth/dashboard-admin.service";
+import { isDesignatedAdminEmail } from "../../common/auth/dashboard-admin";
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
+    private readonly dashboardAdmin: DashboardAdminService,
   ) {}
 
   async register(dto: RegisterDto) {
     const email = dto.email.toLowerCase();
     const phoneDigits = digitsOnly(dto.phone);
+
+    if (isDesignatedAdminEmail(email)) {
+      throw new BadRequestException("This email is reserved for the dashboard Admin account.");
+    }
 
     const existing = await this.prisma.user.findFirst({
       where: {
@@ -61,9 +71,10 @@ export class AuthService {
         race: dto.race,
         location: dto.location,
         emergencyContactName: dto.emergencyContactName,
+        role: Role.USER,
         emergencyContactPhone: emergencyPhone,
         emergencyContactRelation: emergencyRelation,
-        profilePhotos: dto.profilePhotos ?? [],
+        profilePhotos: requireStoredImageUrls(dto.profilePhotos) ?? [],
         avatar:
           dto.profilePhotos?.[0] ||
           "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
@@ -98,7 +109,14 @@ export class AuthService {
     });
 
     const otp = await this.sendPhoneOtp(user.phone);
-    const token = this.signToken(user.id, user.email, user.phone, user.role, user.subscriptionTier);
+    const token = this.signToken(
+      user.id,
+      user.email,
+      user.phone,
+      user.role,
+      user.subscriptionTier,
+      "app",
+    );
 
     return { user: toPublicUser(user), token, otpCode: otp.code };
   }
@@ -171,6 +189,7 @@ export class AuthService {
         verified.phone,
         verified.role,
         verified.subscriptionTier,
+        "app",
       );
       return {
         verified: true,
@@ -259,8 +278,53 @@ export class AuthService {
       throw new UnauthorizedException("Verify your phone number before logging in.");
     }
 
-    const token = this.signToken(user.id, user.email, user.phone, user.role, user.subscriptionTier);
-    return { user: toPublicUser(user), token };
+    await this.dashboardAdmin.ensureSingleAdmin();
+    const fresh = await this.prisma.user.findUnique({ where: { id: user.id } });
+    if (!fresh) {
+      throw new UnauthorizedException("Invalid credentials. Account not found.");
+    }
+    if (isDesignatedAdminEmail(fresh.email) || fresh.role === Role.ADMIN) {
+      throw new ForbiddenException("This account must sign in through the dashboard.");
+    }
+
+    const token = this.signToken(
+      fresh.id,
+      fresh.email,
+      fresh.phone,
+      fresh.role,
+      fresh.subscriptionTier,
+      "app",
+    );
+    return { user: toPublicUser(fresh), token };
+  }
+
+  async loginDashboard(dto: DashboardLoginDto) {
+    const email = dto.email.trim().toLowerCase();
+    const user = await this.prisma.user.findUnique({ where: { email } });
+
+    if (!user || !user.passwordHash || !(await compare(dto.password, user.passwordHash))) {
+      throw new UnauthorizedException("Invalid admin credentials.");
+    }
+
+    await this.dashboardAdmin.ensureSingleAdmin();
+    const fresh = await this.prisma.user.findUnique({ where: { id: user.id } });
+    if (
+      !fresh ||
+      fresh.role !== Role.ADMIN ||
+      !isDesignatedAdminEmail(fresh.email)
+    ) {
+      throw new ForbiddenException("Dashboard access is limited to the designated Admin account.");
+    }
+
+    const token = this.signToken(
+      fresh.id,
+      fresh.email,
+      fresh.phone,
+      fresh.role,
+      fresh.subscriptionTier,
+      "dashboard",
+    );
+    return { user: toPublicUser(fresh), token, audience: "dashboard" as const };
   }
 
   async requestPasswordReset(email: string) {
@@ -478,7 +542,7 @@ export class AuthService {
     return { loggedOut: true };
   }
 
-  async getMe(userId: string) {
+  async getMe(userId: string, audience: JwtAudience = "app") {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
       throw new NotFoundException("User account not found.");
@@ -499,6 +563,7 @@ export class AuthService {
 
     return {
       user: toPublicUser(user),
+      audience,
       groups,
       activeAlerts: activeAlerts.map(toAlertDto),
     };
@@ -510,8 +575,9 @@ export class AuthService {
     phone: string,
     role: JwtPayload["role"],
     tier: JwtPayload["tier"],
+    aud: JwtAudience,
   ): string {
-    const payload: JwtPayload = { sub: userId, email, phone, role, tier };
+    const payload: JwtPayload = { sub: userId, email, phone, role, tier, aud };
     return this.jwt.sign(payload);
   }
 }

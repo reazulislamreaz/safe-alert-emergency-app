@@ -5,32 +5,45 @@ class SocketService {
   private socket: Socket | null = null;
   private isConnected: boolean = false;
   private listeners: Map<string, Set<Function>> = new Map();
+  private asAdmin = true;
 
-  connect() {
-    if (this.socket) return;
+  connect(options?: { token?: string | null; asAdmin?: boolean }) {
+    const asAdmin = options?.asAdmin !== false;
+    const token = options?.token;
 
-    const socketUrl = (import.meta as any).env?.VITE_SOCKET_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5000');
+    if (this.socket) {
+      if (token || asAdmin === false) {
+        this.disconnect();
+      } else {
+        return;
+      }
+    }
+
+    this.asAdmin = asAdmin;
+    const socketUrl =
+      (import.meta as any).env?.VITE_SOCKET_URL ||
+      (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5000');
 
     this.socket = io(socketUrl, {
       transports: ['websocket', 'polling'],
       reconnectionAttempts: 10,
       reconnectionDelay: 2000,
+      auth: token ? { token } : undefined,
     });
 
     this.socket.on('connect', () => {
       this.isConnected = true;
-      console.log('⚡ Connected to SafeAlert WebSocket Server:', this.socket?.id);
-      this.socket?.emit('admin:subscribe');
+      if (this.asAdmin) {
+        this.socket?.emit('admin:subscribe');
+      }
       this.notifyListeners('connection:change', true);
     });
 
     this.socket.on('disconnect', () => {
       this.isConnected = false;
-      console.log('❌ Disconnected from SafeAlert WebSocket Server');
       this.notifyListeners('connection:change', false);
     });
 
-    // Alert Events
     this.socket.on('admin:alert:new', (alert: ActiveAlert) => {
       this.notifyListeners('alert:new', alert);
     });
@@ -43,13 +56,37 @@ class SocketService {
       this.notifyListeners('alert:telemetry', data);
     });
 
-    this.socket.on('alert:telemetry:update', (data: { alertId: string; location: any; latestPoint: TelemetryPoint }) => {
+    this.socket.on('alert:telemetry:update', (data: {
+      alertId: string;
+      location: any;
+      latestPoint: TelemetryPoint;
+    }) => {
       this.notifyListeners('alert:telemetry:update', data);
     });
 
     this.socket.on('alert:messages:update', (messages: any[]) => {
       this.notifyListeners('alert:messages:update', messages);
     });
+
+    this.socket.on('alert:state', (alert: ActiveAlert) => {
+      this.notifyListeners('alert:state', alert);
+    });
+
+    this.socket.on('presence:changed', (payload: {
+      userId: string;
+      phoneDigits: string;
+      online: boolean;
+    }) => {
+      this.notifyListeners('presence:changed', payload);
+    });
+  }
+
+  disconnect() {
+    if (!this.socket) return;
+    this.socket.removeAllListeners();
+    this.socket.disconnect();
+    this.socket = null;
+    this.isConnected = false;
   }
 
   joinAlertRoom(alertId: string) {
@@ -90,7 +127,7 @@ class SocketService {
   }
 
   private notifyListeners(event: string, data: any) {
-    this.listeners.get(event)?.forEach(cb => {
+    this.listeners.get(event)?.forEach((cb) => {
       try {
         cb(data);
       } catch (err) {

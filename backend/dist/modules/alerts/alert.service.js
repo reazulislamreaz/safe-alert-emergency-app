@@ -210,7 +210,8 @@ let AlertService = class AlertService {
                     alertId: dtoLive.id,
                     title: "LIVE EMERGENCY",
                     cta: "Tap to respond →",
-                    headline: `${dtoLive.userName.split(" ")[0]} needs help!`,
+                    emoji: (0, alert_constants_1.emergencyEmoji)(dtoLive.emergencyTypeId || dtoLive.emergencyType),
+                    headline: `${(0, alert_constants_1.emergencyEmoji)(dtoLive.emergencyTypeId || dtoLive.emergencyType)} ${dtoLive.userName.split(" ")[0]} needs help!`,
                     subtitle: `${dtoLive.emergencyType} · ${dtoLive.location.address} · ${formatRelative(new Date(dtoLive.triggeredAt))}`,
                     statusLabel: "LIVE",
                 }
@@ -696,10 +697,12 @@ let AlertService = class AlertService {
     }
     toInboxCard(alert) {
         const dto = (0, alert_mapper_1.toAlertDto)(alert);
+        const emoji = (0, alert_constants_1.emergencyEmoji)(dto.emergencyTypeId || dto.emergencyType);
         return {
             id: dto.id,
             userName: dto.userName,
             initials: initialsFrom(dto.userName),
+            emoji,
             statusLabel: dto.status === "BROADCASTING" ? "LIVE" : "Resolved",
             headline: `🚨 ${dto.emergencyType} · ${dto.modeLabel}`,
             subtitle: `${dto.location.address} · ${formatRelative(new Date(dto.triggeredAt))}`,
@@ -735,24 +738,20 @@ let AlertService = class AlertService {
             include: { members: true },
         });
         const groups = [...owned, ...memberOf];
-        const phones = [
-            ...new Set(groups.flatMap((group) => group.members.map((member) => member.phoneDigits).filter(Boolean))),
-        ];
-        const onlineUsers = phones.length
-            ? await this.prisma.user.findMany({
-                where: { phoneDigits: { in: phones } },
-                select: { phoneDigits: true },
-            })
-            : [];
-        const onlineSet = new Set(onlineUsers.map((row) => row.phoneDigits));
+        const viewerOnline = this.realtime.isUserOnline(userId);
         return groups.map((group) => {
-            const onlineCount = group.members.filter((member) => onlineSet.has(member.phoneDigits)).length;
+            const memberOnline = group.members.filter((member) => this.realtime.isPhoneOnline(member.phoneDigits)).length;
+            const ownerCounted = group.userId === userId &&
+                viewerOnline &&
+                !group.members.some((member) => member.phoneDigits === phoneDigits);
+            const onlineCount = memberOnline + (ownerCounted ? 1 : 0);
+            const memberCount = group.memberCount || group.members.length;
             return {
                 id: group.id,
                 name: group.name,
-                memberCount: group.memberCount || group.members.length,
+                memberCount,
                 onlineCount,
-                memberLabel: `${group.memberCount || group.members.length} members · ${onlineCount} online`,
+                memberLabel: `${memberCount} members · ${onlineCount} online`,
             };
         });
     }

@@ -20,6 +20,7 @@ import {
 import { PrismaService } from "../../prisma/prisma.service";
 import { RealtimeService } from "../../realtime/realtime.service";
 import { env } from "../../config/env";
+import { isDesignatedAdminEmail } from "../../common/auth/dashboard-admin";
 import {
   alertInclude,
   AlertRecord,
@@ -30,6 +31,7 @@ import {
   ALERT_MODES,
   CANCEL_REASONS,
   DEFAULT_EMERGENCY_TYPE_ID,
+  emergencyEmoji,
   PARTICIPANT_COLORS,
   QUICK_RESPONSES,
 } from "./alert.constants";
@@ -245,7 +247,8 @@ export class AlertService {
             alertId: dtoLive.id,
             title: "LIVE EMERGENCY",
             cta: "Tap to respond →",
-            headline: `${dtoLive.userName.split(" ")[0]} needs help!`,
+            emoji: emergencyEmoji(dtoLive.emergencyTypeId || dtoLive.emergencyType),
+            headline: `${emergencyEmoji(dtoLive.emergencyTypeId || dtoLive.emergencyType)} ${dtoLive.userName.split(" ")[0]} needs help!`,
             subtitle: `${dtoLive.emergencyType} · ${dtoLive.location.address} · ${formatRelative(new Date(dtoLive.triggeredAt))}`,
             statusLabel: "LIVE",
           }
@@ -824,12 +827,14 @@ export class AlertService {
 
   private toInboxCard(alert: AlertRecord) {
     const dto = toAlertDto(alert);
+    const emoji = emergencyEmoji(dto.emergencyTypeId || dto.emergencyType);
     return {
       id: dto.id,
       userName: dto.userName,
       initials: initialsFrom(dto.userName),
+      emoji,
       statusLabel: dto.status === "BROADCASTING" ? "LIVE" : "Resolved",
-      headline: `🚨 ${dto.emergencyType} · ${dto.modeLabel}`,
+      headline: `🚨 ${dto.emergencyType} · ${dto.mode === "EMERGENCY" ? "Emergency Mode" : dto.modeLabel}`,
       subtitle: `${dto.location.address} · ${formatRelative(new Date(dto.triggeredAt))}`,
       emergencyType: dto.emergencyType,
       modeLabel: dto.modeLabel,
@@ -869,25 +874,24 @@ export class AlertService {
       include: { members: true },
     });
     const groups = [...owned, ...memberOf];
-    const phones = [
-      ...new Set(groups.flatMap((group) => group.members.map((member) => member.phoneDigits).filter(Boolean))),
-    ];
-    const onlineUsers = phones.length
-      ? await this.prisma.user.findMany({
-          where: { phoneDigits: { in: phones } },
-          select: { phoneDigits: true },
-        })
-      : [];
-    const onlineSet = new Set(onlineUsers.map((row) => row.phoneDigits));
+    const viewerOnline = this.realtime.isUserOnline(userId);
 
     return groups.map((group) => {
-      const onlineCount = group.members.filter((member) => onlineSet.has(member.phoneDigits)).length;
+      const memberOnline = group.members.filter((member) =>
+        this.realtime.isPhoneOnline(member.phoneDigits),
+      ).length;
+      const ownerCounted =
+        group.userId === userId &&
+        viewerOnline &&
+        !group.members.some((member) => member.phoneDigits === phoneDigits);
+      const onlineCount = memberOnline + (ownerCounted ? 1 : 0);
+      const memberCount = group.memberCount || group.members.length;
       return {
         id: group.id,
         name: group.name,
-        memberCount: group.memberCount || group.members.length,
+        memberCount,
         onlineCount,
-        memberLabel: `${group.memberCount || group.members.length} members · ${onlineCount} online`,
+        memberLabel: `${memberCount} members · ${onlineCount} online`,
       };
     });
   }
@@ -914,7 +918,10 @@ export class AlertService {
   private async requireAccessible(alertId: string, userId: string) {
     const alert = await this.requireAlert(alertId);
     const viewer = await this.requireUser(userId);
-    if (alert.userId === userId || viewer.role !== Role.USER) {
+    if (
+      alert.userId === userId ||
+      (viewer.role === Role.ADMIN && isDesignatedAdminEmail(viewer.email))
+    ) {
       return alert;
     }
 

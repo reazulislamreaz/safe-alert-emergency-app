@@ -3,7 +3,7 @@ import { IsOptional, IsString, Matches, MinLength } from "class-validator";
 
 export class LoginDto {
   @ApiProperty({
-    example: "admin@safealert.app",
+    example: "sarah.johnson@example.com",
     description: "Email address or phone number",
   })
   @IsString()
@@ -20,8 +20,8 @@ export class LoginDto {
   pin?: string;
 
   @ApiPropertyOptional({
-    example: "adminpassword",
-    description: "Admin / password login. Use adminpassword or opspassword for demo admins.",
+    example: "password123",
+    description: "Citizen password login. Dashboard Admin must use POST /api/auth/dashboard/login.",
   })
   @IsOptional()
   @IsString()

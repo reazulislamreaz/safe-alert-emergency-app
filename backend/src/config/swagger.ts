@@ -18,7 +18,7 @@ export function setupSwagger(app: INestApplication): void {
         "",
         "**Socket.io** (`ws://localhost:5002`, same origin as REST)",
         "- Client → server: `alert:join`, `alert:telemetry`, `alert:message:send`, `alert:quick_response`, `admin:subscribe` (JWT required; admin room is ops-only)",
-        "- Server → client: `alert:state`, `alert:telemetry:update`, `alert:messages:update`, `alert:resolved`, `notification:new`, `admin:alert:new`, `admin:alert:resolved`, `admin:alert:telemetry`, `admin:metrics`",
+        "- Server → client: `alert:state`, `alert:telemetry:update`, `alert:messages:update`, `alert:resolved`, `notification:new`, `presence:changed`, `admin:alert:new`, `admin:alert:resolved`, `admin:alert:telemetry`, `admin:metrics`",
       ].join("\n"),
     )
     .setVersion("1.0.0")
@@ -42,6 +42,7 @@ export function setupSwagger(app: INestApplication): void {
     .addTag("Notifications", "Inbox: Direct Alert, Alert Received, Someone added you")
     .addTag("Catalog", "Public emergency types")
     .addTag("Dashboard", "Admin metrics, users, types, subscriptions, journals")
+    .addTag("Uploads", "S3 image upload and presigned PUT URLs")
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

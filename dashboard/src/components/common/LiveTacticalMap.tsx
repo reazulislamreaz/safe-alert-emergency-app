@@ -1,11 +1,14 @@
 import React, { useEffect, useRef } from 'react';
 import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 
 interface LiveTacticalMapProps {
   lat: number;
   lng: number;
   groupName: string;
   category: string;
+  className?: string;
+  showGps?: boolean;
 }
 
 export const LiveTacticalMap: React.FC<LiveTacticalMapProps> = ({
@@ -13,6 +16,8 @@ export const LiveTacticalMap: React.FC<LiveTacticalMapProps> = ({
   lng,
   groupName,
   category,
+  className,
+  showGps = true,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -86,14 +91,13 @@ export const LiveTacticalMap: React.FC<LiveTacticalMapProps> = ({
   }, [lat, lng, groupName, category]);
 
   return (
-    <div className="w-full h-48 sm:h-56 lg:h-64 rounded-xl overflow-hidden relative shadow-inner bg-[#0B1120] border border-gray-800">
-      {/* Map container DOM node */}
+    <div className={className || "w-full h-48 sm:h-56 lg:h-64 rounded-xl overflow-hidden relative shadow-inner bg-[#0B1120] border border-gray-800"}>
       <div ref={mapContainerRef} className="w-full h-full z-0" />
-
-      {/* Floating GPS coordinates badge */}
-      <div className="absolute top-2 right-2 z-10 bg-black/70 backdrop-blur-sm text-[10px] font-mono text-gray-300 px-2 py-1 rounded-md border border-white/10 max-w-[calc(100%-1rem)] truncate">
-        GPS: {lat.toFixed(4)}, {lng.toFixed(4)}
-      </div>
+      {showGps && (
+        <div className="absolute top-2 right-2 z-10 bg-black/70 backdrop-blur-sm text-[10px] font-mono text-gray-300 px-2 py-1 rounded-md border border-white/10 max-w-[calc(100%-1rem)] truncate">
+          GPS: {lat.toFixed(4)}, {lng.toFixed(4)}
+        </div>
+      )}
     </div>
   );
 };
