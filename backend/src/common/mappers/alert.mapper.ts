@@ -27,7 +27,7 @@ export type CallParticipant = {
   initials: string;
   relationship?: string;
   status: "CONNECTED" | "CALLING";
-  responderStatus: "JOINED" | "CALLING" | "EN_ROUTE";
+  responderStatus: "JOINED" | "CALLING" | "EN_ROUTE" | "RESPONDING" | "CANT_HELP";
   color: string;
   isSender?: boolean;
 };

@@ -12,6 +12,7 @@ import {
   JournalSource,
   AlertSource,
   NotificationType,
+  InvitationStatus,
 } from "@prisma/client";
 import { hashSync } from "bcryptjs";
 import { digitsOnly } from "../common/utils/phone";
@@ -244,6 +245,32 @@ async function ensureFigmaNotifications(prisma: PrismaClient): Promise<void> {
   }
 }
 
+async function ensureFigmaInvitations(prisma: PrismaClient): Promise<void> {
+  const priya = await prisma.user.findUnique({ where: { id: "usr-003" } });
+  const family = await prisma.contactGroup.findUnique({ where: { id: "grp-family-01" } });
+  if (!priya || !family) {
+    return;
+  }
+
+  const existing = await prisma.groupInvitation.findUnique({ where: { id: "inv-family-priya" } });
+  if (existing) {
+    return;
+  }
+
+  await prisma.groupInvitation.create({
+    data: {
+      id: "inv-family-priya",
+      groupId: family.id,
+      inviterId: "usr-sarah-101",
+      inviteeUserId: priya.id,
+      inviteePhone: priya.phone,
+      inviteePhoneDigits: priya.phoneDigits,
+      inviteeName: priya.fullName,
+      status: InvitationStatus.PENDING,
+    },
+  });
+}
+
 async function ensureFigmaEmergencyTypes(prisma: PrismaClient): Promise<void> {
   for (const type of FIGMA_EMERGENCY_TYPES) {
     await prisma.emergencyType.upsert({
@@ -367,26 +394,21 @@ async function ensureFigmaContacts(prisma: PrismaClient): Promise<void> {
   }
 
   for (const member of FIGMA_MEMBERS) {
+    const phoneDigits = digitsOnly(member.phone);
     await prisma.contactMember.upsert({
       where: { id: member.id },
-      create: member,
+      create: { ...member, phoneDigits },
       update: {
         groupId: member.groupId,
         contactId: member.contactId,
         name: member.name,
         phone: member.phone,
+        phoneDigits,
         relationship: member.relationship,
         isJoinedCall: member.isJoinedCall,
       },
     });
   }
-
-  await prisma.contactMember.deleteMany({
-    where: {
-      groupId: { in: FIGMA_GROUPS.map((group) => group.id) },
-      id: { notIn: FIGMA_MEMBERS.map((member) => member.id) },
-    },
-  });
 
   await prisma.contactGroup.deleteMany({
     where: { userId: "usr-sarah-101", name: "Neighborhood Watch" },
@@ -408,6 +430,7 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
     await ensureFigmaContacts(prisma);
     await ensureFigmaJournals(prisma);
     await ensureFigmaNotifications(prisma);
+    await ensureFigmaInvitations(prisma);
     return;
   }
 
@@ -543,6 +566,7 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
   await ensureFigmaContacts(prisma);
   await ensureFigmaJournals(prisma);
   await ensureFigmaNotifications(prisma);
+  await ensureFigmaInvitations(prisma);
 
   await prisma.alert.create({
     data: {

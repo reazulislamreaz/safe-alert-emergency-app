@@ -16,7 +16,16 @@ export class JournalService {
       where: { userId },
       orderBy: { triggeredAt: "desc" },
     });
-    return { entries: entries.map(toJournalDto) };
+    return {
+      entries: entries.map(toJournalDto),
+      emptyState: entries.length
+        ? null
+        : {
+            title: "No journal entries yet",
+            body: "Save an incident, test, or update so you can look back later.",
+            actionLabel: "Save a New Entry",
+          },
+    };
   }
 
   async get(userId: string, id: string) {

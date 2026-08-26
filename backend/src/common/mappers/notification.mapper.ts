@@ -29,6 +29,8 @@ export function notificationTitle(type: NotificationType): string {
   if (type === NotificationType.ALERT_RECEIVED) return "Alert Received";
   if (type === NotificationType.ALERT_CANCELLED) return "Alert Cancelled";
   if (type === NotificationType.CONTACT_ADDED) return "Someone added you";
+  if (type === NotificationType.GROUP_INVITE) return "Group invitation";
+  if (type === NotificationType.RESPONDER_UPDATE) return "Someone is responding";
   return "Subscription Alert";
 }
 

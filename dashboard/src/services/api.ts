@@ -907,6 +907,109 @@ export const api = {
     return data.data;
   },
 
+  async markAllNotificationsRead() {
+    const res = await fetch(`${API_BASE}/notifications/read-all`, {
+      method: 'POST',
+      headers: this.authHeaders(),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to mark notifications read'));
+    }
+    return data.data;
+  },
+
+  async getAlertInbox(tab?: string) {
+    const suffix = tab ? `?tab=${encodeURIComponent(tab)}` : "";
+    const res = await fetch(`${API_BASE}/alerts/inbox${suffix}`, { headers: this.authHeaders(false) });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to load alerts inbox'));
+    }
+    return data.data;
+  },
+
+  async respondToAlert(alertId: string, action: "RESPONDING" | "CANT_HELP") {
+    const res = await fetch(`${API_BASE}/alerts/${alertId}/respond`, {
+      method: 'POST',
+      headers: this.authHeaders(),
+      body: JSON.stringify({ action }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to respond to alert'));
+    }
+    return data.data;
+  },
+
+  async inviteToGroup(groupId: string, payload?: { phone?: string; contactId?: string }) {
+    const res = await fetch(`${API_BASE}/contacts/groups/${groupId}/invite`, {
+      method: 'POST',
+      headers: this.authHeaders(),
+      body: JSON.stringify(payload || {}),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to send group invite'));
+    }
+    return data.data;
+  },
+
+  async getGroupInvitations() {
+    const res = await fetch(`${API_BASE}/contacts/invitations`, { headers: this.authHeaders(false) });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to load invitations'));
+    }
+    return data.data;
+  },
+
+  async acceptGroupInvitation(invitationId: string) {
+    const res = await fetch(`${API_BASE}/contacts/invitations/${invitationId}/accept`, {
+      method: 'POST',
+      headers: this.authHeaders(),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to accept invitation'));
+    }
+    return data.data;
+  },
+
+  async declineGroupInvitation(invitationId: string) {
+    const res = await fetch(`${API_BASE}/contacts/invitations/${invitationId}/decline`, {
+      method: 'POST',
+      headers: this.authHeaders(),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to decline invitation'));
+    }
+    return data.data;
+  },
+
+  async getRaces() {
+    const res = await fetch(`${API_BASE}/auth/races`);
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to load races'));
+    }
+    return data.data;
+  },
+
+  async setBiometric(enabled: boolean) {
+    const res = await fetch(`${API_BASE}/auth/biometric`, {
+      method: 'POST',
+      headers: this.authHeaders(),
+      body: JSON.stringify({ enabled }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to save Face ID preference'));
+    }
+    return data.data;
+  },
+
   async getEmergencyTypes(): Promise<EmergencyType[]> {
     try {
       const res = await fetch(`${API_BASE}/dashboard/emergency-types`, {

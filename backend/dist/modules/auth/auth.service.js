@@ -167,6 +167,18 @@ let AuthService = class AuthService {
         });
         return { success: true, message: "Security PIN updated successfully." };
     }
+    async setFaceId(userId, enabled) {
+        const user = await this.prisma.user.update({
+            where: { id: userId },
+            data: { faceIdEnabled: enabled },
+        });
+        return {
+            faceIdEnabled: user.faceIdEnabled,
+            message: enabled ? "Face ID registered!" : "Face ID skipped.",
+            completeLabel: "Complete Setup",
+            skipLabel: "Skip for now",
+        };
+    }
     async verifyPin(userId, pin) {
         const user = await this.prisma.user.findUnique({ where: { id: userId } });
         if (!user) {
@@ -201,6 +213,9 @@ let AuthService = class AuthService {
         }
         else {
             throw new common_1.UnauthorizedException("Please provide your security PIN or password to log in.");
+        }
+        if (user.role === client_1.Role.USER && !user.isPhoneVerified) {
+            throw new common_1.UnauthorizedException("Verify your phone number before logging in.");
         }
         const token = this.signToken(user.id, user.email, user.phone, user.role, user.subscriptionTier);
         return { user: (0, user_mapper_1.toPublicUser)(user), token };

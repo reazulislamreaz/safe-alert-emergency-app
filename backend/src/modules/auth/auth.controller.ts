@@ -11,17 +11,29 @@ import { AuthService } from "./auth.service";
 import { RegisterDto } from "./dto/register.dto";
 import { LoginDto } from "./dto/login.dto";
 import { SendOtpDto, VerifyOtpDto } from "./dto/otp.dto";
-import { ForgotPinDto, ResetPinDto, SetupPinDto, VerifyPinDto, VerifyPinResetDto } from "./dto/pin.dto";
+import { ForgotPinDto, ResetPinDto, SetupPinDto, VerifyPinDto, VerifyPinResetDto, BiometricDto } from "./dto/pin.dto";
 import { ForgotPasswordDto, ResetPasswordDto, VerifyResetOtpDto } from "./dto/password-reset.dto";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
-import { OptionalJwtGuard } from "../../common/guards/optional-jwt.guard";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { JwtPayload } from "../../config/env";
+import { RACE_OPTIONS } from "./auth.constants";
 
 @ApiTags("Auth")
 @Controller("api/auth")
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
+
+  @Get("races")
+  @ApiOperation({ summary: "Race(Optional) dropdown for Create Account / Edit Profile" })
+  races() {
+    return {
+      success: true,
+      data: {
+        label: "Race(Optional)",
+        options: RACE_OPTIONS.map((item) => ({ ...item })),
+      },
+    };
+  }
 
   @Post("register")
   @HttpCode(HttpStatus.CREATED)
@@ -67,6 +79,16 @@ export class AuthController {
     return { success: true, data };
   }
 
+  @Post("biometric")
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth("access-token")
+  @ApiOperation({ summary: "Face ID registered / skip for now" })
+  async biometric(@Body() dto: BiometricDto, @CurrentUser() user: JwtPayload) {
+    const data = await this.authService.setFaceId(user.sub, dto.enabled);
+    return { success: true, data };
+  }
+
   @Post("pin/forgot")
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: "Request a PIN-reset OTP by phone" })
@@ -97,11 +119,12 @@ export class AuthController {
 
   @Post("pin/verify")
   @HttpCode(HttpStatus.OK)
-  @UseGuards(OptionalJwtGuard)
+  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth("access-token")
-  @ApiOperation({ summary: "Verify PIN (optional JWT)" })
-  async verifyPin(@Body() dto: VerifyPinDto, @CurrentUser() user?: JwtPayload) {
-    const userId = dto.userId || user?.sub || "usr-sarah-101";
+  @ApiOperation({ summary: "Verify PIN for delete account / logout" })
+  async verifyPin(@Body() dto: VerifyPinDto, @CurrentUser() user: JwtPayload) {
+    const isAdmin = user.role === "OPS_ADMIN" || user.role === "SUPER_ADMIN";
+    const userId = isAdmin && dto.userId ? dto.userId : user.sub;
     const data = await this.authService.verifyPin(userId, dto.pin);
     return { success: true, data };
   }

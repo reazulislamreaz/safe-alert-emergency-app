@@ -80,6 +80,41 @@ export interface ActiveAlert {
   resolutionNotes?: string;
 }
 
+export interface AlertInboxCard {
+  id: string;
+  title?: string;
+  headline?: string;
+  subtitle?: string;
+  statusLabel?: string;
+  timeLabel?: string;
+}
+
+export interface AlertInbox {
+  greeting: string;
+  liveBanner: {
+    alertId: string;
+    title: string;
+    cta: string;
+    headline: string;
+    subtitle: string;
+    statusLabel: string;
+  } | null;
+  tabs: { key: string; label: string }[];
+  selectedTab: "active" | "past";
+  emptyActive: { title: string };
+  active: AlertInboxCard[];
+  past: { heading: string; items: AlertInboxCard[] };
+  invitations: {
+    title: string;
+    subtitle: string;
+    skipLabel: string;
+    acceptLabel: string;
+    declineLabel: string;
+    items: { id: string; groupId: string; groupName: string; invitedBy: string; timeLabel?: string }[];
+  };
+  myGroups: { id: string; name: string; memberCount: number; onlineCount: number; memberLabel: string }[];
+}
+
 export interface EmergencyType {
   id: string;
   key: string;

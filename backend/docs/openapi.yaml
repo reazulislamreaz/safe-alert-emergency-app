@@ -18,6 +18,15 @@ paths:
       summary: Liveness probe
       tags:
         - Health
+  /api/auth/races:
+    get:
+      operationId: AuthController_races
+      responses:
+        '200':
+          description: Race(Optional) dropdown options
+      summary: Race(Optional) catalog for Create Account / Edit Profile
+      tags:
+        - Auth
   /api/auth/register:
     post:
       operationId: AuthController_register
@@ -82,6 +91,68 @@ paths:
       summary: Set or update a 4-digit security PIN
       tags:
         - Auth
+  /api/auth/biometric:
+    post:
+      operationId: AuthController_biometric
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BiometricDto'
+      responses:
+        '200':
+          description: Face ID registered or skipped
+      security:
+        - access-token: []
+      summary: Face ID registered / skip for now
+      tags:
+        - Auth
+  /api/auth/pin/forgot:
+    post:
+      operationId: AuthController_forgotPin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForgotPinDto'
+      responses:
+        '200':
+          description: OTP dispatched if the phone exists
+      summary: Request a PIN-reset OTP by phone
+      tags:
+        - Auth
+  /api/auth/pin/verify-otp:
+    post:
+      operationId: AuthController_verifyPinResetOtp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyPinResetDto'
+      responses:
+        '200':
+          description: PIN-reset OTP verified
+      summary: Verify PIN-reset OTP
+      tags:
+        - Auth
+  /api/auth/pin/reset:
+    post:
+      operationId: AuthController_resetPin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPinDto'
+      responses:
+        '200':
+          description: PIN updated
+      summary: Set a new 4-digit PIN with a verified OTP
+      tags:
+        - Auth
   /api/auth/pin/verify:
     post:
       operationId: AuthController_verifyPin
@@ -97,7 +168,7 @@ paths:
           description: ''
       security:
         - access-token: []
-      summary: Verify PIN (optional JWT)
+      summary: Verify PIN for delete account / logout
       tags:
         - Auth
   /api/auth/login:
@@ -396,16 +467,36 @@ paths:
       summary: Current broadcasting alert
       tags:
         - Alerts
+  /api/alerts/inbox:
+    get:
+      operationId: AlertsController_inbox
+      parameters:
+        - name: tab
+          in: query
+          required: false
+          schema:
+            type: string
+            example: active
+      responses:
+        '200':
+          description: Live banner, Active/Past tabs, invitations, MY GROUPS
+      security:
+        - access-token: []
+      summary: Alerts tab — circle feed, past 7 days, group invitations
+      tags:
+        - Alerts
   /api/alerts/active:
     get:
       operationId: AlertsController_getActive
       parameters: []
       responses:
         '200':
-          description: ''
+          description: Broadcasting SOS alerts
+        '403':
+          description: Citizen JWT is not allowed
       security:
         - access-token: []
-      summary: List broadcasting SOS alerts
+      summary: Admin — list broadcasting SOS alerts
       tags:
         - Alerts
   /api/alerts/{id}:
@@ -598,6 +689,53 @@ paths:
       summary: Send a group chat message
       tags:
         - Alerts
+  /api/alerts/{id}/respond:
+    get:
+      operationId: AlertsController_responderView
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            example: alt-active-991
+            type: string
+      responses:
+        '200':
+          description: LIVE ALERT with I'm Responding / Can't Help
+        '403':
+          description: Viewer is not in the owner's safety circle
+        '404':
+          description: Alert not found
+      security:
+        - access-token: []
+      summary: LIVE ALERT responder view
+      tags:
+        - Alerts
+    post:
+      operationId: AlertsController_respond
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            example: alt-active-991
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RespondAlertDto'
+      responses:
+        '200':
+          description: Responder status updated
+        '403':
+          description: Viewer is not in the owner's safety circle
+      security:
+        - access-token: []
+      summary: I'm Responding or Can't Help
+      tags:
+        - Alerts
   /api/alerts/{id}/quick-response:
     post:
       operationId: AlertsController_quickResponse
@@ -737,6 +875,17 @@ paths:
       summary: Status dropdown values for Add Contact
       tags:
         - Contacts
+  /api/contacts/colors:
+    get:
+      operationId: ContactsController_colors
+      responses:
+        '200':
+          description: Group color picker presets
+      security:
+        - access-token: []
+      summary: Group color picker presets
+      tags:
+        - Contacts
   /api/contacts/plan:
     get:
       operationId: ContactsController_plan
@@ -833,6 +982,81 @@ paths:
       security:
         - access-token: []
       summary: Delete a group
+      tags:
+        - Contacts
+  /api/contacts/groups/{id}/invite:
+    post:
+      operationId: ContactsController_invite
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            example: grp-family-01
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InviteGroupDto'
+      responses:
+        '201':
+          description: Invitations created
+      security:
+        - access-token: []
+      summary: Invite friends to a group (Groups Invite CTA)
+      tags:
+        - Contacts
+  /api/contacts/invitations:
+    get:
+      operationId: ContactsController_invitations
+      responses:
+        '200':
+          description: Pending Accept & Join / Decline invitations
+      security:
+        - access-token: []
+      summary: Pending group invitations
+      tags:
+        - Contacts
+  /api/contacts/invitations/{id}/accept:
+    post:
+      operationId: ContactsController_acceptInvite
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            example: inv-family-priya
+            type: string
+      responses:
+        '200':
+          description: Invitation accepted and member added
+        '404':
+          description: Invitation not found
+      security:
+        - access-token: []
+      summary: Accept & Join a group invitation
+      tags:
+        - Contacts
+  /api/contacts/invitations/{id}/decline:
+    post:
+      operationId: ContactsController_declineInvite
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            example: inv-family-priya
+            type: string
+      responses:
+        '200':
+          description: Invitation declined
+        '404':
+          description: Invitation not found
+      security:
+        - access-token: []
+      summary: Decline a group invitation
       tags:
         - Contacts
   /api/contacts/groups/{id}/suggestions:
@@ -1300,18 +1524,18 @@ info:
     - Phone OTP for Sarah: `123456`
 
 
-    Use **Authorize** after login and paste the JWT as a Bearer token for
-    `/api/auth/me`.
+        Use **Authorize** after login and paste the JWT as a Bearer token for
+        `/api/auth/me`.
 
+        **Socket.io** (`ws://localhost:5002`, same origin as REST)
 
-    **Socket.io** (`ws://localhost:5000`, same origin as REST)
+        - Client → server: `alert:join`, `alert:telemetry`, `alert:message:send`,
+        `alert:quick_response`, `admin:subscribe`
 
-    - Client → server: `alert:join`, `alert:telemetry`, `alert:message:send`,
-    `alert:quick_response`, `admin:subscribe`
-
-    - Server → client: `alert:state`, `alert:telemetry:update`,
-    `alert:messages:update`, `alert:resolved`, `admin:alert:new`,
-    `admin:alert:resolved`, `admin:alert:telemetry`, `admin:metrics`
+        - Server → client: `alert:state`, `alert:telemetry:update`,
+        `alert:messages:update`, `alert:resolved`, `notification:new`,
+        `admin:alert:new`, `admin:alert:resolved`, `admin:alert:telemetry`,
+        `admin:metrics`
   version: 1.0.0
   contact: {}
 tags:
@@ -1320,9 +1544,9 @@ tags:
   - name: Auth
     description: Register, login, OTP, PIN, password reset
   - name: Alerts
-    description: Manual Emergency Alert — SOS, modes, types, live session, cancel
+    description: SOS, Manual/Direct, Alerts tab inbox, live call, chat, respond, cancel
   - name: Contacts
-    description: Address book, groups, plan limits, and referral invite
+    description: Address book, groups, invitations, plan limits, and referral invite
   - name: Profile
     description: Citizen profile, photos, and delete account
   - name: Subscriptions
@@ -1331,6 +1555,8 @@ tags:
     description: About Us, Privacy Policy, Terms & Conditions
   - name: Journal
     description: Citizen Incident Journal (Incident, Test, Update)
+  - name: Notifications
+    description: Inbox — Direct Alert, Alert Received, group invites, responder updates
   - name: Catalog
     description: Public emergency types
   - name: Dashboard
@@ -1430,26 +1656,74 @@ components:
     SetupPinDto:
       type: object
       properties:
-        userId:
-          type: string
-          example: usr-sarah-101
         pin:
           type: string
-          pattern: ^\d{4}$
+          pattern: ^\d{1,4}$
           example: '1234'
       required:
-        - userId
         - pin
+    BiometricDto:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          example: true
+      required:
+        - enabled
+    ForgotPinDto:
+      type: object
+      properties:
+        phone:
+          type: string
+          minLength: 7
+          example: +1 (555) 234-5678
+      required:
+        - phone
+    VerifyPinResetDto:
+      type: object
+      properties:
+        phone:
+          type: string
+          minLength: 7
+          example: +1 (555) 234-5678
+        code:
+          type: string
+          minLength: 6
+          maxLength: 6
+          example: '123456'
+      required:
+        - phone
+        - code
+    ResetPinDto:
+      type: object
+      properties:
+        phone:
+          type: string
+          minLength: 7
+          example: +1 (555) 234-5678
+        code:
+          type: string
+          minLength: 6
+          maxLength: 6
+          example: '123456'
+        newPin:
+          type: string
+          pattern: ^\d{1,4}$
+          example: '1234'
+      required:
+        - phone
+        - code
+        - newPin
     VerifyPinDto:
       type: object
       properties:
         userId:
           type: string
           example: usr-sarah-101
-          description: Defaults to the JWT subject, then Sarah's demo user.
+          description: Admin-only override. Citizens always verify their own PIN.
         pin:
           type: string
-          pattern: ^\d{4}$
+          pattern: ^\d{1,4}$
           example: '1234'
       required:
         - pin
@@ -1633,6 +1907,17 @@ components:
           example: grp-family-01
       required:
         - text
+    RespondAlertDto:
+      type: object
+      properties:
+        action:
+          type: string
+          enum:
+            - RESPONDING
+            - CANT_HELP
+          example: RESPONDING
+      required:
+        - action
     UpdateProfileDto:
       type: object
       properties:
@@ -1773,6 +2058,15 @@ components:
         relationship:
           type: string
           example: Friend
+    InviteGroupDto:
+      type: object
+      properties:
+        phone:
+          type: string
+          example: +1 (555) 456-7890
+        contactId:
+          type: string
+          example: ct-james-01
     CreateEmergencyTypeDto:
       type: object
       properties:

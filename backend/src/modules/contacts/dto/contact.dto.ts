@@ -129,3 +129,15 @@ export class UpdateGroupDto {
   @IsString({ each: true })
   memberIds?: string[];
 }
+
+export class InviteGroupDto {
+  @ApiPropertyOptional({ example: "+1 (555) 456-7890" })
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @ApiPropertyOptional({ example: "ct-james-01" })
+  @IsOptional()
+  @IsString()
+  contactId?: string;
+}

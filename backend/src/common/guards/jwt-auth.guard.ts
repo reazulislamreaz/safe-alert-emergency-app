@@ -39,6 +39,13 @@ export class JwtAuthGuard implements CanActivate {
       if (revoked && revoked.expiresAt > new Date()) {
         throw new UnauthorizedException("Session ended. Please log in again.");
       }
+      const exists = await this.prisma.user.findUnique({
+        where: { id: payload.sub },
+        select: { id: true },
+      });
+      if (!exists) {
+        throw new UnauthorizedException("Session ended. Please log in again.");
+      }
       request.user = payload;
       return true;
     } catch (error) {

@@ -6,7 +6,7 @@ import {
 } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { compare, hash } from "bcryptjs";
-import { AlertStatus } from "@prisma/client";
+import { AlertStatus, Role } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { env, JwtPayload } from "../../config/env";
 import { digitsOnly } from "../../common/utils/phone";
@@ -201,6 +201,19 @@ export class AuthService {
     return { success: true, message: "Security PIN updated successfully." };
   }
 
+  async setFaceId(userId: string, enabled: boolean) {
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: { faceIdEnabled: enabled },
+    });
+    return {
+      faceIdEnabled: user.faceIdEnabled,
+      message: enabled ? "Face ID registered!" : "Face ID skipped.",
+      completeLabel: "Complete Setup",
+      skipLabel: "Skip for now",
+    };
+  }
+
   async verifyPin(userId: string, pin: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
@@ -240,6 +253,10 @@ export class AuthService {
       throw new UnauthorizedException(
         "Please provide your security PIN or password to log in.",
       );
+    }
+
+    if (user.role === Role.USER && !user.isPhoneVerified) {
+      throw new UnauthorizedException("Verify your phone number before logging in.");
     }
 
     const token = this.signToken(user.id, user.email, user.phone, user.role, user.subscriptionTier);

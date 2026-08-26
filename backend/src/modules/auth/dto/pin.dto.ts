@@ -1,5 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsOptional, IsString, Length, Matches, MinLength } from "class-validator";
+import { Type } from "class-transformer";
+import { IsBoolean, IsOptional, IsString, Length, Matches, MinLength } from "class-validator";
+
+export class BiometricDto {
+  @ApiProperty({ example: true, description: "Face ID registered (client-side)" })
+  @Type(() => Boolean)
+  @IsBoolean()
+  enabled!: boolean;
+}
 
 export class SetupPinDto {
   @ApiProperty({ example: "3", description: "1-digit to 4-digit PIN" })
@@ -49,7 +57,7 @@ export class ResetPinDto {
 export class VerifyPinDto {
   @ApiPropertyOptional({
     example: "usr-sarah-101",
-    description: "Defaults to the JWT subject, then Sarah's demo user.",
+    description: "Admin-only override. Citizens always verify their own PIN.",
   })
   @IsOptional()
   @IsString()

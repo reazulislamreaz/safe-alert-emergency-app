@@ -4,7 +4,6 @@ import {
   Get,
   HttpCode,
   HttpStatus,
-  NotFoundException,
   Param,
   Post,
   Query,
@@ -18,10 +17,12 @@ import {
   ApiQuery,
   ApiTags,
 } from "@nestjs/swagger";
+import { Role } from "@prisma/client";
 import { AlertService } from "./alert.service";
 import {
   QuickResponseDto,
   ResolveAlertDto,
+  RespondAlertDto,
   SendAlertMessageDto,
   TelemetryDto,
   TriggerAlertDto,
@@ -29,6 +30,8 @@ import {
 } from "./dto/alert.dto";
 import { OptionalJwtGuard } from "../../common/guards/optional-jwt.guard";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
+import { RolesGuard } from "../../common/guards/roles.guard";
+import { Roles } from "../../common/decorators/roles.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { JwtPayload } from "../../config/env";
 
@@ -77,9 +80,20 @@ export class AlertsController {
   }
 
   @Get("active")
-  @ApiOperation({ summary: "List broadcasting SOS alerts" })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.OPS_ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: "Admin: list broadcasting SOS alerts" })
   async getActive() {
     const data = await this.alertService.getActiveAlerts();
+    return { success: true, data };
+  }
+
+  @Get("inbox")
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: "Alerts tab — live circle feed, past 7 days, group invitations" })
+  @ApiQuery({ name: "tab", required: false, example: "active" })
+  async inbox(@CurrentUser() user: JwtPayload, @Query("tab") tab?: string) {
+    const data = await this.alertService.getInbox(user.sub, tab);
     return { success: true, data };
   }
 
@@ -112,11 +126,12 @@ export class AlertsController {
   }
 
   @Get(":id/live")
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: "View Live Session — map, type, mode, responding contacts" })
   @ApiParam({ name: "id", example: "alt-active-991" })
   @ApiNotFoundResponse({ description: "Alert not found" })
-  async live(@Param("id") id: string) {
-    const data = await this.alertService.getLiveSession(id);
+  async live(@Param("id") id: string, @CurrentUser() user: JwtPayload) {
+    const data = await this.alertService.getLiveSession(id, user.sub);
     return { success: true, data };
   }
 
@@ -157,15 +172,40 @@ export class AlertsController {
     return { success: true, data };
   }
 
+  @Get(":id/respond")
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: "LIVE ALERT responder view — I'm Responding / Can't Help" })
+  @ApiParam({ name: "id", example: "alt-active-991" })
+  async responderView(@Param("id") id: string, @CurrentUser() user: JwtPayload) {
+    const data = await this.alertService.getResponderView(id, user.sub);
+    return { success: true, data };
+  }
+
+  @Post(":id/respond")
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "I'm Responding or Can't Help" })
+  @ApiParam({ name: "id", example: "alt-active-991" })
+  async respond(
+    @Param("id") id: string,
+    @Body() dto: RespondAlertDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    const data = await this.alertService.respondToAlert(id, user.sub, dto);
+    return { success: true, data };
+  }
+
   @Post(":id/telemetry")
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: "Push a GPS / battery telemetry point" })
   @ApiParam({ name: "id", example: "alt-active-991" })
   @ApiNotFoundResponse({ description: "Alert not found" })
-  async telemetry(@Param("id") id: string, @Body() dto: TelemetryDto) {
-    const updated = await this.alertService.updateTelemetry(id, dto);
-    if (!updated) {
-      throw new NotFoundException("Alert not found");
-    }
+  async telemetry(
+    @Param("id") id: string,
+    @Body() dto: TelemetryDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    const updated = await this.alertService.updateTelemetry(id, user.sub, dto);
     return { success: true, data: updated };
   }
 
@@ -191,8 +231,9 @@ export class AlertsController {
   async participants(
     @Param("id") id: string,
     @Body() dto: UpdateParticipantDto,
+    @CurrentUser() user: JwtPayload,
   ) {
-    const data = await this.alertService.updateParticipant(id, dto);
+    const data = await this.alertService.updateParticipant(id, user.sub, dto);
     return { success: true, data };
   }
 
@@ -236,14 +277,12 @@ export class AlertsController {
   }
 
   @Get(":id")
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: "Get one alert by id" })
   @ApiParam({ name: "id", example: "alt-active-991" })
   @ApiNotFoundResponse({ description: "Alert not found" })
-  async getById(@Param("id") id: string) {
-    const alert = await this.alertService.getActiveAlertById(id);
-    if (!alert) {
-      throw new NotFoundException("Alert not found");
-    }
-    return { success: true, data: alert };
+  async getById(@Param("id") id: string, @CurrentUser() user: JwtPayload) {
+    const data = await this.alertService.getResponderView(id, user.sub);
+    return { success: true, data };
   }
 }

@@ -9,7 +9,7 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { digitsOnly } from "../../common/utils/phone";
 import { toContactDto, toGroupDto, toMemberDto } from "../../common/mappers/contact.mapper";
 import { AddMemberDto, CreateContactDto, CreateGroupDto, UpdateContactDto, UpdateGroupDto } from "./dto/contact.dto";
-import { CONTACT_STATUSES, REFERRAL_COPY } from "./contact.constants";
+import { CONTACT_STATUSES, CONTACTS_EMPTY, GROUPS_EMPTY, GROUP_COLORS, REFERRAL_COPY } from "./contact.constants";
 import { NotificationService } from "../notifications/notification.service";
 
 export type ListContactsOptions = {
@@ -37,8 +37,12 @@ export class ContactService {
     return { statuses: [...CONTACT_STATUSES] };
   }
 
+  getColors() {
+    return { colors: GROUP_COLORS.map((item) => ({ ...item })) };
+  }
+
   async listContacts(userId: string, options: ListContactsOptions = {}) {
-    const excludeIds = await this.resolveExcludedIds(options);
+    const excludeIds = await this.resolveExcludedIds(userId, options);
     const query = options.query?.trim();
     const digits = query ? digitsOnly(query) : "";
 
@@ -63,6 +67,7 @@ export class ContactService {
     return {
       contacts: contacts.map(toContactDto),
       plan,
+      emptyState: contacts.length ? null : { ...CONTACTS_EMPTY },
     };
   }
 
@@ -220,6 +225,8 @@ export class ContactService {
     return {
       groups: groups.map((group) => toGroupDto(group, plan.maxMembersPerGroup)),
       plan,
+      colors: GROUP_COLORS.map((item) => ({ ...item })),
+      emptyState: groups.length ? null : { ...GROUPS_EMPTY },
     };
   }
 
@@ -378,6 +385,148 @@ export class ContactService {
     return { deleted: true };
   }
 
+  async inviteToGroup(userId: string, groupId: string, dto: { phone?: string; contactId?: string }) {
+    const group = await this.requireGroup(userId, groupId);
+    const inviter = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    const targets: Array<{ phone: string; name: string }> = [];
+
+    if (dto.contactId) {
+      const contact = await this.requireContact(userId, dto.contactId);
+      targets.push({ phone: contact.phone, name: contact.name });
+    } else if (dto.phone) {
+      targets.push({ phone: dto.phone, name: dto.phone });
+    } else {
+      for (const member of group.members) {
+        targets.push({ phone: member.phone, name: member.name });
+      }
+    }
+
+    const created = [];
+    for (const target of targets) {
+      const phoneDigits = digitsOnly(target.phone);
+      if (phoneDigits.length < 7 || phoneDigits === inviter.phoneDigits) {
+        continue;
+      }
+      const existing = await this.prisma.groupInvitation.findFirst({
+        where: { groupId, inviteePhoneDigits: phoneDigits, status: "PENDING" },
+      });
+      if (existing) {
+        created.push(existing);
+        continue;
+      }
+      const invitee = await this.prisma.user.findFirst({ where: { phoneDigits } });
+      const invite = await this.prisma.groupInvitation.create({
+        data: {
+          id: `inv-${crypto.randomUUID().slice(0, 8)}`,
+          groupId,
+          inviterId: userId,
+          inviteeUserId: invitee?.id,
+          inviteePhone: target.phone,
+          inviteePhoneDigits: phoneDigits,
+          inviteeName: target.name,
+        },
+      });
+      if (invitee) {
+        await this.notifications.notifyGroupInvite({
+          inviteeUserId: invitee.id,
+          inviterName: inviter.fullName.split(" ")[0],
+          groupName: group.name,
+        });
+      }
+      created.push(invite);
+    }
+
+    return {
+      groupId,
+      invited: created.length,
+      invitations: created.map((invite) => ({
+        id: invite.id,
+        phone: invite.inviteePhone,
+        status: invite.status,
+      })),
+    };
+  }
+
+  async listInvitations(userId: string) {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    const items = await this.prisma.groupInvitation.findMany({
+      where: {
+        status: "PENDING",
+        OR: [{ inviteeUserId: userId }, { inviteePhoneDigits: user.phoneDigits }],
+      },
+      include: { group: true, inviter: { select: { fullName: true } } },
+      orderBy: { createdAt: "desc" },
+    });
+    return {
+      title: "Join an Emergency Group",
+      subtitle: "please ! Accept or Reject the pending invitation",
+      skipLabel: "Skip for now — join a group later",
+      acceptLabel: "Accept & Join",
+      declineLabel: "Decline",
+      items: items.map((invite) => ({
+        id: invite.id,
+        groupId: invite.groupId,
+        groupName: invite.group.name,
+        invitedBy: `Invited by ${invite.inviter.fullName}`,
+        createdAt: invite.createdAt.toISOString(),
+      })),
+    };
+  }
+
+  async acceptInvitation(userId: string, invitationId: string) {
+    return this.respondToInvitation(userId, invitationId, "ACCEPTED");
+  }
+
+  async declineInvitation(userId: string, invitationId: string) {
+    return this.respondToInvitation(userId, invitationId, "DECLINED");
+  }
+
+  private async respondToInvitation(
+    userId: string,
+    invitationId: string,
+    status: "ACCEPTED" | "DECLINED",
+  ) {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    const invite = await this.prisma.groupInvitation.findFirst({
+      where: {
+        id: invitationId,
+        status: "PENDING",
+        OR: [{ inviteeUserId: userId }, { inviteePhoneDigits: user.phoneDigits }],
+      },
+      include: { group: true },
+    });
+    if (!invite) {
+      throw new NotFoundException("Invitation not found.");
+    }
+
+    if (status === "ACCEPTED") {
+      const already = await this.prisma.contactMember.findFirst({
+        where: { groupId: invite.groupId, phoneDigits: user.phoneDigits },
+      });
+      if (!already) {
+        await this.prisma.$transaction(async (tx) => {
+          await tx.contactMember.create({
+            data: {
+              id: `mem-${crypto.randomUUID().slice(0, 8)}`,
+              groupId: invite.groupId,
+              name: user.fullName,
+              phone: user.phone,
+              phoneDigits: user.phoneDigits,
+              relationship: "Member",
+            },
+          });
+          await this.syncMemberCount(tx, invite.groupId);
+        });
+      }
+    }
+
+    const updated = await this.prisma.groupInvitation.update({
+      where: { id: invite.id },
+      data: { status, respondedAt: new Date(), inviteeUserId: userId },
+    });
+    return { id: updated.id, status: updated.status, groupId: updated.groupId };
+  }
+
   async getReferral(userId: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
@@ -491,6 +640,7 @@ export class ContactService {
         contactId: contact.id,
         name: contact.name,
         phone: contact.phone,
+        phoneDigits: digitsOnly(contact.phone),
         relationship: contact.relationship,
       },
     });
@@ -506,9 +656,16 @@ export class ContactService {
     });
   }
 
-  private async resolveExcludedIds(options: ListContactsOptions) {
+  private async resolveExcludedIds(userId: string, options: ListContactsOptions) {
     const excludeIds = new Set(options.excludeIds?.filter(Boolean) ?? []);
     if (options.excludeGroupId) {
+      const owned = await this.prisma.contactGroup.findFirst({
+        where: { id: options.excludeGroupId, userId },
+        select: { id: true },
+      });
+      if (!owned) {
+        return [...excludeIds];
+      }
       const members = await this.prisma.contactMember.findMany({
         where: { groupId: options.excludeGroupId, contactId: { not: null } },
         select: { contactId: true },

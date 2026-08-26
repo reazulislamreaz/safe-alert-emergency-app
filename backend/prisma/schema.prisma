@@ -72,6 +72,14 @@ enum NotificationType {
   ALERT_CANCELLED
   CONTACT_ADDED
   SUBSCRIPTION
+  GROUP_INVITE
+  RESPONDER_UPDATE
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
 }
 
 model User {
@@ -99,12 +107,15 @@ model User {
   subscriptionCancelledAt   DateTime?
   subscriptionCancelReason  String?
   trialEndsAt               DateTime?
+  faceIdEnabled             Boolean           @default(false)
   createdAt                 DateTime          @default(now())
   contactGroups             ContactGroup[]
   contacts                  Contact[]
   alerts                    Alert[]
   journals                  Journal[]
   notifications             Notification[]
+  sentInvitations           GroupInvitation[] @relation("InvitationInviter")
+  receivedInvitations       GroupInvitation[] @relation("InvitationInvitee")
 
   @@index([phoneDigits])
   @@index([role])
@@ -149,14 +160,15 @@ model Contact {
 }
 
 model ContactGroup {
-  id           String          @id @default(uuid())
+  id           String             @id @default(uuid())
   userId       String
-  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   name         String
-  color        String          @default("#3A67D5")
-  isDefaultSOS Boolean         @default(true)
-  memberCount  Int             @default(0)
+  color        String             @default("#3A67D5")
+  isDefaultSOS Boolean            @default(true)
+  memberCount  Int                @default(0)
   members      ContactMember[]
+  invitations  GroupInvitation[]
 
   @@index([userId])
   @@map("contact_groups")
@@ -170,12 +182,35 @@ model ContactMember {
   contact      Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
   name         String
   phone        String
+  phoneDigits  String       @default("")
   relationship String
   isJoinedCall Boolean      @default(false)
 
   @@index([groupId])
   @@index([contactId])
+  @@index([phoneDigits])
   @@map("contact_members")
+}
+
+model GroupInvitation {
+  id                 String           @id @default(uuid())
+  groupId            String
+  group              ContactGroup     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  inviterId          String
+  inviter            User             @relation("InvitationInviter", fields: [inviterId], references: [id], onDelete: Cascade)
+  inviteeUserId      String?
+  invitee            User?            @relation("InvitationInvitee", fields: [inviteeUserId], references: [id], onDelete: SetNull)
+  inviteePhone       String
+  inviteePhoneDigits String
+  inviteeName        String?
+  status             InvitationStatus @default(PENDING)
+  createdAt          DateTime         @default(now())
+  respondedAt        DateTime?
+
+  @@index([inviteePhoneDigits, status])
+  @@index([inviteeUserId, status])
+  @@index([groupId])
+  @@map("group_invitations")
 }
 
 model EmergencyType {

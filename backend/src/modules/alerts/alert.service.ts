@@ -10,6 +10,7 @@ import {
   AlertSource,
   AlertStatus,
   DeliveryStatus,
+  InvitationStatus,
   JournalEntryType,
   JournalSource,
   MessageType,
@@ -34,6 +35,7 @@ import {
 } from "./alert.constants";
 import {
   QuickResponseDto,
+  RespondAlertDto,
   SendAlertMessageDto,
   TelemetryDto,
   TriggerAlertDto,
@@ -187,6 +189,197 @@ export class AlertService {
     return alert ? toAlertDto(alert) : null;
   }
 
+  async getInbox(userId: string, tab?: string) {
+    const user = await this.requireUser(userId);
+    const hour = new Date().getHours();
+    const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+    const firstName = user.fullName.split(" ")[0];
+    const ownerIds = await this.circleOwnerIds(user.phoneDigits, user.id);
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    const [activeAlerts, pastAlerts, invitations, unreadCount] = await Promise.all([
+      ownerIds.length
+        ? this.prisma.alert.findMany({
+            where: { userId: { in: ownerIds }, status: AlertStatus.BROADCASTING },
+            include: alertInclude,
+            orderBy: { triggeredAt: "desc" },
+          })
+        : Promise.resolve([]),
+      ownerIds.length
+        ? this.prisma.alert.findMany({
+            where: {
+              userId: { in: ownerIds },
+              status: { in: [AlertStatus.CANCELLED, AlertStatus.RESOLVED] },
+              triggeredAt: { gte: since },
+            },
+            include: alertInclude,
+            orderBy: { triggeredAt: "desc" },
+          })
+        : Promise.resolve([]),
+      this.prisma.groupInvitation.findMany({
+        where: {
+          status: InvitationStatus.PENDING,
+          OR: [{ inviteeUserId: user.id }, { inviteePhoneDigits: user.phoneDigits }],
+        },
+        include: { group: true, inviter: { select: { fullName: true } } },
+        orderBy: { createdAt: "desc" },
+      }),
+      this.notifications.unreadCount(userId),
+    ]);
+
+    const live = activeAlerts[0];
+    const dtoLive = live ? toAlertDto(live) : null;
+    const selectedTab = (tab || "active").toLowerCase() === "past" ? "past" : "active";
+
+    return {
+      greeting,
+      user: {
+        id: user.id,
+        fullName: user.fullName,
+        firstName,
+        avatar: user.avatar,
+      },
+      notifications: { title: "Notification", unreadCount },
+      liveBanner: dtoLive
+        ? {
+            alertId: dtoLive.id,
+            title: "LIVE EMERGENCY",
+            cta: "Tap to respond →",
+            headline: `${dtoLive.userName.split(" ")[0]} needs help!`,
+            subtitle: `${dtoLive.emergencyType} · ${dtoLive.location.address} · ${formatRelative(new Date(dtoLive.triggeredAt))}`,
+            statusLabel: "LIVE",
+          }
+        : null,
+      tabs: [
+        { key: "active", label: `Active(${activeAlerts.length})` },
+        { key: "past", label: "Past alerts" },
+      ],
+      selectedTab,
+      emptyActive: {
+        title: "No Active Alert yet",
+      },
+      active: activeAlerts.map((alert) => this.toInboxCard(alert)),
+      past: {
+        heading: "Past 7 Days",
+        items: pastAlerts.map((alert) => ({
+          ...this.toInboxCard(alert),
+          statusLabel: "Resolved",
+          subtitle: `${alert.mode === AlertMode.TEST ? "Test Alert" : alert.emergencyTypeLabel} · ${formatRelative(alert.triggeredAt)}`,
+        })),
+      },
+      invitations: {
+        title: "Join an Emergency Group",
+        subtitle: "please ! Accept or Reject the pending invitation",
+        skipLabel: "Skip for now — join a group later",
+        acceptLabel: "Accept & Join",
+        declineLabel: "Decline",
+        items: invitations.map((invite) => ({
+          id: invite.id,
+          groupId: invite.groupId,
+          groupName: invite.group.name,
+          invitedBy: `Invited by ${invite.inviter.fullName}`,
+          timeLabel: formatRelative(invite.createdAt),
+        })),
+      },
+      myGroups: await this.circleGroups(user.id, user.phoneDigits),
+    };
+  }
+
+  async getResponderView(alertId: string, userId: string) {
+    const alert = await this.requireAccessible(alertId, userId);
+    const viewer = await this.requireUser(userId);
+    const dto = toAlertDto(alert);
+    const membership = await this.prisma.contactMember.findFirst({
+      where: {
+        phoneDigits: viewer.phoneDigits,
+        group: { userId: alert.userId },
+      },
+      include: { group: true },
+    });
+    const self =
+      dto.activeCallParticipants.find((participant) => participant.id === `part-${userId}`) ||
+      dto.activeCallParticipants.find(
+        (participant) => membership?.contactId && participant.contactId === membership.contactId,
+      ) ||
+      dto.activeCallParticipants.find((participant) => participant.name === viewer.fullName);
+    const responding = self?.responderStatus === "RESPONDING" || self?.responderStatus === "EN_ROUTE";
+
+    return {
+      ...dto,
+      title: "LIVE ALERT",
+      groupLabel: membership
+        ? `Your group: ${membership.group.name} · ${membership.relationship}`
+        : "Your group",
+      actions: {
+        joinCallLabel: "Join Call",
+        messageLabel: "Message",
+        respondLabel: "I'm Responding",
+        declineLabel: "Can't Help",
+      },
+      responding,
+      respondingTitle: responding ? "You're responding" : undefined,
+      respondingBody: responding
+        ? `${alert.userName.split(" ")[0]} has been notified you're on the way`
+        : undefined,
+    };
+  }
+
+  async respondToAlert(alertId: string, userId: string, dto: RespondAlertDto) {
+    const alert = await this.requireAccessible(alertId, userId);
+    const viewer = await this.requireUser(userId);
+    const action = dto.action?.toUpperCase();
+    if (action !== "RESPONDING" && action !== "CANT_HELP") {
+      throw new BadRequestException("Choose I'm Responding or Can't Help.");
+    }
+
+    const responderStatus = action === "RESPONDING" ? "RESPONDING" : "CANT_HELP";
+    const status = action === "RESPONDING" ? "CONNECTED" : "CALLING";
+    const firstName = viewer.fullName.split(" ")[0];
+    const participants = ((alert.participants as CallParticipant[] | null) ?? []).map((participant) => {
+      const matched =
+        participant.id === `part-${userId}` ||
+        participant.name === viewer.fullName ||
+        participant.displayName === firstName;
+      if (!matched) {
+        return participant;
+      }
+      return { ...participant, status, responderStatus };
+    });
+
+    const hasSelf = participants.some(
+      (participant) => participant.id === `part-${userId}` || participant.name === viewer.fullName,
+    );
+    if (!hasSelf) {
+      participants.push({
+        id: `part-${userId}`,
+        contactId: null,
+        name: viewer.fullName,
+        displayName: viewer.fullName.split(" ")[0],
+        initials: initialsFrom(viewer.fullName),
+        relationship: "Responder",
+        status,
+        responderStatus,
+        color: PARTICIPANT_COLORS[1],
+      });
+    }
+
+    const updated = await this.prisma.alert.update({
+      where: { id: alertId },
+      data: { participants: participants as unknown as Prisma.InputJsonValue },
+      include: alertInclude,
+    });
+
+    this.realtime.emitToRoom(`room:${alertId}`, "alert:state", toAlertDto(updated));
+    await this.notifications.notifyResponderUpdate({
+      ownerId: alert.userId,
+      responderName: viewer.fullName.split(" ")[0],
+      alertId,
+      responding: action === "RESPONDING",
+    });
+
+    return this.getResponderView(alertId, userId);
+  }
+
   async triggerAlert(params: TriggerAlertDto & { userId: string }) {
     const user = await this.requireUser(params.userId);
     const existing = await this.findActive(user.id);
@@ -310,8 +503,8 @@ export class AlertService {
     return alert ? toAlertDto(alert) : null;
   }
 
-  async getLiveSession(id: string) {
-    const alert = await this.requireAlert(id);
+  async getLiveSession(id: string, userId: string) {
+    const alert = await this.requireAccessible(id, userId);
     const dto = toAlertDto(alert);
     const respondingContacts = dto.activeCallParticipants
       .filter((participant) => !participant.isSender)
@@ -342,7 +535,7 @@ export class AlertService {
   }
 
   async getCallSession(id: string, userId: string) {
-    const alert = await this.requireAlert(id);
+    const alert = await this.requireAccessible(id, userId);
     const dto = toAlertDto(alert);
     const appId = env.zegoAppId;
     const secret = env.zegoServerSecret;
@@ -376,11 +569,8 @@ export class AlertService {
     return alerts.map(toAlertDto);
   }
 
-  async updateTelemetry(alertId: string, point: TelemetryDto) {
-    const existing = await this.prisma.alert.findUnique({ where: { id: alertId } });
-    if (!existing) {
-      return null;
-    }
+  async updateTelemetry(alertId: string, userId: string, point: TelemetryDto) {
+    await this.requireOwned(alertId, userId);
 
     const alert = await this.prisma.alert.update({
       where: { id: alertId },
@@ -494,8 +684,8 @@ export class AlertService {
     return updated;
   }
 
-  async updateParticipant(alertId: string, dto: UpdateParticipantDto) {
-    const alert = await this.requireAlert(alertId);
+  async updateParticipant(alertId: string, userId: string, dto: UpdateParticipantDto) {
+    const alert = await this.requireAccessible(alertId, userId);
     const participants = ((alert.participants as CallParticipant[] | null) ?? []).map((participant) => {
       const matched =
         (dto.participantId && participant.id === dto.participantId) ||
@@ -632,6 +822,76 @@ export class AlertService {
     });
   }
 
+  private toInboxCard(alert: AlertRecord) {
+    const dto = toAlertDto(alert);
+    return {
+      id: dto.id,
+      userName: dto.userName,
+      initials: initialsFrom(dto.userName),
+      statusLabel: dto.status === "BROADCASTING" ? "LIVE" : "Resolved",
+      headline: `🚨 ${dto.emergencyType} · ${dto.modeLabel}`,
+      subtitle: `${dto.location.address} · ${formatRelative(new Date(dto.triggeredAt))}`,
+      emergencyType: dto.emergencyType,
+      modeLabel: dto.modeLabel,
+      location: dto.location,
+      joinCallLabel: "Join Call",
+      messageLabel: "Message",
+    };
+  }
+
+  private async circleOwnerIds(phoneDigits: string, selfId: string) {
+    const [members, contacts] = await Promise.all([
+      this.prisma.contactMember.findMany({
+        where: { phoneDigits },
+        select: { group: { select: { userId: true } } },
+      }),
+      this.prisma.contact.findMany({
+        where: { phoneDigits, NOT: { userId: selfId } },
+        select: { userId: true },
+      }),
+    ]);
+    return [
+      ...new Set(
+        [...members.map((row) => row.group.userId), ...contacts.map((row) => row.userId)].filter(
+          (id) => id !== selfId,
+        ),
+      ),
+    ];
+  }
+
+  private async circleGroups(userId: string, phoneDigits: string) {
+    const owned = await this.prisma.contactGroup.findMany({
+      where: { userId },
+      include: { members: true },
+    });
+    const memberOf = await this.prisma.contactGroup.findMany({
+      where: { members: { some: { phoneDigits } }, NOT: { userId } },
+      include: { members: true },
+    });
+    const groups = [...owned, ...memberOf];
+    const phones = [
+      ...new Set(groups.flatMap((group) => group.members.map((member) => member.phoneDigits).filter(Boolean))),
+    ];
+    const onlineUsers = phones.length
+      ? await this.prisma.user.findMany({
+          where: { phoneDigits: { in: phones } },
+          select: { phoneDigits: true },
+        })
+      : [];
+    const onlineSet = new Set(onlineUsers.map((row) => row.phoneDigits));
+
+    return groups.map((group) => {
+      const onlineCount = group.members.filter((member) => onlineSet.has(member.phoneDigits)).length;
+      return {
+        id: group.id,
+        name: group.name,
+        memberCount: group.memberCount || group.members.length,
+        onlineCount,
+        memberLabel: `${group.memberCount || group.members.length} members · ${onlineCount} online`,
+      };
+    });
+  }
+
   private async requireAlert(id: string) {
     const alert = await this.prisma.alert.findUnique({
       where: { id },
@@ -661,13 +921,18 @@ export class AlertService {
     const phones = new Set(
       (
         await this.prisma.contactMember.findMany({
-          where: { groupId: { in: alert.notifiedGroups.map((group) => group.groupId) } },
-          select: { phone: true },
+          where: {
+            OR: [
+              { groupId: { in: alert.notifiedGroups.map((group) => group.groupId) } },
+              { group: { userId: alert.userId } },
+            ],
+          },
+          select: { phone: true, phoneDigits: true },
         })
-      ).map((member) => digitsOnly(member.phone)),
+      ).flatMap((member) => [digitsOnly(member.phone), member.phoneDigits].filter(Boolean)),
     );
     if (!phones.has(viewer.phoneDigits)) {
-      throw new ForbiddenException("You cannot access this emergency chat.");
+      throw new ForbiddenException("You cannot access this emergency.");
     }
     return alert;
   }

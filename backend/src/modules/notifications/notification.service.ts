@@ -178,6 +178,38 @@ export class NotificationService {
     });
   }
 
+  async notifyGroupInvite(params: {
+    inviteeUserId: string;
+    inviterName: string;
+    groupName: string;
+  }) {
+    await this.createForUser({
+      userId: params.inviteeUserId,
+      type: NotificationType.GROUP_INVITE,
+      title: notificationTitle(NotificationType.GROUP_INVITE),
+      body: `${params.inviterName} invited you to ${params.groupName}.`,
+      refLabel: params.groupName,
+    });
+  }
+
+  async notifyResponderUpdate(params: {
+    ownerId: string;
+    responderName: string;
+    alertId: string;
+    responding: boolean;
+  }) {
+    await this.createForUser({
+      userId: params.ownerId,
+      type: NotificationType.RESPONDER_UPDATE,
+      title: params.responding ? "Someone is responding" : "Can't help right now",
+      body: params.responding
+        ? `${params.responderName} is on the way.`
+        : `${params.responderName} can't help right now.`,
+      refLabel: params.responderName,
+      alertId: params.alertId,
+    });
+  }
+
   private async createForUser(data: {
     userId: string;
     type: NotificationType;

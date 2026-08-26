@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Headers, HttpCode, HttpStatus, Param, Patch, Post, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from "@nestjs/swagger";
 import { ProfileService } from "./profile.service";
 import {
@@ -43,8 +43,13 @@ export class ProfileController {
 
   @Delete()
   @ApiOperation({ summary: "Delete Account — requires PIN" })
-  async deleteAccount(@CurrentUser() user: JwtPayload, @Body() dto: DeleteAccountDto) {
-    const data = await this.profileService.deleteAccount(user.sub, dto.pin);
+  async deleteAccount(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: DeleteAccountDto,
+    @Headers("authorization") authorization?: string,
+  ) {
+    const token = authorization?.startsWith("Bearer ") ? authorization.slice("Bearer ".length) : undefined;
+    const data = await this.profileService.deleteAccount(user.sub, dto.pin, token);
     return { success: true, data };
   }
 

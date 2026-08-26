@@ -10,6 +10,7 @@ import { SubscriptionTier, User } from "@prisma/client";
 import { compare } from "bcryptjs";
 import { PrismaService } from "../../prisma/prisma.service";
 import { digitsOnly, maskPhone } from "../../common/utils/phone";
+import { hashToken } from "../../common/utils/token-hash";
 import { toPublicUser } from "../../common/mappers/user.mapper";
 import {
   LEGAL_PAGES,
@@ -122,11 +123,23 @@ export class ProfileService {
     return this.updateProfile(userId, { profilePhotos: cleaned, avatar: cleaned[0] });
   }
 
-  async deleteAccount(userId: string, pin: string) {
+  async deleteAccount(userId: string, pin: string, accessToken?: string) {
     const user = await this.requireUser(userId);
     const valid = await compare(pin, user.pinHash);
     if (!valid) {
       throw new UnauthorizedException("Incorrect PIN.");
+    }
+
+    if (accessToken) {
+      const decoded = this.jwt.decode(accessToken) as { exp?: number } | null;
+      const expiresAt = decoded?.exp
+        ? new Date(decoded.exp * 1000)
+        : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      await this.prisma.revokedToken.upsert({
+        where: { tokenHash: hashToken(accessToken) },
+        create: { tokenHash: hashToken(accessToken), expiresAt },
+        update: { expiresAt },
+      });
     }
 
     await this.prisma.user.delete({ where: { id: userId } });

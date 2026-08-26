@@ -25,6 +25,7 @@ import {
   AddMemberDto,
   CreateContactDto,
   CreateGroupDto,
+  InviteGroupDto,
   UpdateContactDto,
   UpdateGroupDto,
 } from "./dto/contact.dto";
@@ -80,6 +81,12 @@ export class ContactsController {
     return { success: true, data: this.contactService.getStatuses() };
   }
 
+  @Get("colors")
+  @ApiOperation({ summary: "Group color picker presets (Create/Edit Group)" })
+  async colors() {
+    return { success: true, data: this.contactService.getColors() };
+  }
+
   @Get("plan")
   @ApiOperation({ summary: "Current group/member plan limits" })
   async plan(@CurrentUser() user: JwtPayload) {
@@ -127,6 +134,44 @@ export class ContactsController {
   @ApiParam({ name: "id", example: "grp-family-01" })
   async deleteGroup(@CurrentUser() user: JwtPayload, @Param("id") id: string) {
     const data = await this.contactService.deleteGroup(user.sub, id);
+    return { success: true, data };
+  }
+
+  @Post("groups/:id/invite")
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: "Invite friends to a group (Groups Invite CTA)" })
+  @ApiParam({ name: "id", example: "grp-family-01" })
+  async invite(
+    @CurrentUser() user: JwtPayload,
+    @Param("id") id: string,
+    @Body() dto: InviteGroupDto,
+  ) {
+    const data = await this.contactService.inviteToGroup(user.sub, id, dto);
+    return { success: true, data };
+  }
+
+  @Get("invitations")
+  @ApiOperation({ summary: "Pending group invitations for the signed-in user" })
+  async invitations(@CurrentUser() user: JwtPayload) {
+    const data = await this.contactService.listInvitations(user.sub);
+    return { success: true, data };
+  }
+
+  @Post("invitations/:id/accept")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Accept & Join a group invitation" })
+  @ApiParam({ name: "id", example: "inv-family-01" })
+  async acceptInvite(@CurrentUser() user: JwtPayload, @Param("id") id: string) {
+    const data = await this.contactService.acceptInvitation(user.sub, id);
+    return { success: true, data };
+  }
+
+  @Post("invitations/:id/decline")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Decline a group invitation" })
+  @ApiParam({ name: "id", example: "inv-family-01" })
+  async declineInvite(@CurrentUser() user: JwtPayload, @Param("id") id: string) {
+    const data = await this.contactService.declineInvitation(user.sub, id);
     return { success: true, data };
   }
 

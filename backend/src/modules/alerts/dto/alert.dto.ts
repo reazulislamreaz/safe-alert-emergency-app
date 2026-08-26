@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { Type } from "class-transformer";
-import { IsBoolean, IsEnum, IsNumber, IsOptional, IsString, MaxLength, Min, MinLength } from "class-validator";
+import { IsBoolean, IsEnum, IsIn, IsNumber, IsOptional, IsString, MaxLength, Min, MinLength } from "class-validator";
 import { AlertMode } from "@prisma/client";
 
 export class TriggerAlertDto {
@@ -144,4 +144,11 @@ export class SendAlertMessageDto {
   @IsOptional()
   @IsString()
   groupId?: string;
+}
+
+export class RespondAlertDto {
+  @ApiProperty({ enum: ["RESPONDING", "CANT_HELP"], example: "RESPONDING" })
+  @IsString()
+  @IsIn(["RESPONDING", "CANT_HELP"], { message: "Choose I'm Responding or Can't Help." })
+  action!: "RESPONDING" | "CANT_HELP";
 }

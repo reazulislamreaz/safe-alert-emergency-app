@@ -16,8 +16,8 @@ export function setupSwagger(app: INestApplication): void {
         "",
         "Use **Authorize** after login and paste the JWT as a Bearer token for `/api/auth/me`.",
         "",
-        "**Socket.io** (`ws://localhost:5000`, same origin as REST)",
-        "- Client → server: `alert:join`, `alert:telemetry`, `alert:message:send`, `alert:quick_response`, `admin:subscribe`",
+        "**Socket.io** (`ws://localhost:5002`, same origin as REST)",
+        "- Client → server: `alert:join`, `alert:telemetry`, `alert:message:send`, `alert:quick_response`, `admin:subscribe` (JWT required; admin room is ops-only)",
         "- Server → client: `alert:state`, `alert:telemetry:update`, `alert:messages:update`, `alert:resolved`, `notification:new`, `admin:alert:new`, `admin:alert:resolved`, `admin:alert:telemetry`, `admin:metrics`",
       ].join("\n"),
     )
@@ -33,8 +33,8 @@ export function setupSwagger(app: INestApplication): void {
     )
     .addTag("Health", "Process liveness")
     .addTag("Auth", "Register, login, OTP, PIN, password reset")
-    .addTag("Alerts", "Direct + Manual Emergency Alert: SOS hold, Quick, live call, chat, cancel")
-    .addTag("Contacts", "Address book, groups, plan limits, and referral invite")
+    .addTag("Alerts", "SOS, Manual/Direct, Alerts tab inbox, live call, chat, respond, cancel")
+    .addTag("Contacts", "Address book, groups, invitations, plan limits, and referral invite")
     .addTag("Profile", "Citizen profile, photos, and delete account")
     .addTag("Subscriptions", "Free vs Premium plans")
     .addTag("Legal", "About Us, Privacy Policy, Terms & Conditions")

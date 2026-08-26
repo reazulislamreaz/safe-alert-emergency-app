@@ -10,7 +10,7 @@ import {
   WebSocketGateway,
   WebSocketServer,
 } from "@nestjs/websockets";
-import { MessageType } from "@prisma/client";
+import { Role } from "@prisma/client";
 import { Server, Socket } from "socket.io";
 import { env, JwtPayload } from "../config/env";
 import { AlertService } from "../modules/alerts/alert.service";
@@ -71,15 +71,22 @@ export class AlertsGateway
 
   @SubscribeMessage("alert:join")
   async joinAlert(@ConnectedSocket() socket: Socket, @MessageBody() alertId: string) {
-    socket.join(`room:${alertId}`);
-    const alert = await this.alertService.getActiveAlertById(alertId);
-    if (alert) {
+    const user = socket.data?.user as JwtPayload | undefined;
+    if (!user?.sub || !alertId) {
+      return;
+    }
+    try {
+      const alert = await this.alertService.getResponderView(alertId, user.sub);
+      socket.join(`room:${alertId}`);
       socket.emit("alert:state", alert);
+    } catch {
+      this.logger.warn(`alert:join denied for ${socket.id} on ${alertId}`);
     }
   }
 
   @SubscribeMessage("alert:telemetry")
   async telemetry(
+    @ConnectedSocket() socket: Socket,
     @MessageBody()
     data: {
       alertId: string;
@@ -91,32 +98,40 @@ export class AlertsGateway
       batteryLevel: number;
     },
   ) {
-    await this.alertService.updateTelemetry(data.alertId, {
-      latitude: data.latitude,
-      longitude: data.longitude,
-      speed: data.speed,
-      heading: data.heading,
-      accuracy: data.accuracy,
-      batteryLevel: data.batteryLevel,
-    });
+    const user = socket.data?.user as JwtPayload | undefined;
+    if (!user?.sub) {
+      return;
+    }
+    try {
+      await this.alertService.updateTelemetry(data.alertId, user.sub, {
+        latitude: data.latitude,
+        longitude: data.longitude,
+        speed: data.speed,
+        heading: data.heading,
+        accuracy: data.accuracy,
+        batteryLevel: data.batteryLevel,
+      });
+    } catch {
+      this.logger.warn(`alert:telemetry denied for ${socket.id}`);
+    }
   }
 
   @SubscribeMessage("alert:message:send")
   async sendMessage(
     @ConnectedSocket() socket: Socket,
-    @MessageBody() data: { alertId: string; sender: string; text: string },
+    @MessageBody() data: { alertId: string; sender: string; text: string; groupId?: string },
   ) {
     const user = socket.data?.user as JwtPayload | undefined;
-    const senderName = user?.email ? user.email.split("@")[0] : data.sender;
-    const updated = await this.alertService.addMessage(
-      data.alertId,
-      senderName,
-      data.text,
-      MessageType.USER,
-      user?.sub,
-    );
-    if (updated) {
-      this.server.to(`room:${data.alertId}`).emit("alert:messages:update", updated.liveMessages);
+    if (!user?.sub) {
+      return;
+    }
+    try {
+      await this.alertService.sendMessage(data.alertId, user.sub, {
+        text: data.text,
+        groupId: data.groupId,
+      });
+    } catch {
+      this.logger.warn(`alert:message:send denied for ${socket.id}`);
     }
   }
 
@@ -125,27 +140,24 @@ export class AlertsGateway
     @ConnectedSocket() socket: Socket,
     @MessageBody() data: { alertId: string; sender: string; action: string },
   ) {
-    let text = "";
-    if (data.action === "need_help") text = "🚨 I NEED IMMEDIATE HELP!";
-    else if (data.action === "send_location") text = "📍 Live Location pin broadcasted.";
-    else if (data.action === "im_safe") text = "✅ I am currently safe and secure.";
-
     const user = socket.data?.user as JwtPayload | undefined;
-    const senderName = user?.email ? user.email.split("@")[0] : data.sender;
-    const updated = await this.alertService.addMessage(
-      data.alertId,
-      senderName,
-      text,
-      MessageType.QUICK_REPLY,
-      user?.sub,
-    );
-    if (updated) {
-      this.server.to(`room:${data.alertId}`).emit("alert:messages:update", updated.liveMessages);
+    if (!user?.sub) {
+      return;
+    }
+    try {
+      await this.alertService.quickResponse(data.alertId, user.sub, { action: data.action });
+    } catch {
+      this.logger.warn(`alert:quick_response denied for ${socket.id}`);
     }
   }
 
   @SubscribeMessage("admin:subscribe")
   async adminSubscribe(@ConnectedSocket() socket: Socket) {
+    const user = socket.data?.user as JwtPayload | undefined;
+    if (user?.role !== Role.OPS_ADMIN && user?.role !== Role.SUPER_ADMIN) {
+      this.logger.warn(`admin:subscribe denied for ${socket.id}`);
+      return;
+    }
     socket.join("room:admin");
     socket.emit("admin:metrics", await this.dashboardService.getOverviewMetrics());
   }

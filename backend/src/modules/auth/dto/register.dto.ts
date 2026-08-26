@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsArray, IsEmail, IsOptional, IsString, Matches, MinLength } from "class-validator";
+import { IsArray, IsEmail, IsOptional, IsString, Matches, MaxLength, MinLength, ArrayMaxSize } from "class-validator";
 
 export class RegisterDto {
   @ApiProperty({ example: "Jordan Lee" })
@@ -52,6 +52,7 @@ export class RegisterDto {
   })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(3, { message: "Profile Photos * — 0/3 required (max 3)" })
   @IsString({ each: true })
   profilePhotos?: string[];
 

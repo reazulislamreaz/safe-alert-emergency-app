@@ -33,8 +33,11 @@ let ContactService = class ContactService {
     getStatuses() {
         return { statuses: [...contact_constants_1.CONTACT_STATUSES] };
     }
+    getColors() {
+        return { colors: contact_constants_1.GROUP_COLORS.map((item) => ({ ...item })) };
+    }
     async listContacts(userId, options = {}) {
-        const excludeIds = await this.resolveExcludedIds(options);
+        const excludeIds = await this.resolveExcludedIds(userId, options);
         const query = options.query?.trim();
         const digits = query ? (0, phone_1.digitsOnly)(query) : "";
         const contacts = await this.prisma.contact.findMany({
@@ -57,6 +60,7 @@ let ContactService = class ContactService {
         return {
             contacts: contacts.map(contact_mapper_1.toContactDto),
             plan,
+            emptyState: contacts.length ? null : { ...contact_constants_1.CONTACTS_EMPTY },
         };
     }
     async suggestMembers(userId, groupId, query) {
@@ -184,6 +188,8 @@ let ContactService = class ContactService {
         return {
             groups: groups.map((group) => (0, contact_mapper_1.toGroupDto)(group, plan.maxMembersPerGroup)),
             plan,
+            colors: contact_constants_1.GROUP_COLORS.map((item) => ({ ...item })),
+            emptyState: groups.length ? null : { ...contact_constants_1.GROUPS_EMPTY },
         };
     }
     async getGroup(userId, groupId) {
@@ -311,6 +317,136 @@ let ContactService = class ContactService {
         });
         return { deleted: true };
     }
+    async inviteToGroup(userId, groupId, dto) {
+        const group = await this.requireGroup(userId, groupId);
+        const inviter = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+        const targets = [];
+        if (dto.contactId) {
+            const contact = await this.requireContact(userId, dto.contactId);
+            targets.push({ phone: contact.phone, name: contact.name });
+        }
+        else if (dto.phone) {
+            targets.push({ phone: dto.phone, name: dto.phone });
+        }
+        else {
+            for (const member of group.members) {
+                targets.push({ phone: member.phone, name: member.name });
+            }
+        }
+        const created = [];
+        for (const target of targets) {
+            const phoneDigits = (0, phone_1.digitsOnly)(target.phone);
+            if (phoneDigits.length < 7 || phoneDigits === inviter.phoneDigits) {
+                continue;
+            }
+            const existing = await this.prisma.groupInvitation.findFirst({
+                where: { groupId, inviteePhoneDigits: phoneDigits, status: "PENDING" },
+            });
+            if (existing) {
+                created.push(existing);
+                continue;
+            }
+            const invitee = await this.prisma.user.findFirst({ where: { phoneDigits } });
+            const invite = await this.prisma.groupInvitation.create({
+                data: {
+                    id: `inv-${crypto.randomUUID().slice(0, 8)}`,
+                    groupId,
+                    inviterId: userId,
+                    inviteeUserId: invitee?.id,
+                    inviteePhone: target.phone,
+                    inviteePhoneDigits: phoneDigits,
+                    inviteeName: target.name,
+                },
+            });
+            if (invitee) {
+                await this.notifications.notifyGroupInvite({
+                    inviteeUserId: invitee.id,
+                    inviterName: inviter.fullName.split(" ")[0],
+                    groupName: group.name,
+                });
+            }
+            created.push(invite);
+        }
+        return {
+            groupId,
+            invited: created.length,
+            invitations: created.map((invite) => ({
+                id: invite.id,
+                phone: invite.inviteePhone,
+                status: invite.status,
+            })),
+        };
+    }
+    async listInvitations(userId) {
+        const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+        const items = await this.prisma.groupInvitation.findMany({
+            where: {
+                status: "PENDING",
+                OR: [{ inviteeUserId: userId }, { inviteePhoneDigits: user.phoneDigits }],
+            },
+            include: { group: true, inviter: { select: { fullName: true } } },
+            orderBy: { createdAt: "desc" },
+        });
+        return {
+            title: "Join an Emergency Group",
+            subtitle: "please ! Accept or Reject the pending invitation",
+            skipLabel: "Skip for now — join a group later",
+            acceptLabel: "Accept & Join",
+            declineLabel: "Decline",
+            items: items.map((invite) => ({
+                id: invite.id,
+                groupId: invite.groupId,
+                groupName: invite.group.name,
+                invitedBy: `Invited by ${invite.inviter.fullName}`,
+                createdAt: invite.createdAt.toISOString(),
+            })),
+        };
+    }
+    async acceptInvitation(userId, invitationId) {
+        return this.respondToInvitation(userId, invitationId, "ACCEPTED");
+    }
+    async declineInvitation(userId, invitationId) {
+        return this.respondToInvitation(userId, invitationId, "DECLINED");
+    }
+    async respondToInvitation(userId, invitationId, status) {
+        const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+        const invite = await this.prisma.groupInvitation.findFirst({
+            where: {
+                id: invitationId,
+                status: "PENDING",
+                OR: [{ inviteeUserId: userId }, { inviteePhoneDigits: user.phoneDigits }],
+            },
+            include: { group: true },
+        });
+        if (!invite) {
+            throw new common_1.NotFoundException("Invitation not found.");
+        }
+        if (status === "ACCEPTED") {
+            const already = await this.prisma.contactMember.findFirst({
+                where: { groupId: invite.groupId, phoneDigits: user.phoneDigits },
+            });
+            if (!already) {
+                await this.prisma.$transaction(async (tx) => {
+                    await tx.contactMember.create({
+                        data: {
+                            id: `mem-${crypto.randomUUID().slice(0, 8)}`,
+                            groupId: invite.groupId,
+                            name: user.fullName,
+                            phone: user.phone,
+                            phoneDigits: user.phoneDigits,
+                            relationship: "Member",
+                        },
+                    });
+                    await this.syncMemberCount(tx, invite.groupId);
+                });
+            }
+        }
+        const updated = await this.prisma.groupInvitation.update({
+            where: { id: invite.id },
+            data: { status, respondedAt: new Date(), inviteeUserId: userId },
+        });
+        return { id: updated.id, status: updated.status, groupId: updated.groupId };
+    }
     async getReferral(userId) {
         const user = await this.prisma.user.findUnique({ where: { id: userId } });
         if (!user) {
@@ -408,6 +544,7 @@ let ContactService = class ContactService {
                 contactId: contact.id,
                 name: contact.name,
                 phone: contact.phone,
+                phoneDigits: (0, phone_1.digitsOnly)(contact.phone),
                 relationship: contact.relationship,
             },
         });
@@ -421,9 +558,16 @@ let ContactService = class ContactService {
             data: { memberCount },
         });
     }
-    async resolveExcludedIds(options) {
+    async resolveExcludedIds(userId, options) {
         const excludeIds = new Set(options.excludeIds?.filter(Boolean) ?? []);
         if (options.excludeGroupId) {
+            const owned = await this.prisma.contactGroup.findFirst({
+                where: { id: options.excludeGroupId, userId },
+                select: { id: true },
+            });
+            if (!owned) {
+                return [...excludeIds];
+            }
             const members = await this.prisma.contactMember.findMany({
                 where: { groupId: options.excludeGroupId, contactId: { not: null } },
                 select: { contactId: true },
