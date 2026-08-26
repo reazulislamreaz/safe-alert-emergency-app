@@ -168,8 +168,8 @@ export class AuthService {
   }
 
   async setupPin(userId: string, pin: string) {
-    if (!/^\d{4}$/.test(pin)) {
-      throw new BadRequestException("PIN must be a 4-digit number.");
+    if (!/^\d{1,4}$/.test(pin)) {
+      throw new BadRequestException("PIN must be 1 to 4 digits.");
     }
 
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
@@ -218,11 +218,11 @@ export class AuthService {
       }
     } else if (dto.pin) {
       if (!(await compare(dto.pin, user.pinHash))) {
-        throw new UnauthorizedException("Incorrect 4-digit security PIN.");
+        throw new UnauthorizedException("Incorrect security PIN.");
       }
     } else {
       throw new UnauthorizedException(
-        "Please provide your 4-digit PIN or password to log in.",
+        "Please provide your security PIN or password to log in.",
       );
     }
 
@@ -327,8 +327,8 @@ export class AuthService {
   }
 
   async resetPin(phone: string, code: string, newPin: string) {
-    if (!/^\d{4}$/.test(newPin)) {
-      throw new BadRequestException("PIN must be a 4-digit number.");
+    if (!/^\d{1,4}$/.test(newPin)) {
+      throw new BadRequestException("PIN must be 1 to 4 digits.");
     }
 
     const record = await this.getActivePhoneOtp(phone);

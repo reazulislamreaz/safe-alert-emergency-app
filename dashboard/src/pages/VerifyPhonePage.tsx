@@ -61,7 +61,7 @@ export const VerifyPhonePage: React.FC<VerifyPhonePageProps> = ({
   };
 
   return (
-    <MobileAuthLayout title="Enter OTP" onBack={onBack}>
+    <MobileAuthLayout title="Verify" onBack={onBack}>
       <AuthErrorBanner message={errorMessage} />
       <form onSubmit={handleVerify} className="space-y-6">
         <div className="w-14 h-14 rounded-2xl bg-[#3A67D5]/15 border border-[#3A67D5] flex items-center justify-center text-[#3A67D5]">
@@ -70,7 +70,7 @@ export const VerifyPhonePage: React.FC<VerifyPhonePageProps> = ({
         <div>
           <h2 className="text-2xl font-bold text-[#09003B]">Verify your phone</h2>
           <p className="mt-2 text-sm text-[#30302F]">
-            We sent a 6-digit code to <span className="text-[#3A67D5]">{phone}</span>
+            We sent a 6-digit code to <span className="text-[#3A67D5] font-medium">{phone}</span>
           </p>
         </div>
         <DigitBoxes length={OTP_LENGTH} value={otpDigits} onChange={setOtpDigits} />
@@ -80,10 +80,10 @@ export const VerifyPhonePage: React.FC<VerifyPhonePageProps> = ({
           </p>
         )}
         <button type="submit" disabled={isLoading} className={authPrimaryBtnClass}>
-          {isLoading ? <AuthSpinner /> : 'Continue'}
+          {isLoading ? <AuthSpinner /> : 'Verify & Continue'}
         </button>
       </form>
-      <p className={`${authMutedClass} mt-4 flex items-center justify-center gap-2`}>
+      <p className={`${authMutedClass} mt-4 flex items-center justify-center gap-1.5`}>
         Didn't receive it?
         <button type="button" onClick={handleResend} className={authLinkClass}>
           Resend code

@@ -3,6 +3,7 @@ import { Check, Phone } from 'lucide-react';
 import { api } from '../services/api';
 import { MobileAuthLayout } from '../components/auth/MobileAuthLayout';
 import { DigitBoxes } from '../components/auth/DigitBoxes';
+import { OneDigitPinSelector } from '../components/auth/OneDigitPinSelector';
 import { AuthErrorBanner, AuthSpinner } from '../components/auth/AuthFeedback';
 import {
   authInputClass,
@@ -14,7 +15,6 @@ import {
 } from '../components/auth/AuthShell';
 
 const OTP_LENGTH = 6;
-const PIN_LENGTH = 4;
 
 type ForgotPinStep = 'phone' | 'otp' | 'pin' | 'success';
 
@@ -24,17 +24,14 @@ interface ForgotPinPageProps {
 
 export const ForgotPinPage: React.FC<ForgotPinPageProps> = ({ onBackToLogin }) => {
   const [step, setStep] = useState<ForgotPinStep>('phone');
-  const [phone, setPhone] = useState('');
+  const [phone, setPhone] = useState('+1 (555) 234-5678');
   const [otpDigits, setOtpDigits] = useState<string[]>(Array(OTP_LENGTH).fill(''));
-  const [pinDigits, setPinDigits] = useState<string[]>(Array(PIN_LENGTH).fill(''));
+  const [selectedPin, setSelectedPin] = useState<string>('3');
   const [demoCode, setDemoCode] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const otpCode = otpDigits.join('');
-  const newPin = pinDigits.join('');
-  const activePinIndex = pinDigits.findIndex((digit) => !digit);
-  const selectedSlot = activePinIndex === -1 ? PIN_LENGTH : activePinIndex + 1;
 
   const goBack = () => {
     setErrorMessage(null);
@@ -79,7 +76,7 @@ export const ForgotPinPage: React.FC<ForgotPinPageProps> = ({ onBackToLogin }) =
     setIsLoading(true);
     try {
       await api.verifyPinResetOtp(phone.trim(), otpCode);
-      setPinDigits(Array(PIN_LENGTH).fill(''));
+      setSelectedPin('3');
       setStep('pin');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Invalid verification code.';
@@ -104,14 +101,14 @@ export const ForgotPinPage: React.FC<ForgotPinPageProps> = ({ onBackToLogin }) =
   const handleSavePin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
-    if (newPin.length !== PIN_LENGTH) {
-      setErrorMessage('Enter a 4-digit PIN.');
+    if (!selectedPin) {
+      setErrorMessage('Please select a 1-digit PIN.');
       return;
     }
 
     setIsLoading(true);
     try {
-      await api.resetPin(phone.trim(), otpCode, newPin);
+      await api.resetPin(phone.trim(), otpCode, selectedPin);
       setStep('success');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to update PIN.';
@@ -125,10 +122,10 @@ export const ForgotPinPage: React.FC<ForgotPinPageProps> = ({ onBackToLogin }) =
     return (
       <MobileAuthLayout title="" onClose={onBackToLogin}>
         <div className="flex flex-col items-center text-center pt-16">
-          <div className="w-[120px] h-[120px] rounded-full bg-[#00AA1D] flex items-center justify-center mb-4">
-            <Check className="w-14 h-14 text-white" strokeWidth={2.5} />
+          <div className="w-[120px] h-[120px] rounded-full bg-[#00AA1D] flex items-center justify-center mb-4 shadow-lg shadow-green-500/20">
+            <Check className="w-14 h-14 text-white" strokeWidth={3} />
           </div>
-          <h1 className={`${authTitleClass} text-2xl font-medium mb-2`}>Pin Updated!</h1>
+          <h1 className={`${authTitleClass} text-2xl font-bold text-[#09003B] mb-2`}>Pin Updated!</h1>
           <p className="text-sm text-[#30302F] mb-16">Your Emergency Support starts here</p>
           <button type="button" onClick={onBackToLogin} className={authPrimaryBtnClass}>
             Back to Login
@@ -188,7 +185,7 @@ export const ForgotPinPage: React.FC<ForgotPinPageProps> = ({ onBackToLogin }) =
           <button type="submit" disabled={isLoading} className={authPrimaryBtnClass}>
             {isLoading ? <AuthSpinner /> : 'Set New Pin'}
           </button>
-          <p className={`${authMutedClass} flex items-center justify-center gap-2`}>
+          <p className={`${authMutedClass} flex items-center justify-center gap-1.5`}>
             Didn't receive it?
             <button type="button" onClick={handleResend} className={authLinkClass}>
               Resend code
@@ -199,19 +196,14 @@ export const ForgotPinPage: React.FC<ForgotPinPageProps> = ({ onBackToLogin }) =
 
       {step === 'pin' && (
         <form onSubmit={handleSavePin} className="space-y-6">
-          <div>
-            <p className="text-xs text-[#09003B] mb-2">Enter 4-digit PIN</p>
-            <DigitBoxes
-              length={PIN_LENGTH}
-              value={pinDigits}
-              onChange={setPinDigits}
-              autoComplete="new-password"
-              masked
-            />
-            <p className="mt-3 text-xs text-[#00AA1D]">
-              {newPin ? `PIN ${Math.min(selectedSlot, PIN_LENGTH)} selected` : 'Enter each digit'}
-            </p>
-          </div>
+          <OneDigitPinSelector
+            value={selectedPin}
+            onChange={(pin) => {
+              setSelectedPin(pin);
+              setErrorMessage(null);
+            }}
+            label="Enter 1 digit Pin"
+          />
           <button type="submit" disabled={isLoading} className={authPrimaryBtnClass}>
             {isLoading ? <AuthSpinner /> : 'Save New Pin'}
           </button>

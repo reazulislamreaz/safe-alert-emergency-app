@@ -11,12 +11,12 @@ export class LoginDto {
   emailOrPhone!: string;
 
   @ApiPropertyOptional({
-    example: "1234",
-    description: "Citizen 4-digit PIN. Send this or password, not both required.",
+    example: "3",
+    description: "Citizen PIN (1 to 4 digits). Send this or password, not both required.",
   })
   @IsOptional()
   @IsString()
-  @Matches(/^\d{4}$/, { message: "PIN must be 4 digits" })
+  @Matches(/^\d{1,4}$/, { message: "PIN must be 1 to 4 digits" })
   pin?: string;
 
   @ApiPropertyOptional({

@@ -2,9 +2,9 @@ import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { IsOptional, IsString, Length, Matches, MinLength } from "class-validator";
 
 export class SetupPinDto {
-  @ApiProperty({ example: "1234" })
+  @ApiProperty({ example: "3", description: "1-digit to 4-digit PIN" })
   @IsString()
-  @Matches(/^\d{4}$/, { message: "Security PIN must be exactly 4 digits" })
+  @Matches(/^\d{1,4}$/, { message: "Security PIN must be 1 to 4 digits" })
   pin!: string;
 }
 
@@ -40,9 +40,9 @@ export class ResetPinDto {
   @Matches(/^\d{6}$/, { message: "Verification code must be 6 digits" })
   code!: string;
 
-  @ApiProperty({ example: "1234" })
+  @ApiProperty({ example: "3", description: "1-digit to 4-digit PIN" })
   @IsString()
-  @Matches(/^\d{4}$/, { message: "Security PIN must be exactly 4 digits" })
+  @Matches(/^\d{1,4}$/, { message: "Security PIN must be 1 to 4 digits" })
   newPin!: string;
 }
 
@@ -55,8 +55,8 @@ export class VerifyPinDto {
   @IsString()
   userId?: string;
 
-  @ApiProperty({ example: "1234" })
+  @ApiProperty({ example: "3" })
   @IsString()
-  @Matches(/^\d{4}$/, { message: "Security PIN must be exactly 4 digits" })
+  @Matches(/^\d{1,4}$/, { message: "Security PIN must be 1 to 4 digits" })
   pin!: string;
 }

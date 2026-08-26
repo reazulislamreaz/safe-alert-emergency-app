@@ -138,28 +138,59 @@ export const CreateAccountPage: React.FC<CreateAccountPageProps> = ({ onClose, o
       <form onSubmit={handleSubmit} className="space-y-6">
         <div>
           <div className="flex items-center justify-between mb-2">
-            <p className="text-sm text-[#30302F]">
+            <p className="text-sm font-normal text-[#30302F]">
               Profile Photos <span className="text-[#DC2626]">*</span>
             </p>
-            <span className="text-xs text-[#FF7B6B] bg-[#FFDACD] px-2 py-0.5 rounded-full">
+            <span
+              className={`text-xs px-2.5 py-0.5 rounded-full font-medium transition-colors ${
+                photoCount === 3
+                  ? 'text-[#00AA1D] bg-[#E8F8EE]'
+                  : 'text-[#FF7B6B] bg-[#FFDACD]'
+              }`}
+            >
               {photoCount}/3 required
             </span>
           </div>
           <div className="flex gap-2">
             {photos.map((photo, index) => (
-              <button
-                key={index}
-                type="button"
-                onClick={() => fileRefs.current[index]?.click()}
-                className="flex-1 h-[108px] rounded-lg border border-dashed border-[#E1E1E1] bg-[#F5F5F5] overflow-hidden flex flex-col items-center justify-center gap-1 touch-manipulation"
-              >
-                {photo ? (
-                  <img src={photo} alt={`Photo ${index + 1}`} className="w-full h-full object-cover" />
-                ) : (
-                  <>
-                    <Camera className="w-6 h-6 text-[#30302F]" />
-                    <span className="text-xs text-[#30302F]">Photo {index + 1}</span>
-                  </>
+              <div key={index} className="flex-1 relative">
+                <button
+                  type="button"
+                  onClick={() => fileRefs.current[index]?.click()}
+                  className={`w-full h-[108px] rounded-xl border border-dashed overflow-hidden flex flex-col items-center justify-center gap-1 transition-all touch-manipulation ${
+                    photo
+                      ? 'border-[#3A67D5] bg-white shadow-sm'
+                      : 'border-[#E1E1E1] bg-[#F5F5F5] hover:bg-gray-100'
+                  }`}
+                  aria-label={`Upload photo ${index + 1}`}
+                >
+                  {photo ? (
+                    <img
+                      src={photo}
+                      alt={`Photo ${index + 1}`}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <>
+                      <Camera className="w-6 h-6 text-[#30302F]" />
+                      <span className="text-xs text-[#30302F]">Photo {index + 1}</span>
+                    </>
+                  )}
+                </button>
+                {photo && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const next = [...photos];
+                      next[index] = null;
+                      setPhotos(next);
+                    }}
+                    className="absolute top-1 right-1 size-5 bg-black/60 hover:bg-black/80 text-white rounded-full flex items-center justify-center text-[10px] touch-manipulation"
+                    aria-label={`Remove photo ${index + 1}`}
+                  >
+                    ×
+                  </button>
                 )}
                 <input
                   ref={(el) => {
@@ -170,7 +201,7 @@ export const CreateAccountPage: React.FC<CreateAccountPageProps> = ({ onClose, o
                   className="hidden"
                   onChange={(e) => handlePhoto(index, e.target.files?.[0])}
                 />
-              </button>
+              </div>
             ))}
           </div>
         </div>

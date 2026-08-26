@@ -138,8 +138,8 @@ let AuthService = class AuthService {
         return { verified: true, message: "Phone verified successfully." };
     }
     async setupPin(userId, pin) {
-        if (!/^\d{4}$/.test(pin)) {
-            throw new common_1.BadRequestException("PIN must be a 4-digit number.");
+        if (!/^\d{1,4}$/.test(pin)) {
+            throw new common_1.BadRequestException("PIN must be 1 to 4 digits.");
         }
         const user = await this.prisma.user.findUnique({ where: { id: userId } });
         if (!user) {
@@ -180,11 +180,11 @@ let AuthService = class AuthService {
         }
         else if (dto.pin) {
             if (!(await (0, bcryptjs_1.compare)(dto.pin, user.pinHash))) {
-                throw new common_1.UnauthorizedException("Incorrect 4-digit security PIN.");
+                throw new common_1.UnauthorizedException("Incorrect security PIN.");
             }
         }
         else {
-            throw new common_1.UnauthorizedException("Please provide your 4-digit PIN or password to log in.");
+            throw new common_1.UnauthorizedException("Please provide your security PIN or password to log in.");
         }
         const token = this.signToken(user.id, user.email, user.phone, user.role, user.subscriptionTier);
         return { user: (0, user_mapper_1.toPublicUser)(user), token };
@@ -263,8 +263,8 @@ let AuthService = class AuthService {
         return { verified: true, message: "Phone verified. You may now set a new PIN." };
     }
     async resetPin(phone, code, newPin) {
-        if (!/^\d{4}$/.test(newPin)) {
-            throw new common_1.BadRequestException("PIN must be a 4-digit number.");
+        if (!/^\d{1,4}$/.test(newPin)) {
+            throw new common_1.BadRequestException("PIN must be 1 to 4 digits.");
         }
         const record = await this.getActivePhoneOtp(phone);
         if (record.code !== code) {
