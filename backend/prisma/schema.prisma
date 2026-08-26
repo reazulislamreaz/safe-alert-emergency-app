@@ -49,9 +49,15 @@ enum DeliveryStatus {
   PENDING
 }
 
-enum ParticipantStatus {
-  CONNECTED
-  CALLING
+enum JournalEntryType {
+  INCIDENT
+  TEST
+  UPDATE
+}
+
+enum JournalSource {
+  MANUAL
+  ALERT
 }
 
 model User {
@@ -243,19 +249,24 @@ model LiveMessage {
 }
 
 model Journal {
-  id               String   @id @default(uuid())
+  id               String           @id @default(uuid())
   userId           String
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  emergencyType    String
-  severity         String
-  status           String   @default("RESOLVED")
-  resolutionReason String
-  resolutionNotes  String
-  location         String
-  triggeredAt      DateTime
-  duration         String
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type             JournalEntryType @default(UPDATE)
+  body             String           @default("")
+  source           JournalSource    @default(MANUAL)
+  emergencyType    String?
+  severity         String?
+  status           String?
+  resolutionReason String?
+  resolutionNotes  String?
+  location         String?
+  triggeredAt      DateTime         @default(now())
+  duration         String?
+  createdAt        DateTime         @default(now())
 
   @@index([userId])
+  @@index([triggeredAt])
   @@map("journals")
 }
 

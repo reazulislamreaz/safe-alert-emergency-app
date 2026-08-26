@@ -91,4 +91,11 @@ export class DashboardController {
     const data = await this.dashboardService.getSubscriptions();
     return { success: true, data };
   }
+
+  @Get("journals")
+  @ApiOperation({ summary: "Historical incident journals (all users)" })
+  async journals() {
+    const data = await this.dashboardService.getJournals();
+    return { success: true, data };
+  }
 }

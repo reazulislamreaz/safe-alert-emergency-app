@@ -142,6 +142,7 @@ let DashboardService = class DashboardService {
         return journals.map((journal) => ({
             ...journal,
             triggeredAt: journal.triggeredAt.toISOString(),
+            createdAt: journal.createdAt.toISOString(),
         }));
     }
 };

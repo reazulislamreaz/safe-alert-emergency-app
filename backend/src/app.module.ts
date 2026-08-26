@@ -6,6 +6,7 @@ import { AuthModule } from "./modules/auth/auth.module";
 import { AlertsModule } from "./modules/alerts/alerts.module";
 import { ContactsModule } from "./modules/contacts/contacts.module";
 import { ProfileModule } from "./modules/profile/profile.module";
+import { JournalsModule } from "./modules/journals/journals.module";
 import { DashboardModule } from "./modules/dashboard/dashboard.module";
 import { AlertsGateway } from "./gateways/alerts.gateway";
 import { HealthController } from "./health.controller";
@@ -19,6 +20,7 @@ import { HealthController } from "./health.controller";
     AlertsModule,
     ContactsModule,
     ProfileModule,
+    JournalsModule,
     DashboardModule,
   ],
   controllers: [HealthController],

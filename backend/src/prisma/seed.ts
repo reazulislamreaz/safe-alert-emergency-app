@@ -8,7 +8,8 @@ import {
   AlertStatus,
   MessageType,
   DeliveryStatus,
-  ParticipantStatus,
+  JournalEntryType,
+  JournalSource,
 } from "@prisma/client";
 import { hashSync } from "bcryptjs";
 import { digitsOnly } from "../common/utils/phone";
@@ -124,6 +125,56 @@ const FIGMA_MEMBERS = [
     isJoinedCall: false,
   },
 ] as const;
+
+const FIGMA_JOURNAL_AT = new Date("2026-07-30T16:00:00.000Z");
+const FIGMA_JOURNALS = [
+  {
+    id: "jrn-incident-01",
+    type: JournalEntryType.INCIDENT,
+    body: "Was followed home from the subway. Got home safely",
+  },
+  {
+    id: "jrn-test-01",
+    type: JournalEntryType.TEST,
+    body: "Was followed home from the subway. Got home safely",
+  },
+  {
+    id: "jrn-update-01",
+    type: JournalEntryType.UPDATE,
+    body: "Was followed home from the subway. Got home safely",
+  },
+] as const;
+
+async function ensureFigmaJournals(prisma: PrismaClient): Promise<void> {
+  const sarah = await prisma.user.findUnique({ where: { id: "usr-sarah-101" } });
+  if (!sarah) {
+    return;
+  }
+
+  await prisma.journal.deleteMany({
+    where: { id: { in: ["jrn-01", "jrn-02"] } },
+  });
+
+  for (const entry of FIGMA_JOURNALS) {
+    await prisma.journal.upsert({
+      where: { id: entry.id },
+      update: {
+        type: entry.type,
+        body: entry.body,
+        source: JournalSource.MANUAL,
+        triggeredAt: FIGMA_JOURNAL_AT,
+      },
+      create: {
+        id: entry.id,
+        userId: "usr-sarah-101",
+        type: entry.type,
+        body: entry.body,
+        source: JournalSource.MANUAL,
+        triggeredAt: FIGMA_JOURNAL_AT,
+      },
+    });
+  }
+}
 
 async function ensureFigmaContacts(prisma: PrismaClient): Promise<void> {
   const sarah = await prisma.user.findUnique({ where: { id: "usr-sarah-101" } });
@@ -254,6 +305,7 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
   const existingUsers = await prisma.user.count();
   if (existingUsers > 0) {
     await ensureFigmaContacts(prisma);
+    await ensureFigmaJournals(prisma);
     return;
   }
 
@@ -444,35 +496,7 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
   });
 
   await ensureFigmaContacts(prisma);
-
-  await prisma.journal.createMany({
-    data: [
-      {
-        id: "jrn-01",
-        userId: "usr-sarah-101",
-        emergencyType: "Medical Emergency",
-        severity: "CRITICAL",
-        status: "RESOLVED",
-        resolutionReason: "SAFE",
-        resolutionNotes: "Ambulance arrived promptly. Resolved safely at clinic.",
-        location: "Grand Central Terminal, NY",
-        triggeredAt: new Date("2026-08-10T14:22:00Z"),
-        duration: "18 mins",
-      },
-      {
-        id: "jrn-02",
-        userId: "usr-sarah-101",
-        emergencyType: "Vehicle Breakdown",
-        severity: "URGENT",
-        status: "RESOLVED",
-        resolutionReason: "SAFE",
-        resolutionNotes: "Towing truck helped change the flat tire.",
-        location: "FDR Drive & 34th St, NY",
-        triggeredAt: new Date("2026-07-28T22:45:00Z"),
-        duration: "42 mins",
-      },
-    ],
-  });
+  await ensureFigmaJournals(prisma);
 
   await prisma.alert.create({
     data: {
@@ -493,7 +517,7 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
           id: "part-01",
           name: "You (Sarah)",
           initials: "SJ",
-          status: ParticipantStatus.CONNECTED,
+          status: "CONNECTED",
           color: "#3A67D5",
           isSender: true,
         },
@@ -501,21 +525,21 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
           id: "part-02",
           name: "James",
           initials: "JJ",
-          status: ParticipantStatus.CONNECTED,
+          status: "CONNECTED",
           color: "#3B82F6",
         },
         {
           id: "part-03",
           name: "Emma",
           initials: "ES",
-          status: ParticipantStatus.CONNECTED,
+          status: "CONNECTED",
           color: "#8B5CF6",
         },
         {
           id: "part-04",
           name: "Mike",
           initials: "MJ",
-          status: ParticipantStatus.CALLING,
+          status: "CALLING",
           color: "#64748B",
         },
       ],

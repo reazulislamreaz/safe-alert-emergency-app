@@ -896,62 +896,103 @@ export const api = {
   // --- Journals / Incident Logs ---
   async getJournals(): Promise<HistoricalJournal[]> {
     try {
-      const res = await fetch(`${API_BASE}/journals`, { headers: this.authHeaders(false) });
+      const res = await fetch(`${API_BASE}/dashboard/journals`, { headers: this.authHeaders(false) });
       if (!res.ok) throw new Error('Failed to fetch journals');
       const data = await res.json();
       return data.data;
     } catch {
       return [
         {
-          id: "jrn-01",
+          id: "jrn-incident-01",
           userId: "usr-sarah-101",
-          emergencyType: "Medical Emergency",
-          severity: "CRITICAL",
-          status: "RESOLVED",
-          resolutionReason: "SAFE",
-          resolutionNotes: "Ambulance arrived promptly. Resolved safely at clinic.",
-          location: "Grand Central Terminal, NY",
-          triggeredAt: "2026-08-10T14:22:00Z",
-          duration: "18 mins",
+          type: "INCIDENT",
+          body: "Was followed home from the subway. Got home safely",
+          source: "MANUAL",
+          triggeredAt: "2026-07-30T16:00:00.000Z",
         },
         {
-          id: "jrn-02",
+          id: "jrn-test-01",
           userId: "usr-sarah-101",
-          emergencyType: "Vehicle Breakdown",
-          severity: "URGENT",
-          status: "RESOLVED",
-          resolutionReason: "SAFE",
-          resolutionNotes: "Towing truck helped change the flat tire.",
-          location: "FDR Drive & 34th St, NY",
-          triggeredAt: "2026-07-28T22:45:00Z",
-          duration: "42 mins",
+          type: "TEST",
+          body: "Was followed home from the subway. Got home safely",
+          source: "MANUAL",
+          triggeredAt: "2026-07-30T16:00:00.000Z",
         },
         {
-          id: "jrn-03",
-          userId: "usr-003",
-          emergencyType: "Suspicious Person",
-          severity: "URGENT",
-          status: "RESOLVED",
-          resolutionReason: "SAFE",
-          resolutionNotes: "Campus security escorted user safely to dormitory.",
-          location: "Washington Square Park, NY",
-          triggeredAt: "2026-07-20T23:15:00Z",
-          duration: "12 mins",
+          id: "jrn-update-01",
+          userId: "usr-sarah-101",
+          type: "UPDATE",
+          body: "Was followed home from the subway. Got home safely",
+          source: "MANUAL",
+          triggeredAt: "2026-07-30T16:00:00.000Z",
         },
-        {
-          id: "jrn-04",
-          userId: "usr-004",
-          emergencyType: "Car Accident",
-          severity: "HIGH",
-          status: "RESOLVED",
-          resolutionReason: "SAFE",
-          resolutionNotes: "Minor fender bender on highway, police report filed.",
-          location: "Queens Midtown Tunnel, NY",
-          triggeredAt: "2026-07-11T08:30:00Z",
-          duration: "35 mins",
-        }
       ];
     }
+  },
+
+  async getJournalTypes() {
+    const res = await fetch(`${API_BASE}/journals/types`, { headers: this.authHeaders(false) });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to load journal types'));
+    }
+    return data.data;
+  },
+
+  async listJournals() {
+    const res = await fetch(`${API_BASE}/journals`, { headers: this.authHeaders(false) });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to load journal'));
+    }
+    return data.data;
+  },
+
+  async createJournal(payload: { body?: string; content?: string; type?: string }) {
+    const res = await fetch(`${API_BASE}/journals`, {
+      method: 'POST',
+      headers: this.authHeaders(),
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to save journal entry'));
+    }
+    return data.data;
+  },
+
+  async getJournal(id: string) {
+    const res = await fetch(`${API_BASE}/journals/${id}`, { headers: this.authHeaders(false) });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to load journal entry'));
+    }
+    return data.data;
+  },
+
+  async updateJournal(id: string, payload: { body?: string; content?: string; type?: string }) {
+    const res = await fetch(`${API_BASE}/journals/${id}`, {
+      method: 'PATCH',
+      headers: this.authHeaders(),
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to update journal entry'));
+    }
+    return data.data;
+  },
+
+  async deleteJournal(id: string) {
+    const res = await fetch(`${API_BASE}/journals/${id}`, {
+      method: 'DELETE',
+      headers: this.authHeaders(false),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to delete journal entry'));
+    }
+    return data.data;
   },
 
   // --- Contact Groups for User ---

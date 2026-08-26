@@ -38,8 +38,9 @@ export function setupSwagger(app: INestApplication): void {
     .addTag("Profile", "Citizen profile, photos, and delete account")
     .addTag("Subscriptions", "Free vs Premium plans")
     .addTag("Legal", "About Us, Privacy Policy, Terms & Conditions")
-    .addTag("Catalog", "Public emergency types and incident journals")
-    .addTag("Dashboard", "Admin metrics, users, types, subscriptions")
+    .addTag("Journal", "Citizen Incident Journal (Incident, Test, Update)")
+    .addTag("Catalog", "Public emergency types")
+    .addTag("Dashboard", "Admin metrics, users, types, subscriptions, journals")
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

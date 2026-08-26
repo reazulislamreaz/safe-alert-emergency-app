@@ -871,6 +871,17 @@ paths:
       summary: List subscription plans
       tags:
         - Dashboard
+  /api/dashboard/journals:
+    get:
+      operationId: DashboardController_journals
+      responses:
+        '200':
+          description: Historical journals for all users
+      security:
+        - access-token: []
+      summary: Historical incident journals (all users)
+      tags:
+        - Dashboard
   /api/emergency-types:
     get:
       operationId: CatalogController_emergencyTypes
@@ -881,16 +892,108 @@ paths:
       summary: Public emergency type catalog
       tags:
         - Catalog
-  /api/journals:
+  /api/journals/types:
     get:
-      operationId: CatalogController_journals
-      parameters: []
+      operationId: JournalsController_types
       responses:
         '200':
-          description: ''
-      summary: Historical incident journals
+          description: Incident, Test, and Update tags
+      security:
+        - access-token: []
+      summary: Journal tags
       tags:
-        - Catalog
+        - Journal
+  /api/journals:
+    get:
+      operationId: JournalsController_list
+      responses:
+        '200':
+          description: Incident Journal list for the authenticated user
+      security:
+        - access-token: []
+      summary: Incident Journal list
+      tags:
+        - Journal
+    post:
+      operationId: JournalsController_create
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateJournalDto'
+      responses:
+        '201':
+          description: Saved journal entry
+      security:
+        - access-token: []
+      summary: Save a New Entry
+      tags:
+        - Journal
+  /api/journals/{id}:
+    get:
+      operationId: JournalsController_get
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: jrn-incident-01
+      responses:
+        '200':
+          description: Journal entry
+        '404':
+          description: Journal entry not found
+      security:
+        - access-token: []
+      summary: Get one journal entry
+      tags:
+        - Journal
+    patch:
+      operationId: JournalsController_update
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: jrn-incident-01
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateJournalDto'
+      responses:
+        '200':
+          description: Updated journal entry
+        '404':
+          description: Journal entry not found
+      security:
+        - access-token: []
+      summary: Update a journal entry
+      tags:
+        - Journal
+    delete:
+      operationId: JournalsController_remove
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: jrn-incident-01
+      responses:
+        '200':
+          description: Deleted
+        '404':
+          description: Journal entry not found
+      security:
+        - access-token: []
+      summary: Delete a journal entry
+      tags:
+        - Journal
 info:
   title: SafeAlert Emergency API
   description: >-
@@ -930,11 +1033,19 @@ tags:
   - name: Alerts
     description: SOS trigger, telemetry, resolve
   - name: Contacts
-    description: Emergency groups and members
+    description: Address book, groups, plan limits, and referral invite
+  - name: Profile
+    description: Citizen profile, photos, and delete account
+  - name: Subscriptions
+    description: Free vs Premium plans
+  - name: Legal
+    description: About Us, Privacy Policy, Terms & Conditions
+  - name: Journal
+    description: Citizen Incident Journal (Incident, Test, Update)
   - name: Catalog
-    description: Public emergency types and incident journals
+    description: Public emergency types
   - name: Dashboard
-    description: Admin metrics, users, types, subscriptions
+    description: Admin metrics, users, types, subscriptions, journals
 servers: []
 components:
   securitySchemes:
@@ -1363,3 +1474,27 @@ components:
         - severity
         - icon
         - description
+    CreateJournalDto:
+      type: object
+      properties:
+        body:
+          type: string
+          example: Was followed home from the subway. Got home safely
+        content:
+          type: string
+          description: Alias of body (Figma composer)
+        type:
+          type: string
+          example: Incident
+          description: Incident | Test | Update (defaults to Update)
+    UpdateJournalDto:
+      type: object
+      properties:
+        body:
+          type: string
+          example: Was followed home from the subway. Got home safely
+        content:
+          type: string
+        type:
+          type: string
+          example: Update

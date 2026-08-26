@@ -138,14 +138,18 @@ export interface SubscriptionPlan {
 export interface HistoricalJournal {
   id: string;
   userId: string;
-  emergencyType: string;
-  severity: "LOW" | "URGENT" | "HIGH" | "CRITICAL" | string;
-  status: string;
-  resolutionReason: "SAFE" | "FALSE_ALARM" | "TEST" | string;
-  resolutionNotes: string;
-  location: string;
+  type?: "INCIDENT" | "TEST" | "UPDATE" | string;
+  body?: string;
+  source?: "MANUAL" | "ALERT" | string;
+  emergencyType?: string | null;
+  severity?: "LOW" | "URGENT" | "HIGH" | "CRITICAL" | string | null;
+  status?: string | null;
+  resolutionReason?: "SAFE" | "FALSE_ALARM" | "TEST" | string | null;
+  resolutionNotes?: string | null;
+  location?: string | null;
   triggeredAt: string;
-  duration: string;
+  duration?: string | null;
+  createdAt?: string;
 }
 
 export interface DashboardMetrics {

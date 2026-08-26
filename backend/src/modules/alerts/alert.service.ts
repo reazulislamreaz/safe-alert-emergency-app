@@ -8,6 +8,8 @@ import {
   AlertMode,
   AlertStatus,
   DeliveryStatus,
+  JournalEntryType,
+  JournalSource,
   MessageType,
   Prisma,
 } from "@prisma/client";
@@ -266,6 +268,9 @@ export class AlertService {
         data: {
           id: `jrn-${Date.now()}`,
           userId: alert.userId,
+          type: JournalEntryType.INCIDENT,
+          body: notes || alert.emergencyTypeLabel,
+          source: JournalSource.ALERT,
           emergencyType: alert.emergencyTypeLabel,
           severity: alert.severity,
           status: "RESOLVED",

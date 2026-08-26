@@ -224,6 +224,9 @@ let AlertService = class AlertService {
                 data: {
                     id: `jrn-${Date.now()}`,
                     userId: alert.userId,
+                    type: client_1.JournalEntryType.INCIDENT,
+                    body: notes || alert.emergencyTypeLabel,
+                    source: client_1.JournalSource.ALERT,
                     emergencyType: alert.emergencyTypeLabel,
                     severity: alert.severity,
                     status: "RESOLVED",
