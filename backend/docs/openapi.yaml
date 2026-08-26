@@ -18,6 +18,15 @@ paths:
       summary: Liveness probe
       tags:
         - Health
+  /api/config:
+    get:
+      operationId: ConfigController_config
+      responses:
+        '200':
+          description: Runtime config for dashboard and citizen maps
+      summary: Public client config (Google Maps browser key)
+      tags:
+        - Config
   /api/auth/races:
     get:
       operationId: AuthController_races
@@ -1567,7 +1576,123 @@ paths:
       summary: Live contact groups with SOS status and members
       tags:
         - Dashboard
+  /api/dashboard/live-groups/{id}/location-history:
+    get:
+      operationId: DashboardController_locationHistory
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            example: grp-family-01
+            type: string
+      responses:
+        '200':
+          description: GPS telemetry points for the group
+        '401':
+          description: Authentication required
+        '403':
+          description: USER tokens cannot access the Dashboard
+        '404':
+          description: Group not found
+      security:
+        - access-token: []
+      summary: GPS telemetry history for a live group
+      tags:
+        - Dashboard
+  /api/dashboard/profile:
+    get:
+      operationId: DashboardController_profile
+      responses:
+        '200':
+          description: Super Admin profile
+        '401':
+          description: Authentication required
+        '403':
+          description: USER tokens cannot access the Dashboard
+      security:
+        - access-token: []
+      summary: Super Admin profile for Settings
+      tags:
+        - Dashboard
+    patch:
+      operationId: DashboardController_updateProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDashboardProfileDto'
+      responses:
+        '200':
+          description: Updated Super Admin profile
+        '401':
+          description: Authentication required
+        '403':
+          description: USER tokens cannot access the Dashboard
+      security:
+        - access-token: []
+      summary: Update Super Admin profile (name, email, phone)
+      tags:
+        - Dashboard
+  /api/dashboard/notifications:
+    get:
+      operationId: DashboardController_notifications
+      responses:
+        '200':
+          description: Recent alerts as dashboard notifications
+        '401':
+          description: Authentication required
+        '403':
+          description: USER tokens cannot access the Dashboard
+      security:
+        - access-token: []
+      summary: Recent alerts as dashboard notifications
+      tags:
+        - Dashboard
+  /api/dashboard/notifications/read-all:
+    post:
+      operationId: DashboardController_readAllNotifications
+      responses:
+        '200':
+          description: Notifications acknowledged
+        '401':
+          description: Authentication required
+        '403':
+          description: USER tokens cannot access the Dashboard
+      security:
+        - access-token: []
+      summary: Acknowledge dashboard notifications
+      tags:
+        - Dashboard
   /api/dashboard/legal/{slug}:
+    get:
+      operationId: DashboardController_getLegal
+      parameters:
+        - name: slug
+          required: true
+          in: path
+          schema:
+            example: about
+            enum:
+              - about
+              - privacy
+              - terms
+            type: string
+      responses:
+        '200':
+          description: Legal page body
+        '401':
+          description: Authentication required
+        '403':
+          description: USER tokens cannot access the Dashboard
+        '404':
+          description: Page not found
+      security:
+        - access-token: []
+      summary: Get a legal page (about, privacy, terms)
+      tags:
+        - Dashboard
     patch:
       operationId: DashboardController_updateLegal
       parameters:
@@ -2440,6 +2565,18 @@ components:
           type: array
           items:
             type: string
+    UpdateDashboardProfileDto:
+      type: object
+      properties:
+        fullName:
+          type: string
+          example: Admin User
+        email:
+          type: string
+          example: admin@safealert.app
+        phone:
+          type: string
+          example: '+1 (555) 000-0000'
     UpdateLegalPageDto:
       type: object
       properties:

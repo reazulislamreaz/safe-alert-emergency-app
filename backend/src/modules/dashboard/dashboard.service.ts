@@ -6,11 +6,14 @@ import {
 } from "@nestjs/common";
 import { AlertStatus, Prisma, Severity, SubscriptionPlan, SubscriptionTier } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
+import { toPublicUser } from "../../common/mappers/user.mapper";
+import { digitsOnly } from "../../common/utils/phone";
 import { LEGAL_PAGES, PLAN_CATALOG } from "../profile/profile.constants";
 import { isStoredImageUrl } from "../uploads/uploads.constants";
 import { CreateEmergencyTypeDto, UpdateEmergencyTypeDto } from "./dto/emergency-type.dto";
 import { CreateSubscriptionPlanDto, UpdateSubscriptionPlanDto } from "./dto/subscription.dto";
 import { UpdateLegalPageDto } from "./dto/legal.dto";
+import { UpdateDashboardProfileDto } from "./dto/profile.dto";
 
 const ADMIN_AVATAR_COLOR = "#2563EB";
 const LEGAL_SLUGS = ["about", "privacy", "terms"] as const;
@@ -604,12 +607,26 @@ export class DashboardService {
     return { groups: mapped, counts };
   }
 
-  async updateLegalPage(slug: string, dto: UpdateLegalPageDto) {
-    const normalized = slug.trim().toLowerCase();
-    if (!LEGAL_SLUGS.includes(normalized as (typeof LEGAL_SLUGS)[number])) {
+  async getLegalPage(slug: string) {
+    const normalized = this.requireLegalSlug(slug);
+    const page = await this.prisma.legalPage.findUnique({ where: { slug: normalized } });
+    if (page) {
+      return {
+        slug: page.slug,
+        title: page.title,
+        body: page.body,
+        updatedAt: page.updatedAt.toISOString(),
+      };
+    }
+    const fallback = LEGAL_PAGES.find((item) => item.slug === normalized);
+    if (!fallback) {
       throw new NotFoundException("Page not found");
     }
+    return { ...fallback, updatedAt: null };
+  }
 
+  async updateLegalPage(slug: string, dto: UpdateLegalPageDto) {
+    const normalized = this.requireLegalSlug(slug);
     const fallback = LEGAL_PAGES.find((page) => page.slug === normalized);
     const title = dto.title?.trim() || fallback?.title || titleCase(normalized);
 
@@ -627,6 +644,156 @@ export class DashboardService {
     });
   }
 
+  async getAdminProfile(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException("User not found");
+    }
+    return { user: toPublicUser(user) };
+  }
+
+  async updateAdminProfile(userId: string, dto: UpdateDashboardProfileDto) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException("User not found");
+    }
+
+    if (dto.email) {
+      const email = dto.email.toLowerCase();
+      const taken = await this.prisma.user.findFirst({
+        where: { email, NOT: { id: userId } },
+      });
+      if (taken) {
+        throw new BadRequestException("An account with this email already exists.");
+      }
+    }
+
+    if (dto.phone) {
+      const phoneDigits = digitsOnly(dto.phone);
+      if (phoneDigits.length < 7) {
+        throw new BadRequestException("Enter a valid phone number.");
+      }
+      const taken = await this.prisma.user.findFirst({
+        where: { phoneDigits, NOT: { id: userId } },
+      });
+      if (taken) {
+        throw new BadRequestException("An account with this phone number already exists.");
+      }
+    }
+
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        ...(dto.fullName?.trim() ? { fullName: dto.fullName.trim() } : {}),
+        ...(dto.email ? { email: dto.email.toLowerCase() } : {}),
+        ...(dto.phone ? { phone: dto.phone.trim(), phoneDigits: digitsOnly(dto.phone) } : {}),
+      },
+    });
+
+    return { user: toPublicUser(updated) };
+  }
+
+  async getNotifications() {
+    const [alerts, unreadAlerts, notifications] = await Promise.all([
+      this.prisma.alert.findMany({
+        orderBy: { triggeredAt: "desc" },
+        take: 20,
+      }),
+      this.prisma.alert.count({ where: { status: AlertStatus.BROADCASTING } }),
+      this.prisma.notification.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      }),
+    ]);
+
+    if (alerts.length > 0) {
+      return {
+        items: alerts.map((alert) => ({
+          id: alert.id,
+          title: alert.emergencyTypeLabel,
+          body: `${alert.userName} · ${alert.address}`,
+          read: alert.status !== AlertStatus.BROADCASTING,
+        })),
+        unreadCount: unreadAlerts,
+      };
+    }
+
+    return {
+      items: notifications.map((item) => ({
+        id: item.id,
+        title: item.title,
+        body: item.body,
+        read: Boolean(item.readAt),
+      })),
+      unreadCount: notifications.filter((item) => !item.readAt).length,
+    };
+  }
+
+  async markAllNotificationsRead() {
+    return { read: true };
+  }
+
+  async getGroupLocationHistory(groupId: string) {
+    const group = await this.prisma.contactGroup.findUnique({
+      where: { id: groupId },
+      select: { id: true, name: true, userId: true },
+    });
+    if (!group) {
+      throw new NotFoundException("Group not found");
+    }
+
+    const notified = await this.prisma.alertNotifiedGroup.findFirst({
+      where: { groupId },
+      include: {
+        alert: {
+          include: { telemetryHistory: { orderBy: { timestamp: "asc" } } },
+        },
+      },
+      orderBy: { alert: { triggeredAt: "desc" } },
+    });
+
+    const alert =
+      notified?.alert ??
+      (await this.prisma.alert.findFirst({
+        where: { userId: group.userId },
+        include: { telemetryHistory: { orderBy: { timestamp: "asc" } } },
+        orderBy: { triggeredAt: "desc" },
+      }));
+
+    const telemetry = alert?.telemetryHistory ?? [];
+    const points =
+      telemetry.length > 0
+        ? telemetry.map((point) => ({
+            id: point.id,
+            latitude: point.latitude,
+            longitude: point.longitude,
+            accuracy: point.accuracy,
+            timestamp: point.timestamp.toISOString(),
+            timeAgo: timeAgo(point.timestamp),
+            address: null as string | null,
+          }))
+        : alert
+          ? [
+              {
+                id: alert.id,
+                latitude: alert.latitude,
+                longitude: alert.longitude,
+                accuracy: 0,
+                timestamp: alert.triggeredAt.toISOString(),
+                timeAgo: timeAgo(alert.triggeredAt),
+                address: alert.address,
+              },
+            ]
+          : [];
+
+    return {
+      groupId: group.id,
+      groupName: group.name,
+      alertId: alert?.id ?? null,
+      points,
+    };
+  }
+
   async getJournals() {
     const journals = await this.prisma.journal.findMany({
       orderBy: { triggeredAt: "desc" },
@@ -636,6 +803,14 @@ export class DashboardService {
       triggeredAt: journal.triggeredAt.toISOString(),
       createdAt: journal.createdAt.toISOString(),
     }));
+  }
+
+  private requireLegalSlug(slug: string): (typeof LEGAL_SLUGS)[number] {
+    const normalized = slug.trim().toLowerCase();
+    if (!LEGAL_SLUGS.includes(normalized as (typeof LEGAL_SLUGS)[number])) {
+      throw new NotFoundException("Page not found");
+    }
+    return normalized as (typeof LEGAL_SLUGS)[number];
   }
 
   private toAdminPlan(plan: SubscriptionPlan, subscriberCount: number) {

@@ -32,6 +32,7 @@ export function setupSwagger(app: INestApplication): void {
       "access-token",
     )
     .addTag("Health", "Process liveness")
+    .addTag("Config", "Public client config such as Google Maps")
     .addTag("Auth", "Register, login, OTP, PIN, password reset")
     .addTag("Alerts", "SOS, Manual/Direct, Alerts tab inbox, live call, chat, respond, cancel")
     .addTag("Contacts", "Address book, groups, invitations, plan limits, and referral invite")

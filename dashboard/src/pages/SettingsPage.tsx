@@ -30,12 +30,22 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser, onProfi
   useEffect(() => {
     let cancelled = false;
     Promise.all([
+      api.getDashboardProfile(),
       api.getLegalPage('about'),
       api.getLegalPage('terms'),
       api.getLegalPage('privacy'),
     ])
-      .then(([about, terms, privacy]) => {
+      .then(([profile, about, terms, privacy]) => {
         if (cancelled) return;
+        const user = profile?.user;
+        if (user) {
+          setProfileName(user.fullName ?? currentUser.fullName);
+          setProfilePhone(user.phone ?? currentUser.phone);
+          setProfileEmail(user.email ?? currentUser.email);
+          if (user.role && roleLabel[user.role as AccountUser['role']]) {
+            setProfileRole(roleLabel[user.role as AccountUser['role']]);
+          }
+        }
         setAboutText(about.body ?? '');
         setTermsText(terms.body ?? '');
         setPrivacyText(privacy.body ?? '');
@@ -44,13 +54,13 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser, onProfi
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [currentUser.email, currentUser.fullName, currentUser.phone]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       if (activeSubTab === 'profile') {
-        const data = await api.updateProfile({
+        const data = await api.updateDashboardProfile({
           fullName: profileName,
           phone: profilePhone,
           email: profileEmail,

@@ -12,6 +12,7 @@ import { DashboardModule } from "./modules/dashboard/dashboard.module";
 import { UploadsModule } from "./modules/uploads/uploads.module";
 import { AlertsGateway } from "./gateways/alerts.gateway";
 import { HealthController } from "./health.controller";
+import { ConfigController } from "./config.controller";
 
 @Module({
   imports: [
@@ -27,7 +28,7 @@ import { HealthController } from "./health.controller";
     DashboardModule,
     UploadsModule,
   ],
-  controllers: [HealthController],
+  controllers: [HealthController, ConfigController],
   providers: [AlertsGateway],
 })
 export class AppModule {}

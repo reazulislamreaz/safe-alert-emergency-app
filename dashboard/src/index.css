@@ -50,7 +50,8 @@
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
 }
 
-/* Leaflet dark map container for Live Group Status */
+/* Google Maps dark container for Live Group Status and citizen live alert */
+.google-map-container,
 .leaflet-container {
   background-color: #0d1527 !important;
   font-family: inherit;

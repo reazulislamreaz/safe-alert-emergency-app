@@ -18,6 +18,13 @@ services:
       - DASHBOARD_ADMIN_EMAIL=${DASHBOARD_ADMIN_EMAIL:-admin@safealert.app}
       - DATABASE_URL=postgresql://${POSTGRES_USER:-safealert}:${POSTGRES_PASSWORD:-safealert_password}@postgres:5432/${POSTGRES_DB:-safealert_db}?schema=public
       - REDIS_URL=redis://redis:6379
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - AWS_S3_BUCKET=${AWS_S3_BUCKET:-}
+      - AWS_S3_BUCKET_NAME=${AWS_S3_BUCKET_NAME:-}
+      - AWS_S3_PUBLIC_BASE_URL=${AWS_S3_PUBLIC_BASE_URL:-}
+      - GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy

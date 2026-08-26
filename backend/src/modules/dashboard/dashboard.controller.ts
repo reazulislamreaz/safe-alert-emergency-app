@@ -3,6 +3,8 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   NotFoundException,
   Param,
   Patch,
@@ -23,9 +25,12 @@ import {
 import { CreateEmergencyTypeDto, UpdateEmergencyTypeDto } from "./dto/emergency-type.dto";
 import { CreateSubscriptionPlanDto, UpdateSubscriptionPlanDto } from "./dto/subscription.dto";
 import { UpdateLegalPageDto } from "./dto/legal.dto";
+import { UpdateDashboardProfileDto } from "./dto/profile.dto";
 import { DashboardService } from "./dashboard.service";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { DashboardAdminGuard } from "../../common/guards/dashboard-admin.guard";
+import { CurrentUser } from "../../common/decorators/current-user.decorator";
+import { JwtPayload } from "../../config/env";
 
 @ApiTags("Dashboard")
 @ApiBearerAuth("access-token")
@@ -155,6 +160,53 @@ export class DashboardController {
   @ApiOperation({ summary: "Live contact groups with SOS status and members" })
   async liveGroups() {
     const data = await this.dashboardService.getLiveGroups();
+    return { success: true, data };
+  }
+
+  @Get("live-groups/:id/location-history")
+  @ApiOperation({ summary: "GPS telemetry history for a live group" })
+  @ApiParam({ name: "id", example: "grp-family-01" })
+  @ApiNotFoundResponse({ description: "Group not found" })
+  async locationHistory(@Param("id") id: string) {
+    const data = await this.dashboardService.getGroupLocationHistory(id);
+    return { success: true, data };
+  }
+
+  @Get("profile")
+  @ApiOperation({ summary: "Super Admin profile for Settings" })
+  async profile(@CurrentUser() user: JwtPayload) {
+    const data = await this.dashboardService.getAdminProfile(user.sub);
+    return { success: true, data };
+  }
+
+  @Patch("profile")
+  @ApiOperation({ summary: "Update Super Admin profile (name, email, phone)" })
+  async updateProfile(@CurrentUser() user: JwtPayload, @Body() dto: UpdateDashboardProfileDto) {
+    const data = await this.dashboardService.updateAdminProfile(user.sub, dto);
+    return { success: true, data };
+  }
+
+  @Get("notifications")
+  @ApiOperation({ summary: "Recent alerts as dashboard notifications" })
+  async notifications() {
+    const data = await this.dashboardService.getNotifications();
+    return { success: true, data };
+  }
+
+  @Post("notifications/read-all")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Acknowledge dashboard notifications" })
+  async readAllNotifications() {
+    const data = await this.dashboardService.markAllNotificationsRead();
+    return { success: true, data };
+  }
+
+  @Get("legal/:slug")
+  @ApiOperation({ summary: "Get a legal page (about, privacy, terms)" })
+  @ApiParam({ name: "slug", example: "about", enum: ["about", "privacy", "terms"] })
+  @ApiNotFoundResponse({ description: "Page not found" })
+  async getLegal(@Param("slug") slug: string) {
+    const data = await this.dashboardService.getLegalPage(slug);
     return { success: true, data };
   }
 

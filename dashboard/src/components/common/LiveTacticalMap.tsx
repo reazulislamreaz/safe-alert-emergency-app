@@ -1,6 +1,12 @@
-import React, { useEffect, useRef } from 'react';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
+import React, { useEffect, useRef, useState } from 'react';
+import { api } from '../../services/api';
+import {
+  createGoogleMap,
+  destroyGoogleMap,
+  loadGoogleMaps,
+  updateGoogleMapPosition,
+  type GoogleMapInstance,
+} from '../../services/maps';
 
 interface LiveTacticalMapProps {
   lat: number;
@@ -20,84 +26,71 @@ export const LiveTacticalMap: React.FC<LiveTacticalMapProps> = ({
   showGps = true,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<L.Map | null>(null);
-  const markerRef = useRef<L.Marker | null>(null);
-  const circleRef = useRef<L.Circle | null>(null);
+  const handlesRef = useRef<GoogleMapInstance | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!mapContainerRef.current) return;
+    let cancelled = false;
 
-    // Destroy existing map instance if already initialized to prevent leaflet crash
-    if (mapInstanceRef.current) {
-      mapInstanceRef.current.remove();
-      mapInstanceRef.current = null;
-    }
+    const mount = async () => {
+      if (!mapContainerRef.current) {
+        return;
+      }
 
-    try {
-      const map = L.map(mapContainerRef.current, {
-        center: [lat, lng],
-        zoom: 14,
-        zoomControl: false,
-        attributionControl: false,
-      });
+      try {
+        const config = await api.getAppConfig();
+        const apiKey = config.googleMapsApiKey?.trim();
+        if (!apiKey) {
+          throw new Error('Google Maps API key is not configured.');
+        }
 
-      mapInstanceRef.current = map;
+        const maps = await loadGoogleMaps(apiKey);
+        if (cancelled || !mapContainerRef.current) {
+          return;
+        }
 
-      // Dark CartoDB Tiles
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        maxZoom: 19,
-        subdomains: 'abcd',
-      }).addTo(map);
+        const center = { lat, lng };
+        if (handlesRef.current) {
+          updateGoogleMapPosition(handlesRef.current, center);
+          return;
+        }
 
-      // Custom Beacon Icon
-      const beaconIcon = L.divIcon({
-        className: 'custom-sos-marker',
-        html: `
-          <div class="beacon-wave"></div>
-          <div class="beacon-core"></div>
-        `,
-        iconSize: [36, 36],
-        iconAnchor: [18, 18],
-      });
-
-      const marker = L.marker([lat, lng], { icon: beaconIcon }).addTo(map);
-      markerRef.current = marker;
-
-      const circle = L.circle([lat, lng], {
-        radius: 350,
-        color: '#EF4444',
-        fillColor: '#EF4444',
-        fillOpacity: 0.15,
-        weight: 1.5,
-      }).addTo(map);
-      circleRef.current = circle;
-
-      marker.bindPopup(
-        `<div style="font-family: inherit; font-size: 11px; padding: 2px;">
-          <strong style="color: #EF4444;">${groupName}</strong><br/>
-          <span>${category} Active SOS Beacon</span>
-        </div>`
-      );
-    } catch (err) {
-      console.error('Leaflet initialization warning:', err);
-    }
-
-    return () => {
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
+        handlesRef.current = createGoogleMap(maps, mapContainerRef.current, center);
+        setLoadError(null);
+      } catch (err) {
+        if (!cancelled) {
+          setLoadError(err instanceof Error ? err.message : 'Failed to load Google Maps.');
+        }
       }
     };
-  }, [lat, lng, groupName, category]);
+
+    void mount();
+  }, [lat, lng]);
+
+  useEffect(() => {
+    return () => {
+      destroyGoogleMap(handlesRef.current);
+      handlesRef.current = null;
+      if (mapContainerRef.current) {
+        mapContainerRef.current.innerHTML = '';
+      }
+    };
+  }, []);
 
   return (
     <div className={className || "w-full h-48 sm:h-56 lg:h-64 rounded-xl overflow-hidden relative shadow-inner bg-[#0B1120] border border-gray-800"}>
-      <div ref={mapContainerRef} className="w-full h-full z-0" />
+      <div ref={mapContainerRef} className="google-map-container w-full h-full z-0" />
+      {loadError && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#0B1120] px-4 text-center">
+          <p className="text-[11px] text-gray-400">{loadError}</p>
+        </div>
+      )}
       {showGps && (
         <div className="absolute top-2 right-2 z-10 bg-black/70 backdrop-blur-sm text-[10px] font-mono text-gray-300 px-2 py-1 rounded-md border border-white/10 max-w-[calc(100%-1rem)] truncate">
           GPS: {lat.toFixed(4)}, {lng.toFixed(4)}
         </div>
       )}
+      <span className="sr-only">{groupName} {category}</span>
     </div>
   );
 };

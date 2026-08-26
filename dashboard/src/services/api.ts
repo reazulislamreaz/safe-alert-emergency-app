@@ -36,9 +36,15 @@ export interface DashboardSubscriptions {
   transactions: TransactionItem[];
 }
 
+export interface AppConfig {
+  googleMapsApiKey: string;
+}
+
 const API_BASE = '/api';
 
 const TOKEN_KEY = 'safealert_auth_token';
+
+let appConfigCache: AppConfig | null = null;
 
 export type RegisterPayload = {
   fullName: string;
@@ -91,6 +97,30 @@ export const api = {
       ...(json ? { 'Content-Type': 'application/json' } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     };
+  },
+
+  async getAppConfig(): Promise<AppConfig> {
+    if (appConfigCache) {
+      return appConfigCache;
+    }
+    const viteKey =
+      typeof import.meta !== 'undefined'
+        ? String((import.meta as { env?: { VITE_GOOGLE_MAPS_API_KEY?: string } }).env?.VITE_GOOGLE_MAPS_API_KEY || '')
+        : '';
+    try {
+      const res = await fetch(`${API_BASE}/config`);
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success && data.data) {
+        appConfigCache = {
+          googleMapsApiKey: String(data.data.googleMapsApiKey || viteKey),
+        };
+        return appConfigCache;
+      }
+    } catch {
+      // Fall through to the Vite key when the backend is unreachable.
+    }
+    appConfigCache = { googleMapsApiKey: viteKey };
+    return appConfigCache;
   },
 
   FACEID_KEY: 'safealert_faceid_enabled',
@@ -399,6 +429,28 @@ export const api = {
     return data.data;
   },
 
+  async getDashboardProfile() {
+    const res = await fetch(`${API_BASE}/dashboard/profile`, { headers: this.authHeaders(false) });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to load profile'));
+    }
+    return data.data;
+  },
+
+  async updateDashboardProfile(payload: Record<string, unknown>) {
+    const res = await fetch(`${API_BASE}/dashboard/profile`, {
+      method: 'PATCH',
+      headers: this.authHeaders(),
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to update profile'));
+    }
+    return data.data;
+  },
+
   async uploadImages(files: File[]) {
     const form = new FormData();
     files.forEach((file) => form.append('files', file));
@@ -486,10 +538,12 @@ export const api = {
   },
 
   async getLegalPage(slug: 'about' | 'privacy' | 'terms') {
-    const res = await fetch(`${API_BASE}/legal/${slug}`);
+    const res = await fetch(`${API_BASE}/dashboard/legal/${slug}`, {
+      headers: this.authHeaders(false),
+    });
     const data = await res.json();
     if (!res.ok || !data.success) {
-      throw new Error(data.error || 'Failed to load page');
+      throw new Error(readApiError(data, 'Failed to load page'));
     }
     return data.data;
   },
@@ -517,6 +571,53 @@ export const api = {
       throw new Error(readApiError(data, 'Failed to fetch users'));
     }
     return data.data;
+  },
+
+  async getDashboardNotifications() {
+    const res = await fetch(`${API_BASE}/dashboard/notifications`, {
+      headers: this.authHeaders(false),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to load notifications'));
+    }
+    return data.data;
+  },
+
+  async markAllDashboardNotificationsRead() {
+    const res = await fetch(`${API_BASE}/dashboard/notifications/read-all`, {
+      method: 'POST',
+      headers: this.authHeaders(),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to mark notifications read'));
+    }
+    return data.data;
+  },
+
+  async getGroupLocationHistory(groupId: string) {
+    const res = await fetch(`${API_BASE}/dashboard/live-groups/${encodeURIComponent(groupId)}/location-history`, {
+      headers: this.authHeaders(false),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to load location history'));
+    }
+    return data.data as {
+      groupId: string;
+      groupName: string;
+      alertId: string | null;
+      points: {
+        id: string;
+        latitude: number;
+        longitude: number;
+        accuracy: number;
+        timestamp: string;
+        timeAgo: string;
+        address: string | null;
+      }[];
+    };
   },
 
   async getLiveGroups(): Promise<DashboardLiveGroups> {
@@ -1086,39 +1187,12 @@ export const api = {
 
   // --- Journals / Incident Logs ---
   async getJournals(): Promise<HistoricalJournal[]> {
-    try {
-      const res = await fetch(`${API_BASE}/dashboard/journals`, { headers: this.authHeaders(false) });
-      if (!res.ok) throw new Error('Failed to fetch journals');
-      const data = await res.json();
-      return data.data;
-    } catch {
-      return [
-        {
-          id: "jrn-incident-01",
-          userId: "usr-sarah-101",
-          type: "INCIDENT",
-          body: "Was followed home from the subway. Got home safely",
-          source: "MANUAL",
-          triggeredAt: "2026-07-30T16:00:00.000Z",
-        },
-        {
-          id: "jrn-test-01",
-          userId: "usr-sarah-101",
-          type: "TEST",
-          body: "Was followed home from the subway. Got home safely",
-          source: "MANUAL",
-          triggeredAt: "2026-07-30T16:00:00.000Z",
-        },
-        {
-          id: "jrn-update-01",
-          userId: "usr-sarah-101",
-          type: "UPDATE",
-          body: "Was followed home from the subway. Got home safely",
-          source: "MANUAL",
-          triggeredAt: "2026-07-30T16:00:00.000Z",
-        },
-      ];
+    const res = await fetch(`${API_BASE}/dashboard/journals`, { headers: this.authHeaders(false) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to fetch journals'));
     }
+    return data.data;
   },
 
   async getJournalTypes() {

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Search, User as UserIcon } from 'lucide-react';
+import { Search, User as UserIcon, X } from 'lucide-react';
 import { LiveTacticalMap } from '../components/common/LiveTacticalMap';
 import { LiveGroupItem } from '../types';
 import { api, LiveGroupCounts } from '../services/api';
@@ -20,6 +20,14 @@ export const LiveGroupStatusPage: React.FC = () => {
   const [groups, setGroups] = useState<LiveGroupItem[]>([]);
   const [counts, setCounts] = useState<LiveGroupCounts>(EMPTY_COUNTS);
   const [selectedGroup, setSelectedGroup] = useState<LiveGroupItem | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyPoints, setHistoryPoints] = useState<{
+    id: string;
+    latitude: number;
+    longitude: number;
+    timeAgo: string;
+    address: string | null;
+  }[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -32,6 +40,8 @@ export const LiveGroupStatusPage: React.FC = () => {
           const still = prev ? data.groups.find((group) => group.id === prev.id) : undefined;
           return still ?? data.groups[0] ?? null;
         });
+        setHistoryOpen(false);
+        setHistoryPoints([]);
       })
       .catch(() => {
         if (cancelled) return;
@@ -137,7 +147,10 @@ export const LiveGroupStatusPage: React.FC = () => {
             return (
               <div
                 key={grp.id}
-                onClick={() => setSelectedGroup(grp)}
+                onClick={() => {
+                  setSelectedGroup(grp);
+                  setHistoryOpen(false);
+                }}
                 className={`bg-white p-4 rounded-2xl cursor-pointer transition-all ${
                   isSelected
                     ? 'border-2 border-blue-600 shadow-md ring-2 ring-blue-500/10'
@@ -240,7 +253,22 @@ export const LiveGroupStatusPage: React.FC = () => {
                 <h4 className="text-xs font-bold text-gray-900">
                   Group members ({selectedGroup.members.length})
                 </h4>
-                <button className="text-xs font-semibold text-blue-600 hover:text-blue-700 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!selectedGroup) return;
+                    api.getGroupLocationHistory(selectedGroup.id)
+                      .then((data) => {
+                        setHistoryPoints(data.points);
+                        setHistoryOpen(true);
+                      })
+                      .catch(() => {
+                        setHistoryPoints([]);
+                        setHistoryOpen(true);
+                      });
+                  }}
+                  className="text-xs font-semibold text-blue-600 hover:text-blue-700 shrink-0"
+                >
                   View location history
                 </button>
               </div>
@@ -288,6 +316,45 @@ export const LiveGroupStatusPage: React.FC = () => {
           )}
         </div>
       </div>
+
+      {historyOpen && selectedGroup && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl border border-gray-200 shadow-2xl w-full max-w-md overflow-y-auto max-h-[90dvh]">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="font-bold text-gray-900 text-sm">Location history</h3>
+              <button
+                type="button"
+                onClick={() => setHistoryOpen(false)}
+                className="p-1 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-6 space-y-3">
+              <p className="text-xs text-gray-500">{selectedGroup.name}</p>
+              {historyPoints.length === 0 ? (
+                <p className="text-xs text-gray-400">No location history for this group yet.</p>
+              ) : (
+                <div className="divide-y divide-gray-100">
+                  {historyPoints.map((point) => (
+                    <div key={point.id} className="py-3 flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-gray-900 font-mono">
+                          {point.latitude.toFixed(5)}, {point.longitude.toFixed(5)}
+                        </p>
+                        {point.address && (
+                          <p className="text-[11px] text-gray-400 truncate">{point.address}</p>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-gray-400 shrink-0">{point.timeAgo}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

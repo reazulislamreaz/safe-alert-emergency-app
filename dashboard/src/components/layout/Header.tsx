@@ -30,7 +30,7 @@ export const Header: React.FC<HeaderProps> = ({
   const [unreadCount, setUnreadCount] = useState(0);
 
   const loadNotifications = async () => {
-    const data = await api.getNotifications();
+    const data = await api.getDashboardNotifications();
     setNotifications(
       (data.items ?? []).map((item: { id: string; title: string; body: string; read: boolean }) => ({
         id: item.id,
@@ -101,8 +101,11 @@ export const Header: React.FC<HeaderProps> = ({
                 <span
                   className="text-[10px] text-blue-600 font-semibold cursor-pointer whitespace-nowrap"
                   onClick={() => {
-                    api.markAllNotificationsRead()
-                      .then(() => loadNotifications())
+                    api.markAllDashboardNotificationsRead()
+                      .then(() => {
+                        setNotifications((prev) => prev.map((item) => ({ ...item, read: true })));
+                        setUnreadCount(0);
+                      })
                       .catch(() => undefined);
                   }}
                 >
