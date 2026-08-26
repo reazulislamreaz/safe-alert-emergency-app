@@ -34,7 +34,10 @@ export function setupSwagger(app: INestApplication): void {
     .addTag("Health", "Process liveness")
     .addTag("Auth", "Register, login, OTP, PIN, password reset")
     .addTag("Alerts", "SOS trigger, telemetry, resolve")
-    .addTag("Contacts", "Emergency groups and members")
+    .addTag("Contacts", "Address book, groups, plan limits, and referral invite")
+    .addTag("Profile", "Citizen profile, photos, and delete account")
+    .addTag("Subscriptions", "Free vs Premium plans")
+    .addTag("Legal", "About Us, Privacy Policy, Terms & Conditions")
     .addTag("Catalog", "Public emergency types and incident journals")
     .addTag("Dashboard", "Admin metrics, users, types, subscriptions")
     .build();

@@ -17,6 +17,7 @@ const client_1 = require("@prisma/client");
 const prisma_service_1 = require("../../prisma/prisma.service");
 const env_1 = require("../../config/env");
 const phone_1 = require("../../common/utils/phone");
+const token_hash_1 = require("../../common/utils/token-hash");
 const user_mapper_1 = require("../../common/mappers/user.mapper");
 const alert_mapper_1 = require("../../common/mappers/alert.mapper");
 let AuthService = class AuthService {
@@ -40,6 +41,11 @@ let AuthService = class AuthService {
         const pinHash = await (0, bcryptjs_1.hash)(dto.pin || "0000", 10);
         const passwordHash = dto.password ? await (0, bcryptjs_1.hash)(dto.password, 10) : null;
         const userId = `usr-${crypto.randomUUID().slice(0, 8)}`;
+        const contactId = `ct-${crypto.randomUUID().slice(0, 8)}`;
+        const groupId = `grp-${crypto.randomUUID().slice(0, 8)}`;
+        const memberId = `mem-${crypto.randomUUID().slice(0, 8)}`;
+        const emergencyPhone = dto.emergencyContactPhone || dto.phone;
+        const emergencyRelation = dto.emergencyContactRelation || "Emergency Contact";
         const user = await this.prisma.user.create({
             data: {
                 id: userId,
@@ -53,24 +59,34 @@ let AuthService = class AuthService {
                 race: dto.race,
                 location: dto.location,
                 emergencyContactName: dto.emergencyContactName,
-                emergencyContactPhone: dto.emergencyContactPhone || dto.phone,
-                emergencyContactRelation: dto.emergencyContactRelation || "Emergency Contact",
+                emergencyContactPhone: emergencyPhone,
+                emergencyContactRelation: emergencyRelation,
                 profilePhotos: dto.profilePhotos ?? [],
                 avatar: dto.profilePhotos?.[0] ||
                     "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
+                contacts: {
+                    create: {
+                        id: contactId,
+                        name: dto.emergencyContactName,
+                        phone: emergencyPhone,
+                        phoneDigits: (0, phone_1.digitsOnly)(emergencyPhone),
+                        relationship: emergencyRelation,
+                    },
+                },
                 contactGroups: {
                     create: {
-                        id: `grp-${crypto.randomUUID().slice(0, 8)}`,
+                        id: groupId,
                         name: "Family (Primary)",
                         color: "#2563EB",
                         isDefaultSOS: true,
                         memberCount: 1,
                         members: {
                             create: {
-                                id: `mem-${crypto.randomUUID().slice(0, 8)}`,
+                                id: memberId,
+                                contactId,
                                 name: dto.emergencyContactName,
-                                phone: dto.emergencyContactPhone || dto.phone,
-                                relationship: dto.emergencyContactRelation || "Emergency Contact",
+                                phone: emergencyPhone,
+                                relationship: emergencyRelation,
                             },
                         },
                     },
@@ -339,6 +355,21 @@ let AuthService = class AuthService {
             where: { email },
             data: { attempts },
         });
+    }
+    async logout(token) {
+        const decoded = this.jwt.decode(token);
+        const expiresAt = decoded?.exp
+            ? new Date(decoded.exp * 1000)
+            : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+        await this.prisma.revokedToken.upsert({
+            where: { tokenHash: (0, token_hash_1.hashToken)(token) },
+            create: { tokenHash: (0, token_hash_1.hashToken)(token), expiresAt },
+            update: { expiresAt },
+        });
+        await this.prisma.revokedToken.deleteMany({
+            where: { expiresAt: { lt: new Date() } },
+        });
+        return { loggedOut: true };
     }
     async getMe(userId) {
         const user = await this.prisma.user.findUnique({ where: { id: userId } });

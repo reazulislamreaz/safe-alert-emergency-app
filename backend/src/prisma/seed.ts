@@ -12,6 +12,7 @@ import {
 } from "@prisma/client";
 import { hashSync } from "bcryptjs";
 import { digitsOnly } from "../common/utils/phone";
+import { LEGAL_PAGES, PLAN_CATALOG } from "../modules/profile/profile.constants";
 
 const logger = new Logger("DatabaseSeed");
 
@@ -19,9 +20,240 @@ function hashSecret(value: string): string {
   return hashSync(value, 10);
 }
 
+const FIGMA_CONTACTS = [
+  {
+    id: "ct-james-01",
+    userId: "usr-sarah-101",
+    name: "James Johnson",
+    phone: "+1 (555) 111-2222",
+    relationship: "Father",
+  },
+  {
+    id: "ct-emma-01",
+    userId: "usr-sarah-101",
+    name: "Emma Smith",
+    phone: "+1 (555) 222-3333",
+    relationship: "Sister",
+  },
+  {
+    id: "ct-david-01",
+    userId: "usr-sarah-101",
+    name: "David Lee",
+    phone: "+1 (555) 555-6666",
+    relationship: "Friend",
+  },
+  {
+    id: "ct-rachel-01",
+    userId: "usr-sarah-101",
+    name: "Rachel Kim",
+    phone: "+1 (555) 666-7777",
+    relationship: "Colleague",
+  },
+  {
+    id: "ct-tom-01",
+    userId: "usr-sarah-101",
+    name: "Tom Wilson",
+    phone: "+1 (555) 777-8888",
+    relationship: "Neighbor",
+  },
+] as const;
+
+const FIGMA_GROUPS = [
+  {
+    id: "grp-family-01",
+    userId: "usr-sarah-101",
+    name: "Family",
+    color: "#3A67D5",
+    isDefaultSOS: true,
+    memberCount: 3,
+  },
+  {
+    id: "grp-work-02",
+    userId: "usr-sarah-101",
+    name: "Work Emergency",
+    color: "#00AA1D",
+    isDefaultSOS: true,
+    memberCount: 2,
+  },
+] as const;
+
+const FIGMA_MEMBERS = [
+  {
+    id: "mem-01",
+    groupId: "grp-family-01",
+    contactId: "ct-james-01",
+    name: "James Johnson",
+    phone: "+1 (555) 111-2222",
+    relationship: "Father",
+    isJoinedCall: true,
+  },
+  {
+    id: "mem-02",
+    groupId: "grp-family-01",
+    contactId: "ct-emma-01",
+    name: "Emma Smith",
+    phone: "+1 (555) 222-3333",
+    relationship: "Sister",
+    isJoinedCall: true,
+  },
+  {
+    id: "mem-03",
+    groupId: "grp-family-01",
+    contactId: "ct-tom-01",
+    name: "Tom Wilson",
+    phone: "+1 (555) 777-8888",
+    relationship: "Neighbor",
+    isJoinedCall: false,
+  },
+  {
+    id: "mem-04",
+    groupId: "grp-work-02",
+    contactId: "ct-david-01",
+    name: "David Lee",
+    phone: "+1 (555) 555-6666",
+    relationship: "Friend",
+    isJoinedCall: false,
+  },
+  {
+    id: "mem-05",
+    groupId: "grp-work-02",
+    contactId: "ct-rachel-01",
+    name: "Rachel Kim",
+    phone: "+1 (555) 666-7777",
+    relationship: "Colleague",
+    isJoinedCall: false,
+  },
+] as const;
+
+async function ensureFigmaContacts(prisma: PrismaClient): Promise<void> {
+  const sarah = await prisma.user.findUnique({ where: { id: "usr-sarah-101" } });
+  if (!sarah) {
+    return;
+  }
+
+  await prisma.subscriptionPlan.upsert({
+    where: { id: "plan-free" },
+    create: {
+      id: "plan-free",
+      name: PLAN_CATALOG.FREE.name,
+      priceMonthly: PLAN_CATALOG.FREE.price,
+      priceYearly: 0,
+      maxContacts: 5,
+      maxGroups: 2,
+      features: PLAN_CATALOG.FREE.features.filter((row) => row.included).map((row) => row.label),
+      subscriberCount: 1340,
+    },
+    update: {
+      name: PLAN_CATALOG.FREE.name,
+      priceMonthly: PLAN_CATALOG.FREE.price,
+      maxContacts: 5,
+      maxGroups: 2,
+      features: PLAN_CATALOG.FREE.features.filter((row) => row.included).map((row) => row.label),
+    },
+  });
+
+  await prisma.subscriptionPlan.upsert({
+    where: { id: "plan-pro" },
+    create: {
+      id: "plan-pro",
+      name: PLAN_CATALOG.PREMIUM.name,
+      priceMonthly: PLAN_CATALOG.PREMIUM.price,
+      priceYearly: 60,
+      maxContacts: 0,
+      maxGroups: 0,
+      features: PLAN_CATALOG.PREMIUM.features.map((row) => row.label),
+      subscriberCount: 1294,
+    },
+    update: {
+      name: PLAN_CATALOG.PREMIUM.name,
+      priceMonthly: PLAN_CATALOG.PREMIUM.price,
+      priceYearly: 60,
+      maxContacts: 0,
+      maxGroups: 0,
+      features: PLAN_CATALOG.PREMIUM.features.map((row) => row.label),
+    },
+  });
+
+  for (const page of LEGAL_PAGES) {
+    await prisma.legalPage.upsert({
+      where: { slug: page.slug },
+      create: { slug: page.slug, title: page.title, body: page.body },
+      update: { title: page.title, body: page.body },
+    });
+  }
+
+  for (const group of FIGMA_GROUPS) {
+    await prisma.contactGroup.upsert({
+      where: { id: group.id },
+      create: group,
+      update: {
+        name: group.name,
+        color: group.color,
+        isDefaultSOS: group.isDefaultSOS,
+      },
+    });
+  }
+
+  for (const contact of FIGMA_CONTACTS) {
+    const phoneDigits = digitsOnly(contact.phone);
+    await prisma.contact.deleteMany({
+      where: {
+        userId: contact.userId,
+        phoneDigits,
+        NOT: { id: contact.id },
+      },
+    });
+    await prisma.contact.upsert({
+      where: { id: contact.id },
+      create: { ...contact, phoneDigits },
+      update: {
+        name: contact.name,
+        phone: contact.phone,
+        phoneDigits,
+        relationship: contact.relationship,
+      },
+    });
+  }
+
+  for (const member of FIGMA_MEMBERS) {
+    await prisma.contactMember.upsert({
+      where: { id: member.id },
+      create: member,
+      update: {
+        groupId: member.groupId,
+        contactId: member.contactId,
+        name: member.name,
+        phone: member.phone,
+        relationship: member.relationship,
+        isJoinedCall: member.isJoinedCall,
+      },
+    });
+  }
+
+  await prisma.contactMember.deleteMany({
+    where: {
+      groupId: { in: FIGMA_GROUPS.map((group) => group.id) },
+      id: { notIn: FIGMA_MEMBERS.map((member) => member.id) },
+    },
+  });
+
+  await prisma.contactGroup.deleteMany({
+    where: { userId: "usr-sarah-101", name: "Neighborhood Watch" },
+  });
+
+  for (const group of FIGMA_GROUPS) {
+    const memberCount = await prisma.contactMember.count({ where: { groupId: group.id } });
+    await prisma.contactGroup.update({
+      where: { id: group.id },
+      data: { memberCount },
+    });
+  }
+}
+
 export async function seedDatabase(prisma: PrismaClient): Promise<void> {
   const existingUsers = await prisma.user.count();
   if (existingUsers > 0) {
+    await ensureFigmaContacts(prisma);
     return;
   }
 
@@ -211,124 +443,7 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
     ],
   });
 
-  await prisma.contactGroup.createMany({
-    data: [
-      {
-        id: "grp-family-01",
-        userId: "usr-sarah-101",
-        name: "Family",
-        color: "#3A67D5",
-        isDefaultSOS: true,
-        memberCount: 4,
-      },
-      {
-        id: "grp-work-02",
-        userId: "usr-sarah-101",
-        name: "Work Emergency",
-        color: "#00AA1D",
-        isDefaultSOS: true,
-        memberCount: 3,
-      },
-      {
-        id: "grp-neighbors-03",
-        userId: "usr-sarah-101",
-        name: "Neighborhood Watch",
-        color: "#E1AA00",
-        isDefaultSOS: false,
-        memberCount: 5,
-      },
-    ],
-  });
-
-  await prisma.contactMember.createMany({
-    data: [
-      {
-        id: "mem-01",
-        groupId: "grp-family-01",
-        name: "James Johnson",
-        phone: "+1 (555) 111-2222",
-        relationship: "Father",
-        isJoinedCall: true,
-      },
-      {
-        id: "mem-02",
-        groupId: "grp-family-01",
-        name: "Emma Johnson",
-        phone: "+1 (555) 222-3333",
-        relationship: "Sister",
-        isJoinedCall: true,
-      },
-      {
-        id: "mem-03",
-        groupId: "grp-family-01",
-        name: "Mike Johnson",
-        phone: "+1 (555) 333-4444",
-        relationship: "Brother",
-        isJoinedCall: false,
-      },
-      {
-        id: "mem-04",
-        groupId: "grp-family-01",
-        name: "Eleanor Johnson",
-        phone: "+1 (555) 444-5555",
-        relationship: "Mother",
-        isJoinedCall: false,
-      },
-      {
-        id: "mem-05",
-        groupId: "grp-work-02",
-        name: "David Vance",
-        phone: "+1 (555) 555-6666",
-        relationship: "Manager",
-        isJoinedCall: false,
-      },
-      {
-        id: "mem-06",
-        groupId: "grp-work-02",
-        name: "Chloe Bennett",
-        phone: "+1 (555) 666-7777",
-        relationship: "Coworker",
-        isJoinedCall: false,
-      },
-    ],
-  });
-
-  await prisma.subscriptionPlan.createMany({
-    data: [
-      {
-        id: "plan-free",
-        name: "Free Basic",
-        priceMonthly: 0,
-        priceYearly: 0,
-        maxContacts: 5,
-        maxGroups: 1,
-        features: [
-          "Instant SOS Trigger",
-          "Live GPS location broadcast",
-          "SMS/Push alerts to 1 group",
-          "Community emergency updates",
-        ],
-        subscriberCount: 1340,
-      },
-      {
-        id: "plan-pro",
-        name: "SafeAlert Pro",
-        priceMonthly: 7.99,
-        priceYearly: 79.99,
-        maxContacts: 25,
-        maxGroups: 5,
-        features: [
-          "Everything in Free",
-          "Multi-party WebRTC Live Video / Audio",
-          "Unlimited Emergency Groups",
-          "Silent SOS & Fake Lock Screen Mode",
-          "30-day Incident Cloud Recordings",
-          "Priority 911/PSAP Auto-Dispatch",
-        ],
-        subscriberCount: 1294,
-      },
-    ],
-  });
+  await ensureFigmaContacts(prisma);
 
   await prisma.journal.createMany({
     data: [
@@ -432,13 +547,13 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
           {
             groupId: "grp-family-01",
             groupName: "Family",
-            memberCount: 4,
+            memberCount: 3,
             deliveryStatus: DeliveryStatus.DELIVERED,
           },
           {
             groupId: "grp-work-02",
             groupName: "Work Emergency",
-            memberCount: 3,
+            memberCount: 2,
             deliveryStatus: DeliveryStatus.DELIVERED,
           },
         ],

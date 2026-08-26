@@ -5,6 +5,7 @@ import { RealtimeModule } from "./realtime/realtime.module";
 import { AuthModule } from "./modules/auth/auth.module";
 import { AlertsModule } from "./modules/alerts/alerts.module";
 import { ContactsModule } from "./modules/contacts/contacts.module";
+import { ProfileModule } from "./modules/profile/profile.module";
 import { DashboardModule } from "./modules/dashboard/dashboard.module";
 import { AlertsGateway } from "./gateways/alerts.gateway";
 import { HealthController } from "./health.controller";
@@ -17,6 +18,7 @@ import { HealthController } from "./health.controller";
     AuthModule,
     AlertsModule,
     ContactsModule,
+    ProfileModule,
     DashboardModule,
   ],
   controllers: [HealthController],

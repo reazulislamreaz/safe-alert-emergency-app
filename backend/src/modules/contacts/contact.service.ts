@@ -1,71 +1,546 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
+import { Prisma, SubscriptionTier } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
+import { digitsOnly } from "../../common/utils/phone";
+import { toContactDto, toGroupDto, toMemberDto } from "../../common/mappers/contact.mapper";
+import { AddMemberDto, CreateContactDto, CreateGroupDto, UpdateContactDto, UpdateGroupDto } from "./dto/contact.dto";
+import { CONTACT_STATUSES, REFERRAL_COPY } from "./contact.constants";
+
+export type ListContactsOptions = {
+  query?: string;
+  excludeGroupId?: string;
+  excludeIds?: string[];
+};
+
+const contactInclude = {
+  memberships: { include: { group: true }, orderBy: { groupId: "asc" as const } },
+} satisfies Prisma.ContactInclude;
+
+const groupInclude = {
+  members: { orderBy: { name: "asc" as const } },
+};
 
 @Injectable()
 export class ContactService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getGroups(userId: string) {
-    return this.prisma.contactGroup.findMany({
-      where: { userId },
-      include: { members: true },
+  getStatuses() {
+    return { statuses: [...CONTACT_STATUSES] };
+  }
+
+  async listContacts(userId: string, options: ListContactsOptions = {}) {
+    const excludeIds = await this.resolveExcludedIds(options);
+    const query = options.query?.trim();
+    const digits = query ? digitsOnly(query) : "";
+
+    const contacts = await this.prisma.contact.findMany({
+      where: {
+        userId,
+        ...(excludeIds.length ? { id: { notIn: excludeIds } } : {}),
+        ...(query
+          ? {
+              OR: [
+                { name: { contains: query, mode: "insensitive" as const } },
+                ...(digits.length ? [{ phoneDigits: { contains: digits } }] : []),
+              ],
+            }
+          : {}),
+      },
+      include: contactInclude,
       orderBy: { name: "asc" },
     });
+
+    const plan = await this.getPlanUsage(userId);
+    return {
+      contacts: contacts.map(toContactDto),
+      plan,
+    };
   }
 
-  async createGroup(userId: string, name: string, color?: string) {
-    return this.prisma.contactGroup.create({
-      data: {
-        id: `grp-${Date.now()}`,
-        userId,
-        name,
-        color: color || "#3A67D5",
-        isDefaultSOS: true,
-        memberCount: 0,
-      },
-    });
+  async suggestMembers(userId: string, groupId: string, query?: string) {
+    await this.requireGroup(userId, groupId);
+    return this.listContacts(userId, { query, excludeGroupId: groupId });
   }
 
-  async addMember(groupId: string, name: string, phone: string, relationship: string) {
-    const group = await this.prisma.contactGroup.findUnique({ where: { id: groupId } });
-    if (!group) {
-      throw new NotFoundException("Group not found");
+  async getContact(userId: string, contactId: string) {
+    const contact = await this.requireContact(userId, contactId);
+    return toContactDto(contact);
+  }
+
+  async createContact(userId: string, dto: CreateContactDto) {
+    const relationship = (dto.relationship || dto.status || "").trim();
+    if (!relationship) {
+      throw new BadRequestException("Status is required.");
     }
 
-    const [member] = await this.prisma.$transaction([
-      this.prisma.contactMember.create({
+    const phoneDigits = digitsOnly(dto.phone);
+    if (phoneDigits.length < 7) {
+      throw new BadRequestException("Enter a valid phone number.");
+    }
+
+    const duplicate = await this.prisma.contact.findFirst({
+      where: { userId, phoneDigits },
+    });
+    if (duplicate) {
+      throw new BadRequestException("A contact with this phone number already exists.");
+    }
+
+    if (dto.groupId) {
+      await this.assertCanAddMember(userId, dto.groupId, 1);
+    }
+
+    const contact = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.contact.create({
         data: {
-          id: `mem-${Date.now()}`,
-          groupId,
-          name,
+          id: `ct-${crypto.randomUUID().slice(0, 8)}`,
+          userId,
+          name: dto.name.trim(),
+          phone: dto.phone.trim(),
+          phoneDigits,
+          relationship,
+        },
+      });
+
+      if (dto.groupId) {
+        await this.createMembership(tx, dto.groupId, created);
+      }
+
+      return tx.contact.findUniqueOrThrow({
+        where: { id: created.id },
+        include: contactInclude,
+      });
+    });
+
+    return toContactDto(contact);
+  }
+
+  async updateContact(userId: string, contactId: string, dto: UpdateContactDto) {
+    const existing = await this.requireContact(userId, contactId);
+    const relationship = (dto.relationship || dto.status || existing.relationship).trim();
+    const phone = dto.phone?.trim() || existing.phone;
+    const phoneDigits = digitsOnly(phone);
+
+    if (phoneDigits.length < 7) {
+      throw new BadRequestException("Enter a valid phone number.");
+    }
+
+    if (phoneDigits !== existing.phoneDigits) {
+      const duplicate = await this.prisma.contact.findFirst({
+        where: { userId, phoneDigits, NOT: { id: contactId } },
+      });
+      if (duplicate) {
+        throw new BadRequestException("A contact with this phone number already exists.");
+      }
+    }
+
+    if (dto.groupId) {
+      const alreadyInGroup = existing.memberships.some((m) => m.groupId === dto.groupId);
+      if (!alreadyInGroup) {
+        await this.assertCanAddMember(userId, dto.groupId, 1);
+      }
+    }
+
+    const contact = await this.prisma.$transaction(async (tx) => {
+      await tx.contact.update({
+        where: { id: contactId },
+        data: {
+          name: dto.name?.trim() || existing.name,
+          phone,
+          phoneDigits,
+          relationship,
+        },
+      });
+
+      await tx.contactMember.updateMany({
+        where: { contactId },
+        data: {
+          name: dto.name?.trim() || existing.name,
           phone,
           relationship,
-          isJoinedCall: false,
         },
-      }),
-      this.prisma.contactGroup.update({
-        where: { id: groupId },
-        data: { memberCount: { increment: 1 } },
-      }),
-    ]);
+      });
 
+      if (dto.groupId && !existing.memberships.some((m) => m.groupId === dto.groupId)) {
+        const updated = await tx.contact.findUniqueOrThrow({ where: { id: contactId } });
+        await this.createMembership(tx, dto.groupId, updated);
+      }
+
+      return tx.contact.findUniqueOrThrow({
+        where: { id: contactId },
+        include: contactInclude,
+      });
+    });
+
+    return toContactDto(contact);
+  }
+
+  async deleteContact(userId: string, contactId: string) {
+    await this.requireContact(userId, contactId);
+
+    await this.prisma.$transaction(async (tx) => {
+      const memberships = await tx.contactMember.findMany({ where: { contactId } });
+      await tx.contactMember.deleteMany({ where: { contactId } });
+      if (memberships.length) {
+        const groupIds = [...new Set(memberships.map((membership) => membership.groupId))];
+        await Promise.all(groupIds.map((groupId) => this.syncMemberCount(tx, groupId)));
+      }
+      await tx.contact.delete({ where: { id: contactId } });
+    });
+
+    return { deleted: true };
+  }
+
+  async getGroups(userId: string) {
+    const plan = await this.getPlanUsage(userId);
+    const groups = await this.prisma.contactGroup.findMany({
+      where: { userId },
+      include: groupInclude,
+      orderBy: { name: "asc" },
+    });
+
+    return {
+      groups: groups.map((group) => toGroupDto(group, plan.maxMembersPerGroup)),
+      plan,
+    };
+  }
+
+  async getGroup(userId: string, groupId: string) {
+    const plan = await this.getPlanUsage(userId);
+    const group = await this.requireGroup(userId, groupId);
+    return toGroupDto(group, plan.maxMembersPerGroup);
+  }
+
+  async createGroup(userId: string, dto: CreateGroupDto) {
+    const plan = await this.getPlanUsage(userId);
+    if (!plan.canCreateGroup) {
+      throw new ForbiddenException(
+        plan.upgradeRequired
+          ? "Add New Group (Upgrade Required)"
+          : "You have reached the maximum number of groups for your plan.",
+      );
+    }
+
+    const memberIds = [...new Set(dto.memberIds ?? [])];
+    this.assertMemberCap(memberIds.length, plan.maxMembersPerGroup);
+
+    const contacts = await this.loadOwnedContacts(userId, memberIds);
+
+    const group = await this.prisma.contactGroup.create({
+      data: {
+        id: `grp-${crypto.randomUUID().slice(0, 8)}`,
+        userId,
+        name: dto.name.trim(),
+        color: dto.color || "#3A67D5",
+        isDefaultSOS: true,
+        memberCount: contacts.length,
+        members: {
+          create: contacts.map((contact) => ({
+            id: `mem-${crypto.randomUUID().slice(0, 8)}`,
+            contactId: contact.id,
+            name: contact.name,
+            phone: contact.phone,
+            relationship: contact.relationship,
+          })),
+        },
+      },
+      include: groupInclude,
+    });
+
+    return toGroupDto(group, plan.maxMembersPerGroup);
+  }
+
+  async updateGroup(userId: string, groupId: string, dto: UpdateGroupDto) {
+    const plan = await this.getPlanUsage(userId);
+    const existing = await this.requireGroup(userId, groupId);
+
+    if (dto.memberIds) {
+      this.assertMemberCap(dto.memberIds.length, plan.maxMembersPerGroup);
+      await this.loadOwnedContacts(userId, dto.memberIds);
+    }
+
+    const group = await this.prisma.$transaction(async (tx) => {
+      if (dto.memberIds) {
+        const nextIds = new Set(dto.memberIds);
+        const currentByContact = new Map(
+          existing.members
+            .filter((member) => member.contactId)
+            .map((member) => [member.contactId as string, member]),
+        );
+
+        const toRemove = existing.members.filter(
+          (member) => !member.contactId || !nextIds.has(member.contactId),
+        );
+        if (toRemove.length) {
+          await tx.contactMember.deleteMany({
+            where: { id: { in: toRemove.map((member) => member.id) } },
+          });
+        }
+
+        const toAdd = dto.memberIds.filter((id) => !currentByContact.has(id));
+        if (toAdd.length) {
+          const contacts = await tx.contact.findMany({
+            where: { userId, id: { in: toAdd } },
+          });
+          await tx.contactMember.createMany({
+            data: contacts.map((contact) => ({
+              id: `mem-${crypto.randomUUID().slice(0, 8)}`,
+              groupId,
+              contactId: contact.id,
+              name: contact.name,
+              phone: contact.phone,
+              relationship: contact.relationship,
+            })),
+          });
+        }
+      }
+
+      await tx.contactGroup.update({
+        where: { id: groupId },
+        data: {
+          ...(dto.name ? { name: dto.name.trim() } : {}),
+          ...(dto.color ? { color: dto.color } : {}),
+        },
+      });
+
+      if (dto.memberIds) {
+        await this.syncMemberCount(tx, groupId);
+      }
+
+      return tx.contactGroup.findUniqueOrThrow({
+        where: { id: groupId },
+        include: groupInclude,
+      });
+    });
+
+    return toGroupDto(group, plan.maxMembersPerGroup);
+  }
+
+  async deleteGroup(userId: string, groupId: string) {
+    await this.requireGroup(userId, groupId);
+    await this.prisma.contactGroup.delete({ where: { id: groupId } });
+    return { deleted: true };
+  }
+
+  async addMember(userId: string, groupId: string, dto: AddMemberDto) {
+    const targetGroupId = dto.groupId || groupId;
+    await this.assertCanAddMember(userId, targetGroupId, 1);
+
+    const contactId = await this.resolveMemberContactId(userId, dto);
+
+    const already = await this.prisma.contactMember.findFirst({
+      where: { groupId: targetGroupId, contactId },
+    });
+    if (already) {
+      throw new BadRequestException("This contact is already in the group.");
+    }
+
+    const contact = await this.prisma.contact.findUniqueOrThrow({ where: { id: contactId } });
+    const member = await this.prisma.$transaction(async (tx) => {
+      return this.createMembership(tx, targetGroupId, contact);
+    });
+
+    return toMemberDto(member);
+  }
+
+  async deleteMember(userId: string, memberId: string) {
+    const member = await this.prisma.contactMember.findUnique({
+      where: { id: memberId },
+      include: { group: true },
+    });
+    if (!member || member.group.userId !== userId) {
+      throw new NotFoundException("Group member not found.");
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.contactMember.delete({ where: { id: memberId } });
+      await this.syncMemberCount(tx, member.groupId);
+    });
+
+    return { deleted: true };
+  }
+
+  async getReferral(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException("User account not found.");
+    }
+
+    const shareUrl = `https://safealert.app/invite/${user.id}`;
+    return {
+      title: REFERRAL_COPY.title,
+      subtitle: REFERRAL_COPY.subtitle,
+      shareUrl,
+      shareText: `${user.fullName} invited you to SafeAlert. Join their safety circle: ${shareUrl}`,
+      cta: REFERRAL_COPY.cta,
+    };
+  }
+
+  async getPlanUsage(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException("User account not found.");
+    }
+
+    const planId = user.subscriptionTier === SubscriptionTier.PREMIUM ? "plan-pro" : "plan-free";
+    const plan = await this.prisma.subscriptionPlan.findUnique({ where: { id: planId } });
+    const maxGroups = plan?.maxGroups ?? 2;
+    const maxMembersPerGroup = plan?.maxContacts ?? 5;
+    const groupCount = await this.prisma.contactGroup.count({ where: { userId } });
+    const unlimitedGroups = maxGroups === 0;
+    const canCreateGroup = unlimitedGroups || groupCount < maxGroups;
+    const isFree = user.subscriptionTier === SubscriptionTier.FREE;
+
+    return {
+      tier: user.subscriptionTier,
+      name: isFree ? "FREE PLAN" : "PREMIUM PLAN",
+      groupCount,
+      maxGroups,
+      maxMembersPerGroup,
+      canCreateGroup,
+      upgradeRequired: isFree && !canCreateGroup,
+      usageLabel: unlimitedGroups
+        ? `${isFree ? "FREE PLAN" : "PREMIUM PLAN"} — ${groupCount} groups`
+        : `${isFree ? "FREE PLAN" : "PREMIUM PLAN"} — ${groupCount}/${maxGroups} groups`,
+      banner: isFree
+        ? `Free plan: max ${maxGroups} groups, ${maxMembersPerGroup} members each`
+        : null,
+      upgradeCta: "Upgrade",
+      addGroupCta: canCreateGroup ? "+ Add New Group" : "+ Add New Group (Upgrade Required)",
+    };
+  }
+
+  private async requireContact(userId: string, contactId: string) {
+    const contact = await this.prisma.contact.findFirst({
+      where: { id: contactId, userId },
+      include: contactInclude,
+    });
+    if (!contact) {
+      throw new NotFoundException("Contact not found.");
+    }
+    return contact;
+  }
+
+  private async requireGroup(userId: string, groupId: string) {
+    const group = await this.prisma.contactGroup.findFirst({
+      where: { id: groupId, userId },
+      include: groupInclude,
+    });
+    if (!group) {
+      throw new NotFoundException("Group not found.");
+    }
+    return group;
+  }
+
+  private async loadOwnedContacts(userId: string, ids: string[]) {
+    if (!ids.length) {
+      return [];
+    }
+    const uniqueIds = [...new Set(ids)];
+    const contacts = await this.prisma.contact.findMany({
+      where: { userId, id: { in: uniqueIds } },
+    });
+    if (contacts.length !== uniqueIds.length) {
+      throw new BadRequestException("One or more contacts were not found in your address book.");
+    }
+    return contacts;
+  }
+
+  private async assertCanAddMember(userId: string, groupId: string, additional: number) {
+    const plan = await this.getPlanUsage(userId);
+    await this.requireGroup(userId, groupId);
+    const memberCount = await this.prisma.contactMember.count({ where: { groupId } });
+    this.assertMemberCap(memberCount + additional, plan.maxMembersPerGroup);
+  }
+
+  private assertMemberCap(count: number, maxMembersPerGroup: number) {
+    if (maxMembersPerGroup !== 0 && count > maxMembersPerGroup) {
+      throw new ForbiddenException(
+        `This plan allows up to ${maxMembersPerGroup} members per group.`,
+      );
+    }
+  }
+
+  private async createMembership(
+    tx: Prisma.TransactionClient,
+    groupId: string,
+    contact: { id: string; name: string; phone: string; relationship: string },
+  ) {
+    const member = await tx.contactMember.create({
+      data: {
+        id: `mem-${crypto.randomUUID().slice(0, 8)}`,
+        groupId,
+        contactId: contact.id,
+        name: contact.name,
+        phone: contact.phone,
+        relationship: contact.relationship,
+      },
+    });
+    await this.syncMemberCount(tx, groupId);
     return member;
   }
 
-  async deleteMember(memberId: string) {
-    const member = await this.prisma.contactMember.findUnique({ where: { id: memberId } });
-    if (!member) {
-      return false;
+  private async syncMemberCount(tx: Prisma.TransactionClient, groupId: string) {
+    const memberCount = await tx.contactMember.count({ where: { groupId } });
+    await tx.contactGroup.update({
+      where: { id: groupId },
+      data: { memberCount },
+    });
+  }
+
+  private async resolveExcludedIds(options: ListContactsOptions) {
+    const excludeIds = new Set(options.excludeIds?.filter(Boolean) ?? []);
+    if (options.excludeGroupId) {
+      const members = await this.prisma.contactMember.findMany({
+        where: { groupId: options.excludeGroupId, contactId: { not: null } },
+        select: { contactId: true },
+      });
+      for (const member of members) {
+        if (member.contactId) {
+          excludeIds.add(member.contactId);
+        }
+      }
+    }
+    return [...excludeIds];
+  }
+
+  private async resolveMemberContactId(userId: string, dto: AddMemberDto) {
+    if (dto.contactId) {
+      await this.requireContact(userId, dto.contactId);
+      return dto.contactId;
     }
 
-    await this.prisma.$transaction([
-      this.prisma.contactMember.delete({ where: { id: memberId } }),
-      this.prisma.contactGroup.update({
-        where: { id: member.groupId },
-        data: { memberCount: { decrement: 1 } },
-      }),
-    ]);
+    if (dto.name && dto.phone) {
+      const created = await this.createContact(userId, {
+        name: dto.name,
+        phone: dto.phone,
+        relationship: dto.relationship || "Contact",
+      });
+      return created.id;
+    }
 
-    return true;
+    const typedName = dto.name?.trim();
+    if (typedName) {
+      const matches = await this.prisma.contact.findMany({
+        where: {
+          userId,
+          name: { contains: typedName, mode: "insensitive" },
+        },
+        orderBy: { name: "asc" },
+      });
+      if (matches.length === 1) {
+        return matches[0].id;
+      }
+      if (matches.length > 1) {
+        throw new BadRequestException("Multiple contacts match that name. Pick one from suggested contacts.");
+      }
+      throw new BadRequestException("No matching contact. Add them from All Contacts first.");
+    }
+
+    throw new BadRequestException("Provide a contactId or a name and phone number.");
   }
 }

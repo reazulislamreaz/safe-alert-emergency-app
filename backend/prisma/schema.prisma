@@ -74,8 +74,14 @@ model User {
   emergencyContactName      String?
   emergencyContactPhone     String?
   emergencyContactRelation  String?
+  subscriptionStartedAt     DateTime?
+  subscriptionRenewsAt      DateTime?
+  subscriptionCancelledAt   DateTime?
+  subscriptionCancelReason  String?
+  trialEndsAt               DateTime?
   createdAt                 DateTime          @default(now())
   contactGroups             ContactGroup[]
+  contacts                  Contact[]
   alerts                    Alert[]
   journals                  Journal[]
 
@@ -104,6 +110,23 @@ model EmailOtp {
   @@map("email_otps")
 }
 
+model Contact {
+  id            String          @id
+  userId        String
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String
+  phone         String
+  phoneDigits   String
+  relationship  String
+  createdAt     DateTime        @default(now())
+  memberships   ContactMember[]
+
+  @@unique([userId, phoneDigits])
+  @@index([userId])
+  @@index([phoneDigits])
+  @@map("contacts")
+}
+
 model ContactGroup {
   id           String          @id @default(uuid())
   userId       String
@@ -122,12 +145,15 @@ model ContactMember {
   id           String       @id @default(uuid())
   groupId      String
   group        ContactGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  contactId    String?
+  contact      Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
   name         String
   phone        String
   relationship String
   isJoinedCall Boolean      @default(false)
 
   @@index([groupId])
+  @@index([contactId])
   @@map("contact_members")
 }
 
@@ -244,4 +270,21 @@ model SubscriptionPlan {
   subscriberCount Int      @default(0)
 
   @@map("subscription_plans")
+}
+
+model LegalPage {
+  slug      String   @id
+  title     String
+  body      String
+  updatedAt DateTime @updatedAt
+
+  @@map("legal_pages")
+}
+
+model RevokedToken {
+  tokenHash String   @id
+  expiresAt DateTime
+
+  @@index([expiresAt])
+  @@map("revoked_tokens")
 }

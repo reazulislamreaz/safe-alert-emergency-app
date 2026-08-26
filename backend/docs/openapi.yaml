@@ -180,6 +180,167 @@ paths:
       summary: Current user, groups, and active alerts
       tags:
         - Auth
+  /api/auth/logout:
+    post:
+      operationId: AuthController_logout
+      responses:
+        '200':
+          description: Session token revoked
+      security:
+        - access-token: []
+      summary: Log out — invalidate the current session token
+      tags:
+        - Auth
+  /api/profile:
+    get:
+      operationId: ProfileController_getProfile
+      responses:
+        '200':
+          description: Profile home payload
+      security:
+        - access-token: []
+      summary: Profile home
+      tags:
+        - Profile
+    patch:
+      operationId: ProfileController_updateProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileDto'
+      responses:
+        '200':
+          description: Profile updated
+      security:
+        - access-token: []
+      summary: Update Profile
+      tags:
+        - Profile
+    delete:
+      operationId: ProfileController_deleteAccount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteAccountDto'
+      responses:
+        '200':
+          description: Account deleted
+      security:
+        - access-token: []
+      summary: Delete Account (PIN required)
+      tags:
+        - Profile
+  /api/profile/photos:
+    post:
+      operationId: ProfileController_updatePhotos
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePhotosDto'
+      responses:
+        '200':
+          description: Photos updated
+      security:
+        - access-token: []
+      summary: Replace profile photos (max 3)
+      tags:
+        - Profile
+  /api/profile/subscription:
+    get:
+      operationId: ProfileController_subscription
+      responses:
+        '200':
+          description: Current and switch-plan cards
+      security:
+        - access-token: []
+      summary: My Subscription
+      tags:
+        - Profile
+  /api/subscriptions/plans:
+    get:
+      operationId: SubscriptionsController_plans
+      responses:
+        '200':
+          description: Choose Plan catalog
+      security:
+        - access-token: []
+      summary: Choose Plan
+      tags:
+        - Subscriptions
+  /api/subscriptions/current:
+    get:
+      operationId: SubscriptionsController_current
+      responses:
+        '200':
+          description: Current subscription
+      security:
+        - access-token: []
+      summary: Current subscription status
+      tags:
+        - Subscriptions
+  /api/subscriptions/subscribe:
+    post:
+      operationId: SubscriptionsController_subscribe
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubscribeDto'
+      responses:
+        '200':
+          description: Premium started (7-day trial)
+      security:
+        - access-token: []
+      summary: Start Premium
+      tags:
+        - Subscriptions
+  /api/subscriptions/cancel:
+    post:
+      operationId: SubscriptionsController_cancel
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelSubscriptionDto'
+      responses:
+        '200':
+          description: Moved to Free with Cancelled badge
+      security:
+        - access-token: []
+      summary: Cancel Subscription
+      tags:
+        - Subscriptions
+  /api/legal:
+    get:
+      operationId: LegalController_list
+      responses:
+        '200':
+          description: Legal pages
+      summary: About, Privacy, Terms
+      tags:
+        - Legal
+  /api/legal/{slug}:
+    get:
+      operationId: LegalController_get
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [about, privacy, terms]
+      responses:
+        '200':
+          description: Page body
+      summary: Get one legal page
+      tags:
+        - Legal
   /api/alerts/active:
     get:
       operationId: AlertsController_getActive
@@ -280,28 +441,98 @@ paths:
       summary: Resolve an alert with the user's PIN
       tags:
         - Alerts
+  /api/contacts:
+    get:
+      operationId: ContactsController_listContacts
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+            example: james
+        - name: excludeGroupId
+          in: query
+          required: false
+          schema:
+            type: string
+            example: grp-family-01
+        - name: excludeIds
+          in: query
+          required: false
+          schema:
+            type: string
+            example: ct-emma-01,ct-james-01
+      responses:
+        '200':
+          description: All Contacts tab — contacts plus plan usage
+      security:
+        - access-token: []
+      summary: List address-book contacts (All Contacts tab)
+      tags:
+        - Contacts
+    post:
+      operationId: ContactsController_createContact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateContactDto'
+      responses:
+        '201':
+          description: Contact created
+      security:
+        - access-token: []
+      summary: Add a contact (Add Contact modal)
+      tags:
+        - Contacts
+  /api/contacts/referral:
+    get:
+      operationId: ContactsController_referral
+      responses:
+        '200':
+          description: Share referral link payload
+      security:
+        - access-token: []
+      summary: Referral share payload (Invite)
+      tags:
+        - Contacts
+  /api/contacts/statuses:
+    get:
+      operationId: ContactsController_statuses
+      responses:
+        '200':
+          description: Status dropdown values
+      security:
+        - access-token: []
+      summary: Status dropdown values for Add Contact
+      tags:
+        - Contacts
+  /api/contacts/plan:
+    get:
+      operationId: ContactsController_plan
+      responses:
+        '200':
+          description: Free plan 2 groups / 5 members each
+      security:
+        - access-token: []
+      summary: Current group/member plan limits
+      tags:
+        - Contacts
   /api/contacts/groups:
     get:
       operationId: ContactsController_getGroups
-      parameters:
-        - name: userId
-          required: false
-          in: query
-          description: Defaults to JWT subject, then Sarah's demo user
-          schema:
-            example: usr-sarah-101
-            type: string
       responses:
         '200':
-          description: ''
+          description: Groups tab with plan banner payload
       security:
         - access-token: []
-      summary: List contact groups (with members)
+      summary: List groups with plan limits (Groups tab)
       tags:
         - Contacts
     post:
       operationId: ContactsController_createGroup
-      parameters: []
       requestBody:
         required: true
         content:
@@ -310,16 +541,106 @@ paths:
               $ref: '#/components/schemas/CreateGroupDto'
       responses:
         '201':
-          description: ''
+          description: Group created
+        '403':
+          description: Free plan group cap reached (Upgrade Required)
       security:
         - access-token: []
-      summary: Create a contact group
+      summary: Create a group (Save Group)
       tags:
         - Contacts
-  /api/contacts/members:
+  /api/contacts/groups/{id}:
+    get:
+      operationId: ContactsController_getGroup
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            example: grp-family-01
+            type: string
+      responses:
+        '200':
+          description: Group with members for Edit Group
+      security:
+        - access-token: []
+      summary: Get one group with members (Edit Group)
+      tags:
+        - Contacts
+    patch:
+      operationId: ContactsController_updateGroup
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            example: grp-family-01
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateGroupDto'
+      responses:
+        '200':
+          description: Group updated
+      security:
+        - access-token: []
+      summary: Update a group (Update Group)
+      tags:
+        - Contacts
+    delete:
+      operationId: ContactsController_deleteGroup
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            example: grp-family-01
+            type: string
+      responses:
+        '200':
+          description: Group deleted
+      security:
+        - access-token: []
+      summary: Delete a group
+      tags:
+        - Contacts
+  /api/contacts/groups/{id}/suggestions:
+    get:
+      operationId: ContactsController_suggestMembers
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            example: grp-family-01
+            type: string
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+            example: james
+      responses:
+        '200':
+          description: Address-book contacts not already in the group
+      security:
+        - access-token: []
+      summary: Suggested from contacts (Create/Edit Group)
+      tags:
+        - Contacts
+  /api/contacts/groups/{id}/members:
     post:
-      operationId: ContactsController_addMember
-      parameters: []
+      operationId: ContactsController_addGroupMember
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            example: grp-family-01
+            type: string
       requestBody:
         required: true
         content:
@@ -328,7 +649,50 @@ paths:
               $ref: '#/components/schemas/AddMemberDto'
       responses:
         '201':
-          description: ''
+          description: Member added
+        '403':
+          description: Member cap reached (5 on Free)
+      security:
+        - access-token: []
+      summary: Add a suggested or searched contact to a group
+      tags:
+        - Contacts
+  /api/contacts/groups/{id}/members/{memberId}:
+    delete:
+      operationId: ContactsController_deleteGroupMember
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            example: grp-family-01
+            type: string
+        - name: memberId
+          required: true
+          in: path
+          schema:
+            example: mem-02
+            type: string
+      responses:
+        '200':
+          description: Member chip removed
+      security:
+        - access-token: []
+      summary: Remove a member chip from a group
+      tags:
+        - Contacts
+  /api/contacts/members:
+    post:
+      operationId: ContactsController_addMember
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddMemberDto'
+      responses:
+        '201':
+          description: Member added
       security:
         - access-token: []
       summary: Add a member to a group
@@ -342,14 +706,72 @@ paths:
           required: true
           in: path
           schema:
-            example: mem-06
+            example: mem-05
             type: string
       responses:
         '200':
-          description: ''
+          description: Member removed
       security:
         - access-token: []
       summary: Remove a group member
+      tags:
+        - Contacts
+  /api/contacts/{id}:
+    get:
+      operationId: ContactsController_getContact
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            example: ct-james-01
+            type: string
+      responses:
+        '200':
+          description: Single contact
+      security:
+        - access-token: []
+      summary: Get one contact
+      tags:
+        - Contacts
+    patch:
+      operationId: ContactsController_updateContact
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            example: ct-james-01
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateContactDto'
+      responses:
+        '200':
+          description: Contact updated
+      security:
+        - access-token: []
+      summary: Update a contact
+      tags:
+        - Contacts
+    delete:
+      operationId: ContactsController_deleteContact
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            example: ct-james-01
+            type: string
+      responses:
+        '200':
+          description: Contact deleted
+      security:
+        - access-token: []
+      summary: Delete a contact
       tags:
         - Contacts
   /api/dashboard/metrics:
@@ -769,40 +1191,146 @@ components:
         userId:
           type: string
           example: usr-sarah-101
+    UpdateProfileDto:
+      type: object
+      properties:
+        fullName:
+          type: string
+        dob:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        location:
+          type: string
+        emergencyContactName:
+          type: string
+        emergencyContactPhone:
+          type: string
+        emergencyContactRelation:
+          type: string
+        profilePhotos:
+          type: array
+          items:
+            type: string
+        avatar:
+          type: string
+    UpdatePhotosDto:
+      type: object
+      properties:
+        photos:
+          type: array
+          items:
+            type: string
+      required:
+        - photos
+    DeleteAccountDto:
+      type: object
+      properties:
+        pin:
+          type: string
+          example: '1234'
+      required:
+        - pin
+    SubscribeDto:
+      type: object
+      properties:
+        planId:
+          type: string
+          example: plan-pro
+    CancelSubscriptionDto:
+      type: object
+      properties:
+        comments:
+          type: string
+        reason:
+          type: string
+        feedback:
+          type: string
+    CreateContactDto:
+      type: object
+      properties:
+        name:
+          type: string
+          example: James Johnson
+        status:
+          type: string
+          example: Father
+          description: Figma Status dropdown (alias of relationship)
+        relationship:
+          type: string
+          example: Father
+        phone:
+          type: string
+          example: '+1 (555) 111-2222'
+        groupId:
+          type: string
+          example: grp-family-01
+      required:
+        - name
+        - phone
+    UpdateContactDto:
+      type: object
+      properties:
+        name:
+          type: string
+        status:
+          type: string
+        relationship:
+          type: string
+        phone:
+          type: string
+        groupId:
+          type: string
     CreateGroupDto:
       type: object
       properties:
-        userId:
-          type: string
-          example: usr-sarah-101
         name:
           type: string
-          example: Close Friends
+          example: Family
         color:
           type: string
           example: '#3A67D5'
+        memberIds:
+          type: array
+          items:
+            type: string
+          example:
+            - ct-james-01
       required:
         - name
+    UpdateGroupDto:
+      type: object
+      properties:
+        name:
+          type: string
+          example: Family
+        color:
+          type: string
+          example: '#3A67D5'
+        memberIds:
+          type: array
+          items:
+            type: string
     AddMemberDto:
       type: object
       properties:
         groupId:
           type: string
           example: grp-family-01
+        contactId:
+          type: string
+          example: ct-james-01
         name:
           type: string
-          example: Alex Rivera
+          example: James Johnson
         phone:
           type: string
           example: +1 (555) 222-1111
         relationship:
           type: string
           example: Friend
-      required:
-        - groupId
-        - name
-        - phone
-        - relationship
     CreateEmergencyTypeDto:
       type: object
       properties:

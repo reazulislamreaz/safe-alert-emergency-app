@@ -311,6 +311,121 @@ export const api = {
     this.setAuthToken(null);
   },
 
+  async logoutRemote() {
+    const res = await fetch(`${API_BASE}/auth/logout`, {
+      method: 'POST',
+      headers: this.authHeaders(false),
+    });
+    const data = await res.json().catch(() => ({}));
+    this.setAuthToken(null);
+    if (!res.ok || data.success === false) {
+      throw new Error(data.error || 'Failed to log out');
+    }
+    return data.data;
+  },
+
+  async getProfile() {
+    const res = await fetch(`${API_BASE}/profile`, { headers: this.authHeaders(false) });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Failed to load profile');
+    }
+    return data.data;
+  },
+
+  async updateProfile(payload: Record<string, unknown>) {
+    const res = await fetch(`${API_BASE}/profile`, {
+      method: 'PATCH',
+      headers: this.authHeaders(),
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Failed to update profile');
+    }
+    return data.data;
+  },
+
+  async updateProfilePhotos(photos: string[]) {
+    const res = await fetch(`${API_BASE}/profile/photos`, {
+      method: 'POST',
+      headers: this.authHeaders(),
+      body: JSON.stringify({ photos }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Failed to update photos');
+    }
+    return data.data;
+  },
+
+  async deleteAccount(pin: string) {
+    const res = await fetch(`${API_BASE}/profile`, {
+      method: 'DELETE',
+      headers: this.authHeaders(),
+      body: JSON.stringify({ pin }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Failed to delete account');
+    }
+    this.setAuthToken(null);
+    return data.data;
+  },
+
+  async getSubscription() {
+    const res = await fetch(`${API_BASE}/profile/subscription`, { headers: this.authHeaders(false) });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Failed to load subscription');
+    }
+    return data.data;
+  },
+
+  async getSubscriptionPlans() {
+    const res = await fetch(`${API_BASE}/subscriptions/plans`, { headers: this.authHeaders(false) });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Failed to load plans');
+    }
+    return data.data;
+  },
+
+  async subscribeToPremium(planId = 'plan-pro') {
+    const res = await fetch(`${API_BASE}/subscriptions/subscribe`, {
+      method: 'POST',
+      headers: this.authHeaders(),
+      body: JSON.stringify({ planId }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Failed to subscribe');
+    }
+    return data.data;
+  },
+
+  async cancelSubscription(comments?: string) {
+    const res = await fetch(`${API_BASE}/subscriptions/cancel`, {
+      method: 'POST',
+      headers: this.authHeaders(),
+      body: JSON.stringify({ comments }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Failed to cancel subscription');
+    }
+    return data.data;
+  },
+
+  async getLegalPage(slug: 'about' | 'privacy' | 'terms') {
+    const res = await fetch(`${API_BASE}/legal/${slug}`);
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Failed to load page');
+    }
+    return data.data;
+  },
+
   // --- Dashboard Metrics ---
   async getMetrics(): Promise<DashboardMetrics> {
     try {
@@ -847,7 +962,8 @@ export const api = {
       });
       if (!res.ok) throw new Error('Failed to fetch groups');
       const data = await res.json();
-      return data.data;
+      const payload = data.data;
+      return Array.isArray(payload) ? payload : payload.groups ?? [];
     } catch {
       return [
         {
@@ -856,7 +972,7 @@ export const api = {
           name: "Family",
           color: "#3A67D5",
           isDefaultSOS: true,
-          memberCount: 4,
+          memberCount: 3,
         },
         {
           id: "grp-work-02",
@@ -864,17 +980,180 @@ export const api = {
           name: "Work Emergency",
           color: "#00AA1D",
           isDefaultSOS: true,
-          memberCount: 3,
-        },
-        {
-          id: "grp-neighbors-03",
-          userId: "usr-sarah-101",
-          name: "Neighborhood Watch",
-          color: "#E1AA00",
-          isDefaultSOS: false,
-          memberCount: 5,
+          memberCount: 2,
         },
       ];
     }
-  }
+  },
+
+  async getContacts(query?: string, options?: { excludeGroupId?: string; excludeIds?: string[] }) {
+    const params = new URLSearchParams();
+    if (query) params.set("q", query);
+    if (options?.excludeGroupId) params.set("excludeGroupId", options.excludeGroupId);
+    if (options?.excludeIds?.length) params.set("excludeIds", options.excludeIds.join(","));
+    const suffix = params.toString() ? `?${params.toString()}` : "";
+    const res = await fetch(`${API_BASE}/contacts${suffix}`, { headers: this.authHeaders(false) });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Failed to fetch contacts');
+    }
+    return data.data;
+  },
+
+  async createContact(payload: {
+    name: string;
+    phone: string;
+    relationship?: string;
+    status?: string;
+    groupId?: string;
+  }) {
+    const res = await fetch(`${API_BASE}/contacts`, {
+      method: 'POST',
+      headers: this.authHeaders(),
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Failed to add contact');
+    }
+    return data.data;
+  },
+
+  async updateContact(
+    contactId: string,
+    payload: { name?: string; phone?: string; relationship?: string; status?: string; groupId?: string },
+  ) {
+    const res = await fetch(`${API_BASE}/contacts/${contactId}`, {
+      method: 'PATCH',
+      headers: this.authHeaders(),
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Failed to update contact');
+    }
+    return data.data;
+  },
+
+  async deleteContact(contactId: string) {
+    const res = await fetch(`${API_BASE}/contacts/${contactId}`, {
+      method: 'DELETE',
+      headers: this.authHeaders(false),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Failed to delete contact');
+    }
+    return data.data;
+  },
+
+  async getContactStatuses() {
+    const res = await fetch(`${API_BASE}/contacts/statuses`, { headers: this.authHeaders(false) });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Failed to load statuses');
+    }
+    return data.data;
+  },
+
+  async getContactPlan() {
+    const res = await fetch(`${API_BASE}/contacts/plan`, { headers: this.authHeaders(false) });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Failed to load plan limits');
+    }
+    return data.data;
+  },
+
+  async createContactGroup(payload: { name: string; color?: string; memberIds?: string[] }) {
+    const res = await fetch(`${API_BASE}/contacts/groups`, {
+      method: 'POST',
+      headers: this.authHeaders(),
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Failed to create group');
+    }
+    return data.data;
+  },
+
+  async updateContactGroup(
+    groupId: string,
+    payload: { name?: string; color?: string; memberIds?: string[] },
+  ) {
+    const res = await fetch(`${API_BASE}/contacts/groups/${groupId}`, {
+      method: 'PATCH',
+      headers: this.authHeaders(),
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Failed to update group');
+    }
+    return data.data;
+  },
+
+  async deleteContactGroup(groupId: string) {
+    const res = await fetch(`${API_BASE}/contacts/groups/${groupId}`, {
+      method: 'DELETE',
+      headers: this.authHeaders(false),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Failed to delete group');
+    }
+    return data.data;
+  },
+
+  async getContactSuggestions(groupId: string, query?: string) {
+    const url = query
+      ? `${API_BASE}/contacts/groups/${groupId}/suggestions?q=${encodeURIComponent(query)}`
+      : `${API_BASE}/contacts/groups/${groupId}/suggestions`;
+    const res = await fetch(url, { headers: this.authHeaders(false) });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Failed to load suggested contacts');
+    }
+    return data.data;
+  },
+
+  async addGroupMember(
+    groupId: string,
+    payload: { contactId?: string; name?: string; phone?: string; relationship?: string },
+  ) {
+    const res = await fetch(`${API_BASE}/contacts/groups/${groupId}/members`, {
+      method: 'POST',
+      headers: this.authHeaders(),
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Failed to add group member');
+    }
+    return data.data;
+  },
+
+  async removeGroupMember(groupId: string, memberId: string) {
+    const res = await fetch(`${API_BASE}/contacts/groups/${groupId}/members/${memberId}`, {
+      method: 'DELETE',
+      headers: this.authHeaders(false),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Failed to remove group member');
+    }
+    return data.data;
+  },
+
+  async getContactReferral() {
+    const res = await fetch(`${API_BASE}/contacts/referral`, {
+      headers: this.authHeaders(false),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Failed to load referral link');
+    }
+    return data.data;
+  },
 };

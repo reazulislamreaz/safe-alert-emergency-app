@@ -3,11 +3,15 @@ export interface User {
   fullName: string;
   email: string;
   phone: string;
+  phoneMasked?: string;
   role: "USER" | "OPS_ADMIN" | "SUPER_ADMIN";
   subscriptionTier: "FREE" | "PREMIUM";
   isVerified: boolean;
   pin: string;
   avatar?: string;
+  dob?: string | null;
+  location?: string | null;
+  profilePhotos?: string[];
   createdAt: string;
 }
 
@@ -78,21 +82,46 @@ export interface EmergencyType {
   isActive: boolean;
 }
 
+export interface ContactMember {
+  id: string;
+  groupId: string;
+  contactId?: string | null;
+  name: string;
+  firstName?: string;
+  chipLabel?: string;
+  phone: string;
+  relationship: string;
+  initials?: string;
+  isJoinedCall?: boolean;
+}
+
 export interface ContactGroup {
   id: string;
   userId: string;
   name: string;
+  tag?: string;
   color: string;
   isDefaultSOS: boolean;
   memberCount: number;
-  members?: {
-    id: string;
-    groupId: string;
-    name: string;
-    phone: string;
-    relationship: string;
-    isJoinedCall?: boolean;
-  }[];
+  memberLimit?: number | null;
+  memberLabel?: string;
+  memberCounter?: string;
+  canAddMember?: boolean;
+  inviteCta?: string;
+  members?: ContactMember[];
+}
+
+export interface AddressBookContact {
+  id: string;
+  userId: string;
+  name: string;
+  firstName?: string;
+  phone: string;
+  relationship: string;
+  status?: string;
+  initials?: string;
+  group?: { id: string; name: string; tag: string; color: string } | null;
+  groups?: { id: string; name: string; tag: string; color: string }[];
 }
 
 export interface SubscriptionPlan {

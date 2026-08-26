@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Headers, HttpCode, HttpStatus, Post, UseGuards } from "@nestjs/common";
 import {
   ApiBearerAuth,
   ApiCreatedResponse,
@@ -112,6 +112,17 @@ export class AuthController {
   @ApiUnauthorizedResponse({ description: "Invalid credentials" })
   async login(@Body() dto: LoginDto) {
     const data = await this.authService.login(dto);
+    return { success: true, data };
+  }
+
+  @Post("logout")
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth("access-token")
+  @ApiOperation({ summary: "Log out — invalidate the current session token" })
+  async logout(@Headers("authorization") authorization?: string) {
+    const token = authorization?.startsWith("Bearer ") ? authorization.slice("Bearer ".length) : "";
+    const data = await this.authService.logout(token);
     return { success: true, data };
   }
 

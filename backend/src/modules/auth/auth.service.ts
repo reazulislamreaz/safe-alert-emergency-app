@@ -10,6 +10,7 @@ import { AlertStatus } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { env, JwtPayload } from "../../config/env";
 import { digitsOnly } from "../../common/utils/phone";
+import { hashToken } from "../../common/utils/token-hash";
 import { toPublicUser } from "../../common/mappers/user.mapper";
 import { alertInclude, toAlertDto } from "../../common/mappers/alert.mapper";
 import { RegisterDto } from "./dto/register.dto";
@@ -41,6 +42,11 @@ export class AuthService {
     const pinHash = await hash(dto.pin || "0000", 10);
     const passwordHash = dto.password ? await hash(dto.password, 10) : null;
     const userId = `usr-${crypto.randomUUID().slice(0, 8)}`;
+    const contactId = `ct-${crypto.randomUUID().slice(0, 8)}`;
+    const groupId = `grp-${crypto.randomUUID().slice(0, 8)}`;
+    const memberId = `mem-${crypto.randomUUID().slice(0, 8)}`;
+    const emergencyPhone = dto.emergencyContactPhone || dto.phone;
+    const emergencyRelation = dto.emergencyContactRelation || "Emergency Contact";
 
     const user = await this.prisma.user.create({
       data: {
@@ -55,25 +61,35 @@ export class AuthService {
         race: dto.race,
         location: dto.location,
         emergencyContactName: dto.emergencyContactName,
-        emergencyContactPhone: dto.emergencyContactPhone || dto.phone,
-        emergencyContactRelation: dto.emergencyContactRelation || "Emergency Contact",
+        emergencyContactPhone: emergencyPhone,
+        emergencyContactRelation: emergencyRelation,
         profilePhotos: dto.profilePhotos ?? [],
         avatar:
           dto.profilePhotos?.[0] ||
           "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
+        contacts: {
+          create: {
+            id: contactId,
+            name: dto.emergencyContactName,
+            phone: emergencyPhone,
+            phoneDigits: digitsOnly(emergencyPhone),
+            relationship: emergencyRelation,
+          },
+        },
         contactGroups: {
           create: {
-            id: `grp-${crypto.randomUUID().slice(0, 8)}`,
+            id: groupId,
             name: "Family (Primary)",
             color: "#2563EB",
             isDefaultSOS: true,
             memberCount: 1,
             members: {
               create: {
-                id: `mem-${crypto.randomUUID().slice(0, 8)}`,
+                id: memberId,
+                contactId,
                 name: dto.emergencyContactName,
-                phone: dto.emergencyContactPhone || dto.phone,
-                relationship: dto.emergencyContactRelation || "Emergency Contact",
+                phone: emergencyPhone,
+                relationship: emergencyRelation,
               },
             },
           },
@@ -425,6 +441,24 @@ export class AuthService {
       where: { email },
       data: { attempts },
     });
+  }
+
+  async logout(token: string) {
+    const decoded = this.jwt.decode(token) as { exp?: number } | null;
+    const expiresAt = decoded?.exp
+      ? new Date(decoded.exp * 1000)
+      : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    await this.prisma.revokedToken.upsert({
+      where: { tokenHash: hashToken(token) },
+      create: { tokenHash: hashToken(token), expiresAt },
+      update: { expiresAt },
+    });
+    await this.prisma.revokedToken.deleteMany({
+      where: { expiresAt: { lt: new Date() } },
+    });
+
+    return { loggedOut: true };
   }
 
   async getMe(userId: string) {
