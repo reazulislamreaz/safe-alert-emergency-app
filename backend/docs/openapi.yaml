@@ -341,6 +341,61 @@ paths:
       summary: Get one legal page
       tags:
         - Legal
+  /api/alerts/home:
+    get:
+      operationId: AlertsController_home
+      responses:
+        '200':
+          description: Home SOS, status, recent activity, and Create Emergency Alert actions
+      security:
+        - access-token: []
+      summary: Home for Manual Emergency Alert
+      tags:
+        - Alerts
+  /api/alerts/modes:
+    get:
+      operationId: AlertsController_modes
+      responses:
+        '200':
+          description: Emergency Mode vs Silent Mode
+      security:
+        - access-token: []
+      summary: Alert Mode catalog
+      tags:
+        - Alerts
+  /api/alerts/cancel-reasons:
+    get:
+      operationId: AlertsController_cancelReasons
+      responses:
+        '200':
+          description: I'm Safe, False Alert, Test
+      security:
+        - access-token: []
+      summary: Cancel Alert reasons
+      tags:
+        - Alerts
+  /api/alerts/quick-responses:
+    get:
+      operationId: AlertsController_quickResponses
+      responses:
+        '200':
+          description: Need Help, Send Location, I'm Safe
+      security:
+        - access-token: []
+      summary: Live call quick responses
+      tags:
+        - Alerts
+  /api/alerts/current:
+    get:
+      operationId: AlertsController_current
+      responses:
+        '200':
+          description: Active alert or null
+      security:
+        - access-token: []
+      summary: Current broadcasting alert
+      tags:
+        - Alerts
   /api/alerts/active:
     get:
       operationId: AlertsController_getActive
@@ -388,7 +443,7 @@ paths:
           description: ''
       security:
         - access-token: []
-      summary: Trigger an SOS broadcast
+      summary: Create Emergency Alert / Quick / SOS / Test
       tags:
         - Alerts
   /api/alerts/{id}/telemetry:
@@ -438,7 +493,116 @@ paths:
           description: ''
       security:
         - access-token: []
-      summary: Resolve an alert with the user's PIN
+      summary: Resolve / cancel an alert (optional PIN)
+      tags:
+        - Alerts
+  /api/alerts/{id}/live:
+    get:
+      operationId: AlertsController_live
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            example: alt-active-991
+            type: string
+      responses:
+        '200':
+          description: View Live Session
+        '404':
+          description: Alert not found
+      security:
+        - access-token: []
+      summary: View Live Session
+      tags:
+        - Alerts
+  /api/alerts/{id}/call:
+    get:
+      operationId: AlertsController_call
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            example: alt-active-991
+            type: string
+      responses:
+        '200':
+          description: Zeegocloud room + token
+      security:
+        - access-token: []
+      summary: Start Group Video Call
+      tags:
+        - Alerts
+  /api/alerts/{id}/quick-response:
+    post:
+      operationId: AlertsController_quickResponse
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            example: alt-active-991
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuickResponseDto'
+      responses:
+        '200':
+          description: Quick reply posted
+      security:
+        - access-token: []
+      summary: Need Help / Send Location / I'm Safe
+      tags:
+        - Alerts
+  /api/alerts/{id}/participants:
+    post:
+      operationId: AlertsController_participants
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            example: alt-active-991
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateParticipantDto'
+      responses:
+        '200':
+          description: Participant updated
+      security:
+        - access-token: []
+      summary: Update a call participant
+      tags:
+        - Alerts
+  /api/alerts/{id}/cancel:
+    post:
+      operationId: AlertsController_cancel
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            example: alt-active-991
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolveAlertDto'
+      responses:
+        '200':
+          description: Alert Cancelled
+      security:
+        - access-token: []
+      summary: Cancel Alert
       tags:
         - Alerts
   /api/contacts:
@@ -885,11 +1049,17 @@ paths:
   /api/emergency-types:
     get:
       operationId: CatalogController_emergencyTypes
-      parameters: []
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+            example: fire
       responses:
         '200':
-          description: ''
-      summary: Public emergency type catalog
+          description: Emergency Type grid ordered for the Figma picker
+      summary: Emergency Type catalog
       tags:
         - Catalog
   /api/journals/types:
@@ -1031,7 +1201,7 @@ tags:
   - name: Auth
     description: Register, login, OTP, PIN, password reset
   - name: Alerts
-    description: SOS trigger, telemetry, resolve
+    description: Manual Emergency Alert — SOS, modes, types, live session, cancel
   - name: Contacts
     description: Address book, groups, plan limits, and referral invite
   - name: Profile
@@ -1257,6 +1427,16 @@ components:
         address:
           type: string
           example: 123 Main St, New York, NY 10001
+        source:
+          enum:
+            - MANUAL
+            - QUICK
+            - SOS
+          type: string
+          example: MANUAL
+        alertAllGroups:
+          type: boolean
+          example: false
     TelemetryDto:
       type: object
       properties:
@@ -1302,6 +1482,26 @@ components:
         userId:
           type: string
           example: usr-sarah-101
+    QuickResponseDto:
+      type: object
+      properties:
+        action:
+          type: string
+          example: need_help
+      required:
+        - action
+    UpdateParticipantDto:
+      type: object
+      properties:
+        participantId:
+          type: string
+        contactId:
+          type: string
+        status:
+          enum:
+            - CONNECTED
+            - CALLING
+          type: string
     UpdateProfileDto:
       type: object
       properties:

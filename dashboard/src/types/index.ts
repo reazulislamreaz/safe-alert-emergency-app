@@ -38,7 +38,12 @@ export interface ActiveAlert {
   emergencyType: string;
   severity: "LOW" | "URGENT" | "HIGH" | "CRITICAL";
   mode: "EMERGENCY" | "SILENT" | "TEST";
+  modeLabel?: string;
+  source?: "MANUAL" | "QUICK" | "SOS" | string;
   status: "TRIGGERED" | "BROADCASTING" | "RESOLVED" | "CANCELLED";
+  statusLabel?: string;
+  durationLabel?: string;
+  roomId?: string;
   location: {
     latitude: number;
     longitude: number;
@@ -80,6 +85,7 @@ export interface EmergencyType {
   icon: string;
   description: string;
   isActive: boolean;
+  sortOrder?: number;
 }
 
 export interface ContactMember {

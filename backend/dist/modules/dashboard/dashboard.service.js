@@ -106,10 +106,26 @@ let DashboardService = class DashboardService {
         });
         return (0, user_mapper_1.toPublicUser)(updated);
     }
-    async getEmergencyTypes() {
-        return this.prisma.emergencyType.findMany({ orderBy: { label: "asc" } });
+    async getEmergencyTypes(options) {
+        const query = options?.query?.trim();
+        return this.prisma.emergencyType.findMany({
+            where: {
+                ...(options?.activeOnly ? { isActive: true } : {}),
+                ...(query
+                    ? {
+                        OR: [
+                            { label: { contains: query, mode: "insensitive" } },
+                            { key: { contains: query, mode: "insensitive" } },
+                            { description: { contains: query, mode: "insensitive" } },
+                        ],
+                    }
+                    : {}),
+            },
+            orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
+        });
     }
     async createEmergencyType(dto) {
+        const last = await this.prisma.emergencyType.aggregate({ _max: { sortOrder: true } });
         return this.prisma.emergencyType.create({
             data: {
                 id: `et-${Date.now()}`,
@@ -119,6 +135,7 @@ let DashboardService = class DashboardService {
                 icon: dto.icon,
                 description: dto.description,
                 isActive: dto.isActive ?? true,
+                sortOrder: (last._max.sortOrder ?? 0) + 1,
             },
         });
     }

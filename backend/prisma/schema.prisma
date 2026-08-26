@@ -31,6 +31,12 @@ enum AlertMode {
   TEST
 }
 
+enum AlertSource {
+  MANUAL
+  QUICK
+  SOS
+}
+
 enum AlertStatus {
   TRIGGERED
   BROADCASTING
@@ -171,6 +177,7 @@ model EmergencyType {
   icon        String
   description String
   isActive    Boolean   @default(true)
+  sortOrder   Int       @default(0)
   alerts      Alert[]
 
   @@map("emergency_types")
@@ -187,10 +194,12 @@ model Alert {
   emergencyTypeLabel   String
   severity             Severity
   mode                 AlertMode            @default(EMERGENCY)
+  source               AlertSource          @default(MANUAL)
   status               AlertStatus          @default(BROADCASTING)
   latitude             Float
   longitude            Float
   address              String
+  roomId               String?
   telemetryHistory     TelemetryPoint[]
   notifiedGroups       AlertNotifiedGroup[]
   participants         Json                 @default("[]")

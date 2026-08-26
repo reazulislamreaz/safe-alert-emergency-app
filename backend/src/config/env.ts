@@ -8,6 +8,8 @@ export const env = {
   corsOrigin: process.env.CORS_ORIGIN || "*",
   environment: process.env.NODE_ENV || "development",
   databaseUrl: process.env.DATABASE_URL || "",
+  zegoAppId: process.env.ZEGO_APP_ID ? parseInt(process.env.ZEGO_APP_ID, 10) : 0,
+  zegoServerSecret: process.env.ZEGO_SERVER_SECRET || "",
 };
 
 export type JwtPayload = {

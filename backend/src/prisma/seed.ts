@@ -10,10 +10,12 @@ import {
   DeliveryStatus,
   JournalEntryType,
   JournalSource,
+  AlertSource,
 } from "@prisma/client";
 import { hashSync } from "bcryptjs";
 import { digitsOnly } from "../common/utils/phone";
 import { LEGAL_PAGES, PLAN_CATALOG } from "../modules/profile/profile.constants";
+import { FIGMA_EMERGENCY_TYPES } from "../modules/alerts/alert.constants";
 
 const logger = new Logger("DatabaseSeed");
 
@@ -176,6 +178,38 @@ async function ensureFigmaJournals(prisma: PrismaClient): Promise<void> {
   }
 }
 
+async function ensureFigmaEmergencyTypes(prisma: PrismaClient): Promise<void> {
+  for (const type of FIGMA_EMERGENCY_TYPES) {
+    await prisma.emergencyType.upsert({
+      where: { id: type.id },
+      update: {
+        key: type.key,
+        label: type.label,
+        severity: type.severity,
+        icon: type.icon,
+        description: type.description,
+        isActive: true,
+        sortOrder: type.sortOrder,
+      },
+      create: {
+        id: type.id,
+        key: type.key,
+        label: type.label,
+        severity: type.severity,
+        icon: type.icon,
+        description: type.description,
+        isActive: true,
+        sortOrder: type.sortOrder,
+      },
+    });
+  }
+
+  await prisma.emergencyType.updateMany({
+    where: { id: { in: ["et-breakdown", "et-suspicious"] } },
+    data: { isActive: false },
+  });
+}
+
 async function ensureFigmaContacts(prisma: PrismaClient): Promise<void> {
   const sarah = await prisma.user.findUnique({ where: { id: "usr-sarah-101" } });
   if (!sarah) {
@@ -304,6 +338,7 @@ async function ensureFigmaContacts(prisma: PrismaClient): Promise<void> {
 export async function seedDatabase(prisma: PrismaClient): Promise<void> {
   const existingUsers = await prisma.user.count();
   if (existingUsers > 0) {
+    await ensureFigmaEmergencyTypes(prisma);
     await ensureFigmaContacts(prisma);
     await ensureFigmaJournals(prisma);
     return;
@@ -436,64 +471,7 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
     ],
   });
 
-  await prisma.emergencyType.createMany({
-    data: [
-      {
-        id: "et-assault",
-        key: "ASSAULT",
-        label: "Assault & Physical Danger",
-        severity: Severity.CRITICAL,
-        icon: "ShieldAlert",
-        description: "Immediate violent threat or physical harassment",
-        isActive: true,
-      },
-      {
-        id: "et-medical",
-        key: "MEDICAL",
-        label: "Medical Emergency",
-        severity: Severity.CRITICAL,
-        icon: "HeartPulse",
-        description: "Severe injury, unconsciousness, cardiac or allergic reaction",
-        isActive: true,
-      },
-      {
-        id: "et-accident",
-        key: "ACCIDENT",
-        label: "Car Accident / Crash",
-        severity: Severity.HIGH,
-        icon: "CarCrash",
-        description: "Vehicular collision or roadside emergency",
-        isActive: true,
-      },
-      {
-        id: "et-breakdown",
-        key: "BREAKDOWN",
-        label: "Vehicle Breakdown",
-        severity: Severity.URGENT,
-        icon: "Wrench",
-        description: "Stranded vehicle on dark or remote road",
-        isActive: true,
-      },
-      {
-        id: "et-suspicious",
-        key: "SUSPICIOUS",
-        label: "Suspicious Person / Stalking",
-        severity: Severity.URGENT,
-        icon: "Eye",
-        description: "Being followed or observing dangerous prowler",
-        isActive: true,
-      },
-      {
-        id: "et-fire",
-        key: "FIRE",
-        label: "Fire & Natural Disaster",
-        severity: Severity.CRITICAL,
-        icon: "Flame",
-        description: "Building fire, gas leak, or environmental hazard",
-        isActive: true,
-      },
-    ],
-  });
+  await ensureFigmaEmergencyTypes(prisma);
 
   await ensureFigmaContacts(prisma);
   await ensureFigmaJournals(prisma);
@@ -505,13 +483,15 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
       userName: "Sarah Johnson",
       userPhone: "+1 (555) 234-5678",
       emergencyTypeId: "et-assault",
-      emergencyTypeLabel: "Assault & Physical Danger",
+      emergencyTypeLabel: "Assault",
       severity: Severity.CRITICAL,
       mode: AlertMode.EMERGENCY,
+      source: AlertSource.MANUAL,
       status: AlertStatus.BROADCASTING,
       latitude: 40.712776,
       longitude: -74.005974,
       address: "123 Main St, New York, NY 10001",
+      roomId: "safealert-alt-active-991",
       participants: [
         {
           id: "part-01",

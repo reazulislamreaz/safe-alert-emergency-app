@@ -726,6 +726,8 @@ export const api = {
     latitude?: number;
     longitude?: number;
     address?: string;
+    source?: "MANUAL" | "QUICK" | "SOS";
+    alertAllGroups?: boolean;
   }): Promise<ActiveAlert> {
     const res = await fetch(`${API_BASE}/alerts/trigger`, {
       method: 'POST',
@@ -756,7 +758,85 @@ export const api = {
     return data.data;
   },
 
-  // --- Emergency Types ---
+  async getAlertHome() {
+    const res = await fetch(`${API_BASE}/alerts/home`, { headers: this.authHeaders(false) });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to load alert home'));
+    }
+    return data.data;
+  },
+
+  async getAlertModes() {
+    const res = await fetch(`${API_BASE}/alerts/modes`, { headers: this.authHeaders(false) });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to load alert modes'));
+    }
+    return data.data;
+  },
+
+  async getCancelReasons() {
+    const res = await fetch(`${API_BASE}/alerts/cancel-reasons`, { headers: this.authHeaders(false) });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to load cancel reasons'));
+    }
+    return data.data;
+  },
+
+  async getCurrentAlert() {
+    const res = await fetch(`${API_BASE}/alerts/current`, { headers: this.authHeaders(false) });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to load current alert'));
+    }
+    return data.data;
+  },
+
+  async getAlertLive(alertId: string) {
+    const res = await fetch(`${API_BASE}/alerts/${alertId}/live`, { headers: this.authHeaders(false) });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to load live session'));
+    }
+    return data.data;
+  },
+
+  async getAlertCall(alertId: string) {
+    const res = await fetch(`${API_BASE}/alerts/${alertId}/call`, { headers: this.authHeaders(false) });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to start group call'));
+    }
+    return data.data;
+  },
+
+  async cancelAlert(alertId: string, payload: { reason?: string; notes?: string; pin?: string }) {
+    const res = await fetch(`${API_BASE}/alerts/${alertId}/cancel`, {
+      method: 'POST',
+      headers: this.authHeaders(),
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to cancel alert'));
+    }
+    return data.data;
+  },
+
+  async sendQuickResponse(alertId: string, action: string) {
+    const res = await fetch(`${API_BASE}/alerts/${alertId}/quick-response`, {
+      method: 'POST',
+      headers: this.authHeaders(),
+      body: JSON.stringify({ action }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to send quick response'));
+    }
+    return data.data;
+  },
   async getEmergencyTypes(): Promise<EmergencyType[]> {
     try {
       const res = await fetch(`${API_BASE}/dashboard/emergency-types`, {

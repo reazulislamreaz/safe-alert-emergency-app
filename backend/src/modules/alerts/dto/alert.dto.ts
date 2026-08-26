@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { Type } from "class-transformer";
-import { IsEnum, IsNumber, IsOptional, IsString, Min } from "class-validator";
+import { IsBoolean, IsEnum, IsNumber, IsOptional, IsString, Min } from "class-validator";
 import { AlertMode } from "@prisma/client";
 
 export class TriggerAlertDto {
@@ -18,6 +18,20 @@ export class TriggerAlertDto {
   @IsOptional()
   @IsEnum(AlertMode)
   mode?: AlertMode;
+
+  @ApiPropertyOptional({ enum: ["MANUAL", "QUICK", "SOS"], example: "MANUAL" })
+  @IsOptional()
+  @IsString()
+  source?: string;
+
+  @ApiPropertyOptional({
+    example: false,
+    description: "Quick Emergency — Alert All Groups",
+  })
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  alertAllGroups?: boolean;
 
   @ApiPropertyOptional({ example: 40.712776 })
   @IsOptional()
@@ -78,14 +92,14 @@ export class ResolveAlertDto {
   @ApiPropertyOptional({ enum: ["SAFE", "FALSE_ALARM", "TEST"], example: "SAFE" })
   @IsOptional()
   @IsString()
-  reason?: "SAFE" | "FALSE_ALARM" | "TEST";
+  reason?: string;
 
   @ApiPropertyOptional({ example: "Reached a safe location." })
   @IsOptional()
   @IsString()
   notes?: string;
 
-  @ApiPropertyOptional({ example: "1234", description: "User's 4-digit PIN" })
+  @ApiPropertyOptional({ example: "1234", description: "Optional 4-digit PIN" })
   @IsOptional()
   @IsString()
   pin?: string;
@@ -94,4 +108,27 @@ export class ResolveAlertDto {
   @IsOptional()
   @IsString()
   userId?: string;
+}
+
+export class QuickResponseDto {
+  @ApiProperty({ example: "need_help", description: "need_help | send_location | im_safe" })
+  @IsString()
+  action!: string;
+}
+
+export class UpdateParticipantDto {
+  @ApiPropertyOptional({ example: "part-ct-james-01" })
+  @IsOptional()
+  @IsString()
+  participantId?: string;
+
+  @ApiPropertyOptional({ example: "ct-james-01" })
+  @IsOptional()
+  @IsString()
+  contactId?: string;
+
+  @ApiPropertyOptional({ enum: ["CONNECTED", "CALLING"], example: "CONNECTED" })
+  @IsOptional()
+  @IsString()
+  status?: "CONNECTED" | "CALLING";
 }

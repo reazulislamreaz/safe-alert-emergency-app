@@ -33,7 +33,7 @@ export function setupSwagger(app: INestApplication): void {
     )
     .addTag("Health", "Process liveness")
     .addTag("Auth", "Register, login, OTP, PIN, password reset")
-    .addTag("Alerts", "SOS trigger, telemetry, resolve")
+    .addTag("Alerts", "Manual Emergency Alert: home, modes, types, live call, cancel")
     .addTag("Contacts", "Address book, groups, plan limits, and referral invite")
     .addTag("Profile", "Citizen profile, photos, and delete account")
     .addTag("Subscriptions", "Free vs Premium plans")
