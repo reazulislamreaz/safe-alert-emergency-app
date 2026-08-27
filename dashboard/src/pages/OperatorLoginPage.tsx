@@ -13,13 +13,15 @@ import { AuthErrorBanner, AuthSpinner } from '../components/auth/AuthFeedback';
 interface OperatorLoginPageProps {
   onLoginSuccess: (user: User, audience?: AuthAudience) => void;
   onForgotPassword: () => void;
+<<<<<<< HEAD
   onBack?: () => void;
+=======
+>>>>>>> 0f7c5155b0c4b261a31d42807139c9a4e9b2756b
 }
 
 export const OperatorLoginPage: React.FC<OperatorLoginPageProps> = ({
   onLoginSuccess,
   onForgotPassword,
-  onBack,
 }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -118,6 +120,7 @@ export const OperatorLoginPage: React.FC<OperatorLoginPageProps> = ({
         </button>
       </form>
 
+<<<<<<< HEAD
       {onBack && (
         <button
           type="button"
@@ -128,6 +131,8 @@ export const OperatorLoginPage: React.FC<OperatorLoginPageProps> = ({
         </button>
       )}
 
+=======
+>>>>>>> 0f7c5155b0c4b261a31d42807139c9a4e9b2756b
       <div className="mt-6 sm:mt-8 pt-5 sm:pt-6 border-t border-gray-100">
         <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-3 text-center">
           Demo Super Admin
