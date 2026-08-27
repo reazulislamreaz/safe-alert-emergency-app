@@ -1,3 +1,41 @@
+import { existsSync, readFileSync } from "fs";
+import { resolve } from "path";
+
+function loadEnvFile(filePath: string) {
+  if (!existsSync(filePath)) {
+    return;
+  }
+
+  const text = readFileSync(filePath, "utf8");
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) {
+      continue;
+    }
+    const eq = line.indexOf("=");
+    if (eq <= 0) {
+      continue;
+    }
+    const key = line.slice(0, eq).trim();
+    if (!key || process.env[key] !== undefined) {
+      continue;
+    }
+    let value = line.slice(eq + 1).trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    process.env[key] = value;
+  }
+}
+
+loadEnvFile(resolve(process.cwd(), ".env"));
+loadEnvFile(resolve(process.cwd(), "../.env"));
+
+const smtpPort = process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT, 10) : 587;
+
 export const env = {
   port: process.env.PORT ? parseInt(process.env.PORT, 10) : 5000,
   jwtSecret: process.env.JWT_SECRET || "safealert_super_secret_jwt_key_2026_production",
@@ -21,6 +59,14 @@ export const env = {
   dashboardAdminEmail: (process.env.DASHBOARD_ADMIN_EMAIL || "admin@safealert.app")
     .trim()
     .toLowerCase(),
+  smtp: {
+    host: process.env.SMTP_HOST || "",
+    port: Number.isFinite(smtpPort) ? smtpPort : 587,
+    user: process.env.SMTP_USER || "",
+    pass: (process.env.SMTP_PASS || "").replace(/\s+/g, ""),
+    from: process.env.SMTP_FROM || process.env.SMTP_USER || "",
+    secure: process.env.SMTP_SECURE === "true" || smtpPort === 465,
+  },
 };
 
 export type JwtAudience = "app" | "dashboard";

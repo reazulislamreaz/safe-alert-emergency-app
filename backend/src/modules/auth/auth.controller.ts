@@ -164,12 +164,14 @@ export class AuthController {
 
   @Post("password/forgot")
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Request a password-reset OTP" })
+  @ApiOperation({ summary: "Request a password-reset OTP sent by email" })
   async forgotPassword(@Body() dto: ForgotPasswordDto) {
     const data = await this.authService.requestPasswordReset(dto.email);
     return {
       success: true,
-      message: "If an account exists for this email, a verification code has been sent.",
+      message: data.delivered
+        ? "If an account exists for this email, a verification code has been sent."
+        : "Verification code generated. Email delivery is not configured.",
       data,
     };
   }

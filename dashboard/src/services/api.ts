@@ -351,7 +351,9 @@ export const api = {
     return data.data;
   },
 
-  async requestPasswordReset(email: string): Promise<{ email: string; code?: string; expiresInMinutes: number }> {
+  async requestPasswordReset(
+    email: string,
+  ): Promise<{ email: string; code?: string; delivered?: boolean; expiresInMinutes: number }> {
     const res = await fetch(`${API_BASE}/auth/password/forgot`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

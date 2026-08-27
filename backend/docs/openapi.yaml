@@ -231,8 +231,8 @@ paths:
               $ref: '#/components/schemas/ForgotPasswordDto'
       responses:
         '200':
-          description: ''
-      summary: Request a password-reset OTP
+          description: OTP emailed when SMTP is configured
+      summary: Request a password-reset OTP sent by email
       tags:
         - Auth
   /api/auth/password/verify-otp:

@@ -57,7 +57,7 @@ export const ForgotPasswordPage: React.FC<ForgotPasswordPageProps> = ({
 
     try {
       const data = await api.requestPasswordReset(email.trim());
-      setDemoCode(data.code ?? '123456');
+      setDemoCode(data.code ?? null);
       setOtpDigits(Array(OTP_LENGTH).fill(''));
       setStep('otp');
     } catch (err: unknown) {
@@ -218,6 +218,10 @@ export const ForgotPasswordPage: React.FC<ForgotPasswordPageProps> = ({
           </button>
           {errorBanner}
           <form onSubmit={handleVerifyOtp} className="space-y-5">
+            <p className="text-sm text-gray-500 text-center px-1">
+              Enter the 6-digit code we sent to{' '}
+              <span className="font-medium text-gray-700 break-all">{email}</span>.
+            </p>
             <div className="flex items-center justify-between gap-1.5 sm:gap-2">
               {otpDigits.map((digit, index) => (
                 <input

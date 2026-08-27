@@ -6,9 +6,11 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
+import { randomInt } from "crypto";
 import { compare, hash } from "bcryptjs";
 import { AlertStatus, Role } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
+import { MailService } from "../../mail/mail.service";
 import { env, JwtAudience, JwtPayload } from "../../config/env";
 import { digitsOnly } from "../../common/utils/phone";
 import { hashToken } from "../../common/utils/token-hash";
@@ -27,6 +29,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly dashboardAdmin: DashboardAdminService,
+    private readonly mail: MailService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -342,7 +345,10 @@ export class AuthService {
       throw new NotFoundException("No account found with this email address.");
     }
 
-    const code = "123456";
+    const delivered = this.mail.isConfigured();
+    const code = delivered
+      ? randomInt(100000, 1000000).toString()
+      : "123456";
     const expiresAt = new Date(Date.now() + env.otpExpiryMinutes * 60 * 1000);
 
     await this.prisma.emailOtp.upsert({
@@ -351,9 +357,14 @@ export class AuthService {
       update: { code, expiresAt, attempts: 0, verified: false },
     });
 
+    if (delivered) {
+      await this.mail.sendPasswordResetOtp(normalizedEmail, code, env.otpExpiryMinutes);
+    }
+
     return {
       email: normalizedEmail,
-      code,
+      ...(delivered ? {} : { code }),
+      delivered,
       expiresInMinutes: env.otpExpiryMinutes,
     };
   }
