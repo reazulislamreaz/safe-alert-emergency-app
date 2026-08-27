@@ -1,22 +1,31 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsOptional, IsString, Matches, MinLength } from "class-validator";
+import { IsEmail, IsOptional, IsString, Matches, MinLength } from "class-validator";
 
 export class LoginDto {
   @ApiProperty({
     example: "sarah.johnson@example.com",
-    description: "Email address or phone number",
+    description: "Citizen login email (preferred). Legacy emailOrPhone still accepted.",
   })
-  @IsString()
-  @MinLength(3, { message: "Email or phone number is required" })
-  emailOrPhone!: string;
+  @IsOptional()
+  @IsEmail({}, { message: "Valid email address is required" })
+  email?: string;
 
   @ApiPropertyOptional({
-    example: "3",
-    description: "Citizen PIN (1 to 4 digits). Send this or password, not both required.",
+    example: "sarah.johnson@example.com",
+    description: "Legacy field: email or phone. Prefer email.",
   })
   @IsOptional()
   @IsString()
-  @Matches(/^\d{1,4}$/, { message: "PIN must be 1 to 4 digits" })
+  @MinLength(3, { message: "Email or phone number is required" })
+  emailOrPhone?: string;
+
+  @ApiPropertyOptional({
+    example: "3",
+    description: "Citizen 1-digit PIN. Send this or password.",
+  })
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d$/, { message: "PIN must be exactly 1 digit" })
   pin?: string;
 
   @ApiPropertyOptional({

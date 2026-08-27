@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE "users" ALTER COLUMN "phone" DROP NOT NULL;
+ALTER TABLE "users" ALTER COLUMN "phoneDigits" SET DEFAULT '';
+ALTER TABLE "users" ALTER COLUMN "pinHash" DROP NOT NULL;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "faceIdCredentialId" TEXT;

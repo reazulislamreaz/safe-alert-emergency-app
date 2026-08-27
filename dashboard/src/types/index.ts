@@ -2,7 +2,7 @@ export interface User {
   id: string;
   fullName: string;
   email: string;
-  phone: string;
+  phone?: string | null;
   phoneMasked?: string;
   role: "USER" | "SUPER_ADMIN";
   subscriptionTier: "FREE" | "PREMIUM";
@@ -12,6 +12,7 @@ export interface User {
   dob?: string | null;
   location?: string | null;
   profilePhotos?: string[];
+  faceIdEnabled?: boolean;
   createdAt: string;
 }
 

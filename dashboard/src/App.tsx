@@ -1,8 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
+import { WelcomePage } from './pages/WelcomePage';
+import { LoginPage } from './pages/LoginPage';
 import { OperatorLoginPage } from './pages/OperatorLoginPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
+import { ForgotPinPage } from './pages/ForgotPinPage';
+import { CreateAccountPage } from './pages/CreateAccountPage';
+import { VerifyEmailPage } from './pages/VerifyEmailPage';
+import { SecureAccountPage } from './pages/SecureAccountPage';
+import { CitizenHomePage } from './pages/CitizenHomePage';
 import { DashboardPage } from './pages/DashboardPage';
 import { UserManagementPage } from './pages/UserManagementPage';
 import { EmergencyTypesPage } from './pages/EmergencyTypesPage';
@@ -15,15 +22,30 @@ import { api } from './services/api';
 import { socketService } from './services/socket';
 import { AuthAudience, isDashboardAdmin, User } from './types';
 
-type AuthView = 'operator' | 'forgot-password';
+type AuthView =
+  | 'welcome'
+  | 'login'
+  | 'operator'
+  | 'register'
+  | 'verify-email'
+  | 'secure-account'
+  | 'forgot-pin'
+  | 'forgot-password';
+
+type SignupSession = {
+  email: string;
+  token: string;
+  otpCode?: string;
+};
 
 export const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState<boolean>(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [sessionAudience, setSessionAudience] = useState<AuthAudience>('dashboard');
+  const [sessionAudience, setSessionAudience] = useState<AuthAudience>('app');
   const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
-  const [authView, setAuthView] = useState<AuthView>('operator');
+  const [authView, setAuthView] = useState<AuthView>('welcome');
+  const [signupSession, setSignupSession] = useState<SignupSession | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
   const [activeSosCount, setActiveSosCount] = useState(0);
 
@@ -37,15 +59,15 @@ export const App: React.FC = () => {
 
       try {
         const response = await api.getMe();
-        if (!isDashboardAdmin(response.user, response.audience)) {
+        if (response.user.role === 'SUPER_ADMIN' && response.audience !== 'dashboard') {
           api.logout();
           setCurrentUser(null);
-          setSessionAudience('dashboard');
+          setSessionAudience('app');
           setAuthView('operator');
           return;
         }
         setCurrentUser(response.user);
-        setSessionAudience('dashboard');
+        setSessionAudience(response.audience === 'dashboard' ? 'dashboard' : 'app');
       } catch (err) {
         console.warn('Session expired or invalid, please sign in.');
         api.logout();
@@ -110,26 +132,28 @@ export const App: React.FC = () => {
     return () => socketService.disconnect();
   }, [canAccessDashboard]);
 
-  const handleLoginSuccess = (user: User, audience: AuthAudience = 'dashboard') => {
-    if (!isDashboardAdmin(user, audience)) {
+  const handleLoginSuccess = (user: User, audience: AuthAudience = 'app') => {
+    if (user.role === 'SUPER_ADMIN' && audience !== 'dashboard') {
       api.logout();
       setCurrentUser(null);
-      setSessionAudience('dashboard');
+      setSessionAudience('app');
       setAuthView('operator');
       return;
     }
     setCurrentUser(user);
-    setSessionAudience('dashboard');
+    setSessionAudience(audience);
     setCurrentTab('dashboard');
-    setAuthView('operator');
+    setAuthView(isDashboardAdmin(user, audience) ? 'operator' : 'login');
+    setSignupSession(null);
   };
 
-  const handleLogout = () => {
+  const handleLogout = (nextView: AuthView = 'welcome') => {
     socketService.disconnect();
     api.logout();
     setCurrentUser(null);
-    setSessionAudience('dashboard');
-    setAuthView('operator');
+    setSessionAudience('app');
+    setSignupSession(null);
+    setAuthView(nextView);
     setIsLogoutModalOpen(false);
   };
 
@@ -144,15 +168,94 @@ export const App: React.FC = () => {
     );
   }
 
-  if (!currentUser || !canAccessDashboard) {
+  if (currentUser && !canAccessDashboard) {
+    return (
+      <CitizenHomePage
+        user={currentUser}
+        onLogout={() => handleLogout('welcome')}
+        onOperatorLogin={() => handleLogout('operator')}
+      />
+    );
+  }
+
+  if (!currentUser) {
+    if (authView === 'login') {
+      return (
+        <LoginPage
+          onLoginSuccess={handleLoginSuccess}
+          onForgotPin={() => setAuthView('forgot-pin')}
+          onCreateAccount={() => setAuthView('register')}
+          onClose={() => setAuthView('welcome')}
+          onOperatorLogin={() => setAuthView('operator')}
+        />
+      );
+    }
+
+    if (authView === 'operator') {
+      return (
+        <OperatorLoginPage
+          onLoginSuccess={handleLoginSuccess}
+          onForgotPassword={() => setAuthView('forgot-password')}
+          onBack={() => setAuthView('welcome')}
+        />
+      );
+    }
+
     if (authView === 'forgot-password') {
       return <ForgotPasswordPage onBackToLogin={() => setAuthView('operator')} />;
     }
 
+    if (authView === 'forgot-pin') {
+      return <ForgotPinPage onBackToLogin={() => setAuthView('login')} />;
+    }
+
+    if (authView === 'register') {
+      return (
+        <CreateAccountPage
+          onClose={() => setAuthView('welcome')}
+          onRegistered={(session) => {
+            setSignupSession(session);
+            setAuthView('verify-email');
+          }}
+        />
+      );
+    }
+
+    if (authView === 'verify-email' && signupSession) {
+      return (
+        <VerifyEmailPage
+          email={signupSession.email}
+          demoCode={signupSession.otpCode}
+          onBack={() => setAuthView('register')}
+          onVerified={(token) => {
+            setSignupSession({
+              ...signupSession,
+              token: token || signupSession.token,
+            });
+            setAuthView('secure-account');
+          }}
+        />
+      );
+    }
+
+    if (authView === 'secure-account' && signupSession) {
+      return (
+        <SecureAccountPage
+          setupToken={signupSession.token}
+          email={signupSession.email}
+          onBack={() => setAuthView('verify-email')}
+          onComplete={(user) => {
+            handleLoginSuccess(user, 'app');
+          }}
+        />
+      );
+    }
+
     return (
-      <OperatorLoginPage
-        onLoginSuccess={handleLoginSuccess}
-        onForgotPassword={() => setAuthView('forgot-password')}
+      <WelcomePage
+        onCreateAccount={() => setAuthView('register')}
+        onLogin={() => setAuthView('login')}
+        onOperatorLogin={() => setAuthView('operator')}
       />
     );
   }
@@ -224,7 +327,7 @@ export const App: React.FC = () => {
               </button>
               <button
                 type="button"
-                onClick={handleLogout}
+                onClick={() => handleLogout('welcome')}
                 className="flex-1 py-2.5 px-4 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl transition-colors shadow-md"
               >
                 Log Out

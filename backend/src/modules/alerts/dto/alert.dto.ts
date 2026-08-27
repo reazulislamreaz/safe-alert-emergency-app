@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { Type } from "class-transformer";
-import { IsBoolean, IsEnum, IsIn, IsNumber, IsOptional, IsString, MaxLength, Min, MinLength } from "class-validator";
+import { IsBoolean, IsEnum, IsIn, IsNumber, IsOptional, IsString, Matches, MaxLength, Min, MinLength } from "class-validator";
 import { AlertMode } from "@prisma/client";
 
 export class TriggerAlertDto {
@@ -99,9 +99,10 @@ export class ResolveAlertDto {
   @IsString()
   notes?: string;
 
-  @ApiPropertyOptional({ example: "1234", description: "Optional 4-digit PIN" })
+  @ApiPropertyOptional({ example: "3", description: "Optional 1-digit PIN" })
   @IsOptional()
   @IsString()
+  @Matches(/^\d$/, { message: "PIN must be exactly 1 digit" })
   pin?: string;
 
   @ApiPropertyOptional({ example: "usr-sarah-101" })

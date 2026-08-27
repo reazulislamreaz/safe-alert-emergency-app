@@ -430,7 +430,7 @@ export class AlertService {
         id: alertId,
         userId: user.id,
         userName: user.fullName,
-        userPhone: user.phone,
+        userPhone: user.phone || "",
         emergencyTypeId: emergencyType.id,
         emergencyTypeLabel: emergencyType.label,
         severity: emergencyType.severity,
@@ -747,7 +747,7 @@ export class AlertService {
 
     const owner = await this.requireUser(alert.userId);
     if (pin) {
-      if (!(await compare(pin, owner.pinHash))) {
+      if (!owner.pinHash || !(await compare(pin, owner.pinHash))) {
         throw new BadRequestException("Incorrect Security PIN");
       }
     }

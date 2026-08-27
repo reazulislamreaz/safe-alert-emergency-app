@@ -518,7 +518,7 @@ export class ContactService {
               id: `mem-${crypto.randomUUID().slice(0, 8)}`,
               groupId: invite.groupId,
               name: user.fullName,
-              phone: user.phone,
+              phone: user.phone || "N/A",
               phoneDigits: user.phoneDigits,
               relationship: "Member",
             },

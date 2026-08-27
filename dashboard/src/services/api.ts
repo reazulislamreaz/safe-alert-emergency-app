@@ -49,7 +49,7 @@ let appConfigCache: AppConfig | null = null;
 export type RegisterPayload = {
   fullName: string;
   email: string;
-  phone: string;
+  phone?: string;
   dob?: string;
   race?: string;
   location?: string;
@@ -57,7 +57,6 @@ export type RegisterPayload = {
   emergencyContactPhone?: string;
   emergencyContactRelation?: string;
   profilePhotos?: string[];
-  pin?: string;
   password?: string;
 };
 
@@ -125,6 +124,7 @@ export const api = {
 
   FACEID_KEY: 'safealert_faceid_enabled',
   FACEID_USER_KEY: 'safealert_faceid_user',
+  FACEID_CREDENTIAL_KEY: 'safealert_faceid_credential',
 
   isFaceIdEnabled(): boolean {
     try {
@@ -134,14 +134,16 @@ export const api = {
     }
   },
 
-  setFaceIdEnabled(enabled: boolean, phone?: string) {
+  setFaceIdEnabled(enabled: boolean, email?: string, credentialId?: string) {
     try {
       if (enabled) {
         localStorage.setItem('safealert_faceid_enabled', 'true');
-        if (phone) localStorage.setItem('safealert_faceid_user', phone);
+        if (email) localStorage.setItem('safealert_faceid_user', email);
+        if (credentialId) localStorage.setItem('safealert_faceid_credential', credentialId);
       } else {
         localStorage.removeItem('safealert_faceid_enabled');
         localStorage.removeItem('safealert_faceid_user');
+        localStorage.removeItem('safealert_faceid_credential');
       }
     } catch (e) {
       console.warn("Could not save Face ID state", e);
@@ -156,20 +158,23 @@ export const api = {
     }
   },
 
+  getFaceIdCredentialId(): string | null {
+    try {
+      return localStorage.getItem('safealert_faceid_credential');
+    } catch {
+      return null;
+    }
+  },
+
   async login(
-    emailOrPhone: string,
-    passwordOrPin: string,
+    email: string,
+    pin: string,
     remember: boolean = true,
   ): Promise<{ user: User; token: string }> {
-    const isPin = /^\d{1,4}$/.test(passwordOrPin);
-    const body = isPin
-      ? { emailOrPhone, pin: passwordOrPin }
-      : { emailOrPhone, password: passwordOrPin };
-
     const res = await fetch(`${API_BASE}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ email, pin }),
     });
 
     const data = await res.json();
@@ -201,37 +206,28 @@ export const api = {
     return data.data;
   },
 
-  async loginWithFaceId(phone?: string): Promise<{ user: User; token: string }> {
-    // If phone is provided or remembered from Face ID registration
-    const targetPhone = phone || this.getFaceIdUser() || "+1 (555) 234-5678";
-    
-    // In our verified system, registered Face ID authenticates the user directly
-    const res = await fetch(`${API_BASE}/auth/login`, {
+  async loginWithFaceId(
+    email?: string,
+    credentialId?: string,
+  ): Promise<{ user: User; token: string }> {
+    const targetEmail = (email || this.getFaceIdUser() || '').trim().toLowerCase();
+    const targetCredential = (credentialId || this.getFaceIdCredentialId() || '').trim();
+
+    if (!targetEmail) {
+      throw new Error('Email is required for Face ID login.');
+    }
+    if (!targetCredential) {
+      throw new Error('Face ID is not registered on this device. Please log in with your PIN.');
+    }
+
+    const res = await fetch(`${API_BASE}/auth/login/biometric`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ emailOrPhone: targetPhone, pin: "1234" }),
+      body: JSON.stringify({ email: targetEmail, credentialId: targetCredential }),
     });
 
     const data = await res.json();
     if (!res.ok || !data.success) {
-      // Try with single digit PINs if default fails
-      const fallbackPins = ["3", "1", "2", "4", "0000"];
-      for (const p of fallbackPins) {
-        try {
-          const fbRes = await fetch(`${API_BASE}/auth/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ emailOrPhone: targetPhone, pin: p }),
-          });
-          const fbData = await fbRes.json();
-          if (fbRes.ok && fbData.success) {
-            this.setAuthToken(fbData.data.token, true);
-            return fbData.data;
-          }
-        } catch {
-          // continue
-        }
-      }
       throw new Error(readApiError(data, 'Face ID authentication failed. Please enter PIN.'));
     }
 
@@ -256,7 +252,9 @@ export const api = {
     return data.data;
   },
 
-  async register(payload: RegisterPayload): Promise<{ user: User; token: string; otpCode: string }> {
+  async register(
+    payload: RegisterPayload,
+  ): Promise<{ user: User; token: string; otpCode?: string; delivered?: boolean }> {
     const res = await fetch(`${API_BASE}/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -266,14 +264,15 @@ export const api = {
     if (!res.ok || !data.success) {
       throw new Error(readApiError(data, 'Registration failed'));
     }
+    this.setAuthToken(data.data.token, true);
     return data.data;
   },
 
-  async sendOtp(phone: string): Promise<{ phone: string; code: string }> {
-    const res = await fetch(`${API_BASE}/auth/otp/send`, {
+  async sendEmailOtp(email: string): Promise<{ email: string; code?: string; delivered?: boolean }> {
+    const res = await fetch(`${API_BASE}/auth/otp/email/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone }),
+      body: JSON.stringify({ email }),
     });
     const data = await res.json();
     if (!res.ok || !data.success) {
@@ -282,20 +281,29 @@ export const api = {
     return data.data;
   },
 
-  async verifyOtp(phone: string, code: string): Promise<{ verified: boolean; token?: string; user?: User }> {
-    const res = await fetch(`${API_BASE}/auth/otp/verify`, {
+  async verifyEmailOtp(
+    email: string,
+    code: string,
+  ): Promise<{ verified: boolean; token?: string; user?: User }> {
+    const res = await fetch(`${API_BASE}/auth/otp/email/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone, code }),
+      body: JSON.stringify({ email, code }),
     });
     const data = await res.json();
     if (!res.ok || !data.success) {
       throw new Error(readApiError(data, 'Verification failed'));
     }
+    if (data.data.token) {
+      this.setAuthToken(data.data.token, true);
+    }
     return data.data;
   },
 
-  async setupPin(pin: string, token?: string): Promise<{ success: boolean; message: string }> {
+  async setupPin(
+    pin: string,
+    token?: string,
+  ): Promise<{ success: boolean; message: string; user?: User }> {
     const authToken = token || this.getAuthToken();
     const res = await fetch(`${API_BASE}/auth/pin/setup`, {
       method: 'POST',
@@ -312,11 +320,13 @@ export const api = {
     return data.data;
   },
 
-  async requestPinReset(phone: string): Promise<{ phone: string; code?: string; expiresInMinutes: number }> {
+  async requestPinReset(
+    email: string,
+  ): Promise<{ email: string; code?: string; delivered?: boolean; expiresInMinutes: number }> {
     const res = await fetch(`${API_BASE}/auth/pin/forgot`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone }),
+      body: JSON.stringify({ email }),
     });
     const data = await res.json();
     if (!res.ok || !data.success) {
@@ -325,11 +335,11 @@ export const api = {
     return data.data;
   },
 
-  async verifyPinResetOtp(phone: string, code: string): Promise<{ verified: boolean }> {
+  async verifyPinResetOtp(email: string, code: string): Promise<{ verified: boolean }> {
     const res = await fetch(`${API_BASE}/auth/pin/verify-otp`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone, code }),
+      body: JSON.stringify({ email, code }),
     });
     const data = await res.json();
     if (!res.ok || !data.success) {
@@ -338,11 +348,11 @@ export const api = {
     return data.data;
   },
 
-  async resetPin(phone: string, code: string, newPin: string): Promise<{ message: string }> {
+  async resetPin(email: string, code: string, newPin: string): Promise<{ message: string }> {
     const res = await fetch(`${API_BASE}/auth/pin/reset`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone, code, newPin }),
+      body: JSON.stringify({ email, code, newPin }),
     });
     const data = await res.json();
     if (!res.ok || !data.success) {
@@ -1056,15 +1066,31 @@ export const api = {
     return data.data;
   },
 
-  async setBiometric(enabled: boolean) {
+  async setBiometric(
+    enabled: boolean,
+    credentialId?: string,
+    token?: string,
+  ): Promise<{
+    faceIdEnabled: boolean;
+    message: string;
+    user?: User;
+    token?: string;
+  }> {
+    const authToken = token || this.getAuthToken();
     const res = await fetch(`${API_BASE}/auth/biometric`, {
       method: 'POST',
-      headers: this.authHeaders(),
-      body: JSON.stringify({ enabled }),
+      headers: {
+        'Content-Type': 'application/json',
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      },
+      body: JSON.stringify({ enabled, credentialId }),
     });
     const data = await res.json();
     if (!res.ok || !data.success) {
       throw new Error(readApiError(data, 'Failed to save Face ID preference'));
+    }
+    if (data.data.token) {
+      this.setAuthToken(data.data.token, true);
     }
     return data.data;
   },

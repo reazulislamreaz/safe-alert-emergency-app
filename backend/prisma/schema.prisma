@@ -85,13 +85,13 @@ model User {
   id                        String            @id @default(uuid())
   fullName                  String
   email                     String            @unique
-  phone                     String            @unique
-  phoneDigits               String
+  phone                     String?           @unique
+  phoneDigits               String            @default("")
   role                      Role              @default(USER)
   subscriptionTier          SubscriptionTier  @default(FREE)
   isVerified                Boolean           @default(false)
   isPhoneVerified           Boolean           @default(false)
-  pinHash                   String
+  pinHash                   String?
   passwordHash              String?
   avatar                    String?
   profilePhotos             String[]          @default([])
@@ -107,6 +107,7 @@ model User {
   subscriptionCancelReason  String?
   trialEndsAt               DateTime?
   faceIdEnabled             Boolean           @default(false)
+  faceIdCredentialId        String?
   createdAt                 DateTime          @default(now())
   contactGroups             ContactGroup[]
   contacts                  Contact[]

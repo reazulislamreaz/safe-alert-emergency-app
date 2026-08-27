@@ -133,8 +133,7 @@ export class ProfileService {
 
   async deleteAccount(userId: string, pin: string, accessToken?: string) {
     const user = await this.requireUser(userId);
-    const valid = await compare(pin, user.pinHash);
-    if (!valid) {
+    if (!user.pinHash || !(await compare(pin, user.pinHash))) {
       throw new UnauthorizedException("Incorrect PIN.");
     }
 
@@ -305,7 +304,7 @@ export class ProfileService {
     const photos = user.profilePhotos ?? [];
     return {
       ...toPublicUser(user),
-      phoneMasked: maskPhone(user.phone),
+      phoneMasked: maskPhone(user.phone || ""),
       address: user.location,
       photoCount: photos.length,
       photoRequired: PROFILE_PHOTO_LIMIT,

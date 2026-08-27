@@ -57,7 +57,7 @@ export class JwtAuthGuard implements CanActivate {
       request.user = {
         sub: record.id,
         email: record.email,
-        phone: record.phone,
+        phone: record.phone || "",
         role: record.role,
         tier: record.subscriptionTier,
         aud: aud ?? (payload.aud as JwtAudience | undefined),

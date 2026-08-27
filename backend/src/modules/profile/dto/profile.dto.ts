@@ -79,9 +79,9 @@ export class UpdatePhotosDto {
 }
 
 export class DeleteAccountDto {
-  @ApiProperty({ example: "1234", description: "Confirm with the account PIN" })
+  @ApiProperty({ example: "3", description: "Confirm with the account 1-digit PIN" })
   @IsString()
-  @Matches(/^\d{1,4}$/, { message: "PIN must be 1 to 4 digits" })
+  @Matches(/^\d$/, { message: "PIN must be exactly 1 digit" })
   pin!: string;
 }
 

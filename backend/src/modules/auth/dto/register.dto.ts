@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsArray, IsEmail, IsOptional, IsString, Matches, MaxLength, MinLength, ArrayMaxSize } from "class-validator";
+import { IsArray, IsEmail, IsOptional, IsString, Matches, MinLength, ArrayMaxSize } from "class-validator";
 
 export class RegisterDto {
   @ApiProperty({ example: "Jordan Lee" })
@@ -11,10 +11,11 @@ export class RegisterDto {
   @IsEmail({}, { message: "Invalid email address" })
   email!: string;
 
-  @ApiProperty({ example: "+1 (555) 321-0987" })
+  @ApiPropertyOptional({ example: "+1 (555) 321-0987" })
+  @IsOptional()
   @IsString()
   @MinLength(7, { message: "Invalid phone number format" })
-  phone!: string;
+  phone?: string;
 
   @ApiPropertyOptional({ example: "1998-05-14" })
   @IsOptional()
@@ -55,12 +56,6 @@ export class RegisterDto {
   @ArrayMaxSize(3, { message: "Profile Photos * — 0/3 required (max 3)" })
   @IsString({ each: true })
   profilePhotos?: string[];
-
-  @ApiPropertyOptional({ example: "1234", description: "4-digit de-escalation PIN" })
-  @IsOptional()
-  @IsString()
-  @Matches(/^\d{4}$/, { message: "PIN must be a 4-digit number" })
-  pin?: string;
 
   @ApiPropertyOptional({ example: "password123" })
   @IsOptional()

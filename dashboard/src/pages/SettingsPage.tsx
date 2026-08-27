@@ -17,7 +17,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser, onProfi
   const [activeSubTab, setActiveSubTab] = useState<'profile' | 'about' | 'terms' | 'privacy'>('profile');
 
   const [profileName, setProfileName] = useState(currentUser.fullName);
-  const [profilePhone, setProfilePhone] = useState(currentUser.phone);
+  const [profilePhone, setProfilePhone] = useState(currentUser.phone || '');
   const [profileRole, setProfileRole] = useState(roleLabel[currentUser.role]);
   const [profileEmail, setProfileEmail] = useState(currentUser.email);
 

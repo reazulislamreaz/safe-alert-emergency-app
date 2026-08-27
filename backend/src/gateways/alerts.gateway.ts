@@ -69,7 +69,7 @@ export class AlertsGateway
           socket.data.user = {
             sub: record.id,
             email: record.email,
-            phone: record.phone,
+            phone: record.phone || "",
             role: record.role,
             tier: record.subscriptionTier,
             aud,

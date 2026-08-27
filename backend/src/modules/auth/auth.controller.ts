@@ -12,8 +12,16 @@ import { AuthService } from "./auth.service";
 import { RegisterDto } from "./dto/register.dto";
 import { LoginDto } from "./dto/login.dto";
 import { DashboardLoginDto } from "./dto/dashboard-login.dto";
-import { SendOtpDto, VerifyOtpDto } from "./dto/otp.dto";
-import { ForgotPinDto, ResetPinDto, SetupPinDto, VerifyPinDto, VerifyPinResetDto, BiometricDto } from "./dto/pin.dto";
+import { SendEmailOtpDto, SendOtpDto, VerifyEmailOtpDto, VerifyOtpDto } from "./dto/otp.dto";
+import {
+  ForgotPinDto,
+  ResetPinDto,
+  SetupPinDto,
+  VerifyPinDto,
+  VerifyPinResetDto,
+  BiometricDto,
+  BiometricLoginDto,
+} from "./dto/pin.dto";
 import { ForgotPasswordDto, ResetPasswordDto, VerifyResetOtpDto } from "./dto/password-reset.dto";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
@@ -40,20 +48,45 @@ export class AuthController {
 
   @Post("register")
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: "Register a citizen account" })
-  @ApiCreatedResponse({ description: "Account created; OTP dispatched" })
+  @ApiOperation({ summary: "Register a citizen account (email required, phone optional)" })
+  @ApiCreatedResponse({ description: "Account created; email OTP dispatched" })
   async register(@Body() dto: RegisterDto) {
     const data = await this.authService.register(dto);
     return {
       success: true,
-      message: "Account created successfully. Verification OTP dispatched.",
+      message: data.delivered
+        ? "Account created successfully. Verification OTP sent to your email."
+        : "Account created successfully. Verification OTP generated (email delivery not configured).",
       data,
     };
   }
 
+  @Post("otp/email/send")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Send a 6-digit email verification OTP (citizen registration)" })
+  @ApiOkResponse({ description: "OTP generated and emailed when SMTP is configured" })
+  async sendEmailOtp(@Body() dto: SendEmailOtpDto) {
+    const data = await this.authService.sendEmailVerificationOtp(dto.email);
+    return {
+      success: true,
+      message: data.delivered
+        ? `Verification code sent to ${dto.email}`
+        : "Verification code generated. Email delivery is not configured.",
+      data,
+    };
+  }
+
+  @Post("otp/email/verify")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Verify email OTP for citizen registration" })
+  async verifyEmailOtp(@Body() dto: VerifyEmailOtpDto) {
+    const data = await this.authService.verifyEmailOtp(dto.email, dto.code);
+    return { success: true, data };
+  }
+
   @Post("otp/send")
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Send a 6-digit phone verification OTP" })
+  @ApiOperation({ summary: "Legacy: send phone OTP (not used by citizen registration)" })
   @ApiOkResponse({ description: "OTP generated (returned in data for demo)" })
   async sendOtp(@Body() dto: SendOtpDto) {
     const data = await this.authService.sendPhoneOtp(dto.phone);
@@ -66,7 +99,7 @@ export class AuthController {
 
   @Post("otp/verify")
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Verify phone OTP" })
+  @ApiOperation({ summary: "Legacy: verify phone OTP (not used by citizen registration)" })
   async verifyOtp(@Body() dto: VerifyOtpDto) {
     const data = await this.authService.verifyPhoneOtp(dto.phone, dto.code);
     return { success: true, data };
@@ -76,7 +109,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth("access-token")
-  @ApiOperation({ summary: "Set or update a 4-digit security PIN" })
+  @ApiOperation({ summary: "Set a mandatory 1-digit security PIN" })
   async setupPin(@Body() dto: SetupPinDto, @CurrentUser() user: JwtPayload) {
     const data = await this.authService.setupPin(user.sub, dto.pin);
     return { success: true, data };
@@ -86,37 +119,39 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth("access-token")
-  @ApiOperation({ summary: "Face ID registered / skip for now" })
+  @ApiOperation({ summary: "Register or disable Face ID for the current citizen" })
   async biometric(@Body() dto: BiometricDto, @CurrentUser() user: JwtPayload) {
-    const data = await this.authService.setFaceId(user.sub, dto.enabled);
+    const data = await this.authService.setFaceId(user.sub, dto.enabled, dto.credentialId);
     return { success: true, data };
   }
 
   @Post("pin/forgot")
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Request a PIN-reset OTP by phone" })
+  @ApiOperation({ summary: "Request a PIN-reset OTP by email (citizen)" })
   async forgotPin(@Body() dto: ForgotPinDto) {
-    const data = await this.authService.requestPinReset(dto.phone);
+    const data = await this.authService.requestPinReset(dto.email);
     return {
       success: true,
-      message: "If an account exists for this phone, a verification code has been sent.",
+      message: data.delivered
+        ? "If an account exists for this email, a verification code has been sent."
+        : "Verification code generated. Email delivery is not configured.",
       data,
     };
   }
 
   @Post("pin/verify-otp")
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Verify PIN-reset OTP" })
+  @ApiOperation({ summary: "Verify PIN-reset OTP (email)" })
   async verifyPinResetOtp(@Body() dto: VerifyPinResetDto) {
-    const data = await this.authService.verifyPinResetOtp(dto.phone, dto.code);
+    const data = await this.authService.verifyPinResetOtp(dto.email, dto.code);
     return { success: true, data };
   }
 
   @Post("pin/reset")
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Set a new 4-digit PIN with a verified OTP" })
+  @ApiOperation({ summary: "Set a new 1-digit PIN with a verified email OTP" })
   async resetPin(@Body() dto: ResetPinDto) {
-    const data = await this.authService.resetPin(dto.phone, dto.code, dto.newPin);
+    const data = await this.authService.resetPin(dto.email, dto.code, dto.newPin);
     return { success: true, data };
   }
 
@@ -133,11 +168,20 @@ export class AuthController {
 
   @Post("login")
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Citizen login with email/phone + PIN or password" })
+  @ApiOperation({ summary: "Citizen login with email + 1-digit PIN (or password)" })
   @ApiUnauthorizedResponse({ description: "Invalid credentials" })
   @ApiForbiddenResponse({ description: "Super Admin must use dashboard login" })
   async login(@Body() dto: LoginDto) {
     const data = await this.authService.login(dto);
+    return { success: true, data };
+  }
+
+  @Post("login/biometric")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Citizen login with email + Face ID credential" })
+  @ApiUnauthorizedResponse({ description: "Invalid Face ID credentials" })
+  async loginBiometric(@Body() dto: BiometricLoginDto) {
+    const data = await this.authService.loginWithBiometric(dto.email, dto.credentialId);
     return { success: true, data };
   }
 
