@@ -13,13 +13,11 @@ import { AuthErrorBanner, AuthSpinner } from '../components/auth/AuthFeedback';
 interface OperatorLoginPageProps {
   onLoginSuccess: (user: User, audience?: AuthAudience) => void;
   onForgotPassword: () => void;
-  onBack: () => void;
 }
 
 export const OperatorLoginPage: React.FC<OperatorLoginPageProps> = ({
   onLoginSuccess,
   onForgotPassword,
-  onBack,
 }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -117,14 +115,6 @@ export const OperatorLoginPage: React.FC<OperatorLoginPageProps> = ({
           {isLoading ? <AuthSpinner /> : 'Login'}
         </button>
       </form>
-
-      <button
-        type="button"
-        onClick={onBack}
-        className="mt-4 w-full text-center text-xs text-[#3A67D5] touch-manipulation"
-      >
-        Back to app login
-      </button>
 
       <div className="mt-6 sm:mt-8 pt-5 sm:pt-6 border-t border-gray-100">
         <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-3 text-center">
