@@ -99,10 +99,10 @@ export class ResolveAlertDto {
   @IsString()
   notes?: string;
 
-  @ApiPropertyOptional({ example: "3", description: "Optional 1-digit PIN" })
+  @ApiPropertyOptional({ example: "4821", description: "Optional 4-digit PIN" })
   @IsOptional()
   @IsString()
-  @Matches(/^\d$/, { message: "PIN must be exactly 1 digit" })
+  @Matches(/^\d{4}$/, { message: "PIN must be exactly 4 digits" })
   pin?: string;
 
   @ApiPropertyOptional({ example: "usr-sarah-101" })

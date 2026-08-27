@@ -3,10 +3,10 @@ import { LockKeyhole, ScanFace } from 'lucide-react';
 import { api } from '../services/api';
 import { User } from '../types';
 import { MobileAuthLayout } from '../components/auth/MobileAuthLayout';
-import { OneDigitPinSelector } from '../components/auth/OneDigitPinSelector';
+import { FourDigitPinInput } from '../components/auth/FourDigitPinInput';
 import { FaceIdScanner } from '../components/auth/FaceIdScanner';
 import { AuthErrorBanner, AuthSpinner } from '../components/auth/AuthFeedback';
-import { authPrimaryBtnClass } from '../components/auth/AuthShell';
+import { authMutedClass, authPrimaryBtnClass } from '../components/auth/AuthShell';
 
 interface SecureAccountPageProps {
   setupToken: string;
@@ -15,7 +15,7 @@ interface SecureAccountPageProps {
   onComplete: (user: User) => void;
 }
 
-type SetupStep = 'pin' | 'face';
+type AuthMethod = 'pin' | 'face';
 
 export const SecureAccountPage: React.FC<SecureAccountPageProps> = ({
   setupToken,
@@ -23,39 +23,42 @@ export const SecureAccountPage: React.FC<SecureAccountPageProps> = ({
   onBack,
   onComplete,
 }) => {
-  const [step, setStep] = useState<SetupStep>('pin');
-  const [selectedPin, setSelectedPin] = useState<string>('3');
+  const [method, setMethod] = useState<AuthMethod>('pin');
+  const [selectedPin, setSelectedPin] = useState('');
   const [credentialId, setCredentialId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handlePinContinue = async (e: React.FormEvent) => {
+  const finishWithUser = (user?: User) => {
+    if (!user) {
+      throw new Error('Setup succeeded but user session was not returned.');
+    }
+    onComplete(user);
+  };
+
+  const handleComplete = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
-    if (!selectedPin || !/^\d$/.test(selectedPin)) {
-      setErrorMessage('Please select a 1-digit PIN (0-9).');
+    if (method === 'pin') {
+      if (!/^\d{4}$/.test(selectedPin)) {
+        setErrorMessage('Please enter an exactly 4-digit PIN.');
+        return;
+      }
+      setIsLoading(true);
+      try {
+        const data = await api.setupPin(selectedPin, setupToken);
+        finishWithUser(data.user);
+      } catch (err: unknown) {
+        setErrorMessage(err instanceof Error ? err.message : 'Failed to save PIN.');
+      } finally {
+        setIsLoading(false);
+      }
       return;
     }
 
-    setIsLoading(true);
-    try {
-      await api.setupPin(selectedPin, setupToken);
-      setStep('face');
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to save PIN.';
-      setErrorMessage(message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleFaceComplete = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMessage(null);
-
     if (!credentialId) {
-      setErrorMessage('Please complete Face ID registration to continue.');
+      setErrorMessage('Please complete Face ID registration, or switch to PIN setup.');
       return;
     }
 
@@ -63,31 +66,83 @@ export const SecureAccountPage: React.FC<SecureAccountPageProps> = ({
     try {
       const data = await api.setBiometric(true, credentialId, setupToken);
       api.setFaceIdEnabled(true, email, credentialId);
-      if (!data.user) {
-        throw new Error('Face ID setup succeeded but user session was not returned.');
-      }
-      onComplete(data.user);
+      finishWithUser(data.user);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to save Face ID.';
-      setErrorMessage(message);
+      setErrorMessage(err instanceof Error ? err.message : 'Failed to save Face ID.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  if (step === 'face') {
-    return (
-      <MobileAuthLayout title="Secure Account" onBack={() => setStep('pin')}>
-        <AuthErrorBanner message={errorMessage} />
-        <form onSubmit={handleFaceComplete} className="flex flex-col min-h-[520px]">
-          <div>
-            <h2 className="text-2xl font-bold text-[#09003B]">Set up Face ID</h2>
-            <p className="mt-2 text-sm text-[#30302F]">
-              Register Face ID for faster emergency access. This step is required.
-            </p>
-          </div>
+  const canComplete =
+    method === 'pin' ? selectedPin.length === 4 : Boolean(credentialId);
 
-          <div className="mt-6 flex-1 flex flex-col justify-start">
+  return (
+    <MobileAuthLayout title="Secure Account" onBack={onBack}>
+      <AuthErrorBanner message={errorMessage} />
+      <form onSubmit={handleComplete} className="flex flex-col min-h-[520px]">
+        <div>
+          <h2 className="text-2xl font-bold text-[#09003B]">Secure your Account</h2>
+          <p className="mt-2 text-sm text-[#30302F]">
+            Choose either a 4-digit PIN or Face ID. You only need to set up one method.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 mt-6">
+          <button
+            type="button"
+            onClick={() => {
+              setMethod('face');
+              setErrorMessage(null);
+            }}
+            className={`h-[140px] sm:h-[148px] rounded-2xl border flex flex-col items-center justify-center gap-3.5 transition-all touch-manipulation ${
+              method === 'face'
+                ? 'bg-[#E3E8F7] border-[#3A67D5] shadow-sm ring-1 ring-[#3A67D5]/30'
+                : 'bg-[#F5F5F5] border-[#E1E1E1] hover:bg-gray-100'
+            }`}
+            aria-pressed={method === 'face'}
+          >
+            <ScanFace className="w-8 h-8 text-[#09003B]" />
+            <span className="text-center">
+              <span className="block text-sm font-semibold text-[#09003B]">Face ID</span>
+              <span className="block text-xs text-[#30302F] mt-0.5">Biometric access</span>
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setMethod('pin');
+              setErrorMessage(null);
+            }}
+            className={`h-[140px] sm:h-[148px] rounded-2xl border flex flex-col items-center justify-center gap-3.5 transition-all touch-manipulation ${
+              method === 'pin'
+                ? 'bg-[#E3E8F7] border-[#3A67D5] shadow-sm ring-1 ring-[#3A67D5]/30'
+                : 'bg-[#F5F5F5] border-[#E1E1E1] hover:bg-gray-100'
+            }`}
+            aria-pressed={method === 'pin'}
+          >
+            <LockKeyhole className="w-8 h-8 text-[#09003B]" />
+            <span className="text-center">
+              <span className="block text-sm font-semibold text-[#09003B]">4-digit PIN</span>
+              <span className="block text-xs text-[#30302F] mt-0.5">Code access</span>
+            </span>
+          </button>
+        </div>
+
+        <div className="mt-6 flex-1 flex flex-col justify-start">
+          {method === 'pin' && (
+            <FourDigitPinInput
+              value={selectedPin}
+              onChange={(pin) => {
+                setSelectedPin(pin);
+                setErrorMessage(null);
+              }}
+              label="Enter 4-digit PIN"
+            />
+          )}
+
+          {method === 'face' && (
             <FaceIdScanner
               mode="register"
               isRegistered={Boolean(credentialId)}
@@ -97,55 +152,22 @@ export const SecureAccountPage: React.FC<SecureAccountPageProps> = ({
               }}
               onError={(err) => setErrorMessage(err)}
             />
-          </div>
-
-          <div className="mt-auto pt-8">
-            <button type="submit" disabled={isLoading || !credentialId} className={authPrimaryBtnClass}>
-              {isLoading ? <AuthSpinner /> : 'Complete Setup & Continue'}
-            </button>
-          </div>
-        </form>
-      </MobileAuthLayout>
-    );
-  }
-
-  return (
-    <MobileAuthLayout title="Secure Account" onBack={onBack}>
-      <AuthErrorBanner message={errorMessage} />
-      <form onSubmit={handlePinContinue} className="flex flex-col min-h-[520px]">
-        <div>
-          <h2 className="text-2xl font-bold text-[#09003B]">Set your 1-digit PIN</h2>
-          <p className="mt-2 text-sm text-[#30302F]">
-            Choose a single digit PIN for quick emergency access. This step is required.
-          </p>
+          )}
         </div>
 
-        <div className="grid grid-cols-2 gap-3 mt-6 opacity-60 pointer-events-none">
-          <div className="h-[100px] rounded-2xl border bg-[#F5F5F5] border-[#E1E1E1] flex flex-col items-center justify-center gap-2">
-            <ScanFace className="w-7 h-7 text-[#09003B]" />
-            <span className="text-xs text-[#30302F]">Face ID next</span>
-          </div>
-          <div className="h-[100px] rounded-2xl border bg-[#E3E8F7] border-[#3A67D5] flex flex-col items-center justify-center gap-2 ring-1 ring-[#3A67D5]/30">
-            <LockKeyhole className="w-7 h-7 text-[#09003B]" />
-            <span className="text-xs font-semibold text-[#09003B]">1-digit PIN</span>
-          </div>
-        </div>
-
-        <div className="mt-6 flex-1">
-          <OneDigitPinSelector
-            value={selectedPin}
-            onChange={(pin) => {
-              setSelectedPin(pin);
-              setErrorMessage(null);
-            }}
-            label="Select 1 digit PIN"
-          />
-        </div>
-
-        <div className="mt-auto pt-8">
-          <button type="submit" disabled={isLoading} className={authPrimaryBtnClass}>
-            {isLoading ? <AuthSpinner /> : 'Continue to Face ID'}
+        <div className="mt-auto pt-8 space-y-2">
+          <button
+            type="submit"
+            disabled={isLoading || !canComplete}
+            className={authPrimaryBtnClass}
+          >
+            {isLoading ? <AuthSpinner /> : 'Complete Setup'}
           </button>
+          <p className={`${authMutedClass} text-center`}>
+            {method === 'pin'
+              ? 'Face ID is optional — you can skip it by completing with PIN only.'
+              : 'PIN is optional — you can skip it by completing with Face ID only.'}
+          </p>
         </div>
       </form>
     </MobileAuthLayout>

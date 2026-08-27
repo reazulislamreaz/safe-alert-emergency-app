@@ -109,7 +109,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth("access-token")
-  @ApiOperation({ summary: "Set a mandatory 1-digit security PIN" })
+  @ApiOperation({ summary: "Set a mandatory 4-digit security PIN" })
   async setupPin(@Body() dto: SetupPinDto, @CurrentUser() user: JwtPayload) {
     const data = await this.authService.setupPin(user.sub, dto.pin);
     return { success: true, data };
@@ -149,7 +149,7 @@ export class AuthController {
 
   @Post("pin/reset")
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Set a new 1-digit PIN with a verified email OTP" })
+  @ApiOperation({ summary: "Set a new 4-digit PIN with a verified email OTP" })
   async resetPin(@Body() dto: ResetPinDto) {
     const data = await this.authService.resetPin(dto.email, dto.code, dto.newPin);
     return { success: true, data };
@@ -168,7 +168,7 @@ export class AuthController {
 
   @Post("login")
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Citizen login with email + 1-digit PIN (or password)" })
+  @ApiOperation({ summary: "Citizen login with email + 4-digit PIN (or password)" })
   @ApiUnauthorizedResponse({ description: "Invalid credentials" })
   @ApiForbiddenResponse({ description: "Super Admin must use dashboard login" })
   async login(@Body() dto: LoginDto) {

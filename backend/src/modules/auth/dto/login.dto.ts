@@ -20,12 +20,12 @@ export class LoginDto {
   emailOrPhone?: string;
 
   @ApiPropertyOptional({
-    example: "3",
-    description: "Citizen 1-digit PIN. Send this or password.",
+    example: "4821",
+    description: "Citizen 4-digit PIN. Send this or password.",
   })
   @IsOptional()
   @IsString()
-  @Matches(/^\d$/, { message: "PIN must be exactly 1 digit" })
+  @Matches(/^\d{4}$/, { message: "PIN must be exactly 4 digits" })
   pin?: string;
 
   @ApiPropertyOptional({

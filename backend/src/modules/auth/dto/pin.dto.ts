@@ -19,9 +19,9 @@ export class BiometricDto {
 }
 
 export class SetupPinDto {
-  @ApiProperty({ example: "3", description: "Exactly 1-digit PIN (0-9)" })
+  @ApiProperty({ example: "4821", description: "Exactly 4-digit PIN" })
   @IsString()
-  @Matches(/^\d$/, { message: "Security PIN must be exactly 1 digit" })
+  @Matches(/^\d{4}$/, { message: "Security PIN must be exactly 4 digits" })
   pin!: string;
 }
 
@@ -54,9 +54,9 @@ export class ResetPinDto {
   @Matches(/^\d{6}$/, { message: "Verification code must be 6 digits" })
   code!: string;
 
-  @ApiProperty({ example: "3", description: "Exactly 1-digit PIN (0-9)" })
+  @ApiProperty({ example: "4821", description: "Exactly 4-digit PIN" })
   @IsString()
-  @Matches(/^\d$/, { message: "Security PIN must be exactly 1 digit" })
+  @Matches(/^\d{4}$/, { message: "Security PIN must be exactly 4 digits" })
   newPin!: string;
 }
 
@@ -69,9 +69,9 @@ export class VerifyPinDto {
   @IsString()
   userId?: string;
 
-  @ApiProperty({ example: "3" })
+  @ApiProperty({ example: "4821" })
   @IsString()
-  @Matches(/^\d$/, { message: "Security PIN must be exactly 1 digit" })
+  @Matches(/^\d{4}$/, { message: "Security PIN must be exactly 4 digits" })
   pin!: string;
 }
 

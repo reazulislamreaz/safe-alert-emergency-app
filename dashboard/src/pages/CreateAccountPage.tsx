@@ -108,7 +108,11 @@ export const CreateAccountPage: React.FC<CreateAccountPageProps> = ({ onClose, o
       });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Registration failed.';
-      setErrorMessage(message);
+      if (/already exists/i.test(message)) {
+        setErrorMessage(`${message} Try logging in, or use a different email.`);
+      } else {
+        setErrorMessage(message);
+      }
     } finally {
       setIsLoading(false);
     }

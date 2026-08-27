@@ -43,7 +43,17 @@ export class AuthService {
 
     const existingEmail = await this.prisma.user.findUnique({ where: { email } });
     if (existingEmail) {
-      throw new BadRequestException("An account with this email already exists.");
+      if (existingEmail.role === Role.SUPER_ADMIN) {
+        throw new BadRequestException("An account with this email already exists.");
+      }
+
+      const registrationIncomplete =
+        !existingEmail.isVerified || (!existingEmail.pinHash && !existingEmail.faceIdEnabled);
+      if (!registrationIncomplete) {
+        throw new BadRequestException("An account with this email already exists.");
+      }
+
+      return this.resumeIncompleteRegistration(existingEmail.id, dto, email, phone, phoneDigits);
     }
 
     if (phoneDigits.length >= 7) {
@@ -111,6 +121,64 @@ export class AuthService {
       },
     });
 
+    return this.issueRegistrationSession(user);
+  }
+
+  private async resumeIncompleteRegistration(
+    userId: string,
+    dto: RegisterDto,
+    email: string,
+    phone: string | null,
+    phoneDigits: string,
+  ) {
+    if (phoneDigits.length >= 7) {
+      const phoneTaken = await this.prisma.user.findFirst({
+        where: { phoneDigits, NOT: { id: userId } },
+      });
+      if (phoneTaken) {
+        throw new BadRequestException("An account with this phone number already exists.");
+      }
+    }
+
+    const emergencyPhone = dto.emergencyContactPhone || phone || "N/A";
+    const emergencyRelation = dto.emergencyContactRelation || "Emergency Contact";
+    const passwordHash = dto.password ? await hash(dto.password, 10) : undefined;
+
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        fullName: dto.fullName,
+        email,
+        phone,
+        phoneDigits,
+        ...(passwordHash ? { passwordHash } : {}),
+        dob: dto.dob,
+        race: dto.race,
+        location: dto.location,
+        emergencyContactName: dto.emergencyContactName,
+        emergencyContactPhone: emergencyPhone,
+        emergencyContactRelation: emergencyRelation,
+        profilePhotos: requireStoredImageUrls(dto.profilePhotos) ?? [],
+        avatar:
+          dto.profilePhotos?.[0] ||
+          "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
+        isVerified: false,
+        pinHash: null,
+        faceIdEnabled: false,
+        faceIdCredentialId: null,
+      },
+    });
+
+    return this.issueRegistrationSession(user);
+  }
+
+  private async issueRegistrationSession(user: {
+    id: string;
+    email: string;
+    phone: string | null;
+    role: Role;
+    subscriptionTier: "FREE" | "PREMIUM";
+  }) {
     const otp = await this.sendEmailVerificationOtp(user.email);
     const token = this.signToken(
       user.id,
@@ -121,8 +189,10 @@ export class AuthService {
       "app",
     );
 
+    const fullUser = await this.prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+
     return {
-      user: toPublicUser(user),
+      user: toPublicUser(fullUser),
       token,
       otpCode: otp.code,
       delivered: otp.delivered,
@@ -285,8 +355,8 @@ export class AuthService {
   }
 
   async setupPin(userId: string, pin: string) {
-    if (!/^\d$/.test(pin)) {
-      throw new BadRequestException("PIN must be exactly 1 digit.");
+    if (!/^\d{4}$/.test(pin)) {
+      throw new BadRequestException("PIN must be exactly 4 digits.");
     }
 
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
@@ -303,10 +373,20 @@ export class AuthService {
       data: { pinHash: await hash(pin, 10) },
     });
 
+    const token = this.signToken(
+      updated.id,
+      updated.email,
+      updated.phone || "",
+      updated.role,
+      updated.subscriptionTier,
+      "app",
+    );
+
     return {
       success: true,
       message: "Security PIN updated successfully.",
       user: toPublicUser(updated),
+      token,
     };
   }
 
@@ -318,10 +398,6 @@ export class AuthService {
 
     if (!user.isVerified) {
       throw new BadRequestException("Verify your email before enabling Face ID.");
-    }
-
-    if (!user.pinHash) {
-      throw new BadRequestException("Set your 1-digit PIN before enabling Face ID.");
     }
 
     if (enabled && !credentialId?.trim()) {
@@ -391,7 +467,12 @@ export class AuthService {
         throw new UnauthorizedException("Incorrect password.");
       }
     } else if (dto.pin) {
-      if (!user.pinHash || !(await compare(dto.pin, user.pinHash))) {
+      if (!user.pinHash) {
+        throw new UnauthorizedException(
+          "PIN login is not enabled for this account. Use Face ID instead.",
+        );
+      }
+      if (!(await compare(dto.pin, user.pinHash))) {
         throw new UnauthorizedException("Incorrect security PIN.");
       }
     } else {
@@ -404,8 +485,10 @@ export class AuthService {
       throw new UnauthorizedException("Verify your email before logging in.");
     }
 
-    if (user.role === Role.USER && !user.pinHash) {
-      throw new UnauthorizedException("Complete PIN setup before logging in.");
+    if (user.role === Role.USER && !user.pinHash && !user.faceIdEnabled) {
+      throw new UnauthorizedException(
+        "Complete authentication setup (PIN or Face ID) before logging in.",
+      );
     }
 
     await this.dashboardAdmin.ensureSingleAdmin();
@@ -616,8 +699,8 @@ export class AuthService {
   }
 
   async resetPin(email: string, code: string, newPin: string) {
-    if (!/^\d$/.test(newPin)) {
-      throw new BadRequestException("PIN must be exactly 1 digit.");
+    if (!/^\d{4}$/.test(newPin)) {
+      throw new BadRequestException("PIN must be exactly 4 digits.");
     }
 
     const record = await this.getActiveEmailOtp(email);

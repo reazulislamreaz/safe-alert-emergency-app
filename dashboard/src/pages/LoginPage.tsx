@@ -44,8 +44,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       return;
     }
 
-    if (!pin || !/^\d$/.test(pin)) {
-      setErrorMessage('Please enter your 1-digit security PIN.');
+    if (!pin || !/^\d{4}$/.test(pin)) {
+      setErrorMessage('Enter your 4-digit PIN, or use Face ID if that is how you signed up.');
       return;
     }
 
@@ -69,7 +69,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       const response = await api.loginWithFaceId(email.trim() || undefined, credentialId);
       onLoginSuccess(response.user);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Face ID failed. Please enter your PIN.';
+      const message =
+        err instanceof Error
+          ? err.message
+          : 'Face ID failed. If you set up a PIN, log in with Email + PIN.';
       setErrorMessage(message);
     } finally {
       setIsLoading(false);
@@ -99,19 +102,18 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
           <div>
             <label htmlFor="login-pin" className={authLabelClass}>
-              1-digit PIN
+              4-digit PIN
             </label>
             <div className="flex gap-2 items-center">
               <div className="relative flex-1 min-w-0">
                 <input
                   id="login-pin"
                   type={showPin ? 'text' : 'password'}
-                  required
                   inputMode="numeric"
                   autoComplete="current-password"
                   value={pin}
-                  onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 1))}
-                  placeholder="Enter your 1 digit pin"
+                  onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                  placeholder="If you set a PIN during signup"
                   className={`${authInputClass} pr-11`}
                 />
                 <button
@@ -141,6 +143,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 <ScanFace className="w-6 h-6" />
               </button>
             </div>
+            <p className={`${authMutedClass} mt-2`}>
+              Use the method you set up at registration: PIN and/or Face ID.
+            </p>
           </div>
 
           <p className={`${authMutedClass} flex items-center gap-1.5`}>
@@ -152,7 +157,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
         </div>
 
         <button type="submit" disabled={isLoading} className={authPrimaryBtnClass}>
-          {isLoading ? <AuthSpinner /> : 'Log in'}
+          {isLoading ? <AuthSpinner /> : 'Log in with PIN'}
         </button>
       </form>
 
@@ -164,7 +169,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       </p>
 
       <p className="mt-6 text-center text-[11px] text-gray-400">
-        Demo citizen: sarah.johnson@example.com · PIN 3 or Face ID
+        Demo citizen: sarah.johnson@example.com · PIN 1234
       </p>
       <p className="mt-3 text-center">
         <button type="button" onClick={onOperatorLogin} className={authLinkClass}>

@@ -303,7 +303,7 @@ export const api = {
   async setupPin(
     pin: string,
     token?: string,
-  ): Promise<{ success: boolean; message: string; user?: User }> {
+  ): Promise<{ success: boolean; message: string; user?: User; token?: string }> {
     const authToken = token || this.getAuthToken();
     const res = await fetch(`${API_BASE}/auth/pin/setup`, {
       method: 'POST',
@@ -316,6 +316,9 @@ export const api = {
     const data = await res.json();
     if (!res.ok || !data.success) {
       throw new Error(readApiError(data, 'Failed to save PIN.'));
+    }
+    if (data.data.token) {
+      this.setAuthToken(data.data.token, true);
     }
     return data.data;
   },

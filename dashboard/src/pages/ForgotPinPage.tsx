@@ -3,7 +3,7 @@ import { Check, Mail } from 'lucide-react';
 import { api } from '../services/api';
 import { MobileAuthLayout } from '../components/auth/MobileAuthLayout';
 import { DigitBoxes } from '../components/auth/DigitBoxes';
-import { OneDigitPinSelector } from '../components/auth/OneDigitPinSelector';
+import { FourDigitPinInput } from '../components/auth/FourDigitPinInput';
 import { AuthErrorBanner, AuthSpinner } from '../components/auth/AuthFeedback';
 import {
   authInputClass,
@@ -26,7 +26,7 @@ export const ForgotPinPage: React.FC<ForgotPinPageProps> = ({ onBackToLogin }) =
   const [step, setStep] = useState<ForgotPinStep>('email');
   const [email, setEmail] = useState('');
   const [otpDigits, setOtpDigits] = useState<string[]>(Array(OTP_LENGTH).fill(''));
-  const [selectedPin, setSelectedPin] = useState<string>('3');
+  const [selectedPin, setSelectedPin] = useState('');
   const [demoCode, setDemoCode] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -76,7 +76,7 @@ export const ForgotPinPage: React.FC<ForgotPinPageProps> = ({ onBackToLogin }) =
     setIsLoading(true);
     try {
       await api.verifyPinResetOtp(email.trim(), otpCode);
-      setSelectedPin('3');
+      setSelectedPin('');
       setStep('pin');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Invalid verification code.';
@@ -101,8 +101,8 @@ export const ForgotPinPage: React.FC<ForgotPinPageProps> = ({ onBackToLogin }) =
   const handleSavePin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
-    if (!selectedPin || !/^\d$/.test(selectedPin)) {
-      setErrorMessage('Please select a 1-digit PIN.');
+    if (!selectedPin || !/^\d{4}$/.test(selectedPin)) {
+      setErrorMessage('Please enter an exactly 4-digit PIN.');
       return;
     }
 
@@ -126,7 +126,7 @@ export const ForgotPinPage: React.FC<ForgotPinPageProps> = ({ onBackToLogin }) =
             <Check className="w-8 h-8" strokeWidth={3} />
           </div>
           <h1 className={`${authTitleClass} text-2xl font-bold text-[#09003B] mb-2`}>Pin Updated!</h1>
-          <p className={`${authMutedClass} mb-8`}>Your 1-digit PIN has been reset successfully.</p>
+          <p className={`${authMutedClass} mb-8`}>Your 4-digit PIN has been reset successfully.</p>
           <button type="button" onClick={onBackToLogin} className={authPrimaryBtnClass}>
             Back to Login
           </button>
@@ -193,12 +193,16 @@ export const ForgotPinPage: React.FC<ForgotPinPageProps> = ({ onBackToLogin }) =
 
       {step === 'pin' && (
         <form onSubmit={handleSavePin} className="space-y-6">
-          <OneDigitPinSelector
+          <FourDigitPinInput
             value={selectedPin}
             onChange={setSelectedPin}
-            label="Select your new 1-digit PIN"
+            label="Enter your new 4-digit PIN"
           />
-          <button type="submit" disabled={isLoading} className={authPrimaryBtnClass}>
+          <button
+            type="submit"
+            disabled={isLoading || selectedPin.length !== 4}
+            className={authPrimaryBtnClass}
+          >
             {isLoading ? <AuthSpinner /> : 'Save PIN'}
           </button>
         </form>
