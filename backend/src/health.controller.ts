@@ -11,7 +11,7 @@ export class HealthController {
     schema: {
       example: {
         status: "ok",
-        service: "SafeAlert Emergency Backend",
+        service: "Safety Circle Emergency Backend",
         timestamp: "2026-08-26T02:42:00.000Z",
         uptime: 12.5,
       },
@@ -20,7 +20,7 @@ export class HealthController {
   health() {
     return {
       status: "ok",
-      service: "SafeAlert Emergency Backend",
+      service: "Safety Circle Emergency Backend",
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
     };

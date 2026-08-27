@@ -1,4 +1,4 @@
-# SafeAlert Emergency Response System
+# Safety Circle Emergency Response System
 
 Production-grade real-time emergency alerting, live geospatial telemetry broadcasting, multi-party WebRTC incident response room, and enterprise admin command center.
 

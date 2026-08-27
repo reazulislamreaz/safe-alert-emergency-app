@@ -30,7 +30,7 @@ async function bootstrap() {
   await app.listen(env.port);
 
   console.log(`\n======================================================`);
-  console.log(`🚨 SafeAlert Emergency Backend running on port ${env.port}`);
+  console.log(`🚨 Safety Circle Emergency Backend running on port ${env.port}`);
   console.log(`📡 WebSocket Gateway ready on ws://localhost:${env.port}`);
   console.log(`🩺 Health check: http://localhost:${env.port}/health`);
   console.log(`📘 Swagger UI: http://localhost:${env.port}/api/docs`);

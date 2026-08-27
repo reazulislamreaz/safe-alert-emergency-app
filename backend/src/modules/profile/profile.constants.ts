@@ -81,8 +81,8 @@ export const LEGAL_PAGES = [
     slug: "about",
     title: "About Us",
     body: [
-      "SafeAlert is an emergency response platform built to help you reach trusted people in seconds.",
-      "When something goes wrong, SafeAlert sends live location, SOS alerts, and optional live audio or video to the groups you choose — so family, friends, and responders can act immediately.",
+      "Safety Circle is an emergency response platform built to help you reach trusted people in seconds.",
+      "When something goes wrong, Safety Circle sends live location, SOS alerts, and optional live audio or video to the groups you choose — so family, friends, and responders can act immediately.",
       "Our mission is to make personal safety simple, private, and always within reach. We connect citizens, emergency contacts, and operations teams through one secure app.",
     ].join("\n\n"),
   },
@@ -90,20 +90,20 @@ export const LEGAL_PAGES = [
     slug: "privacy",
     title: "Privacy Policy",
     body: [
-      "SafeAlert collects the information needed to protect you in an emergency: your profile, emergency contacts, device location during an alert, and optional incident recordings.",
+      "Safety Circle collects the information needed to protect you in an emergency: your profile, emergency contacts, device location during an alert, and optional incident recordings.",
       "We do not sell your personal data. Location and media captured during an SOS are shared only with the groups and operators you authorize for that incident.",
       "You can update or delete your account from Profile. Deleting your account removes your profile, contacts, and stored incident history from our systems, except where we must retain records for legal or safety obligations.",
-      "By using SafeAlert you agree to this policy. Contact support@safealert.app with privacy questions.",
+      "By using Safety Circle you agree to this policy. Contact support@safealert.app with privacy questions.",
     ].join("\n\n"),
   },
   {
     slug: "terms",
     title: "Terms & Conditions",
     body: [
-      "SafeAlert is a safety communication tool. It is not a replacement for calling local emergency services (such as 911) when you are in immediate danger.",
+      "Safety Circle is a safety communication tool. It is not a replacement for calling local emergency services (such as 911) when you are in immediate danger.",
       "You are responsible for keeping your PIN private, maintaining accurate emergency contacts, and using the app lawfully. False or abusive alerts may result in account suspension.",
       "The Free plan includes limited groups and contacts. Premium adds unlimited groups and contacts, group video calls, and incident journal access, billed at $5.00 per month after a 7-day trial. You may cancel at any time; access then returns to the Free plan.",
-      "We may update these terms to reflect product or legal changes. Continued use of SafeAlert after an update means you accept the revised terms.",
+      "We may update these terms to reflect product or legal changes. Continued use of Safety Circle after an update means you accept the revised terms.",
     ].join("\n\n"),
   },
 ] as const;

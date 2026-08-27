@@ -45,11 +45,11 @@ export const FaceIdScanner: React.FC<FaceIdScannerProps> = ({
               const credential = (await navigator.credentials.create({
                 publicKey: {
                   challenge,
-                  rp: { name: 'SafeAlert Emergency App' },
+                  rp: { name: 'Safety Circle' },
                   user: {
                     id: userId,
-                    name: 'citizen@safealert.app',
-                    displayName: 'SafeAlert Citizen',
+                    name: 'citizen@safetycircle.app',
+                    displayName: 'Safety Circle Citizen',
                   },
                   pubKeyCredParams: [{ alg: -7, type: 'public-key' }],
                   authenticatorSelection: {

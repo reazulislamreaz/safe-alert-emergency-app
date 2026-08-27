@@ -12,7 +12,7 @@ export const CONTACT_STATUSES = [
 ] as const;
 
 export const REFERRAL_COPY = {
-  title: "Invite your Friends to Safe Alert App",
+  title: "Invite your Friends to Safety Circle",
   subtitle: "Invite trusted contacts to join your safety circle and stay connected.",
   cta: "Share referral link",
 } as const;

@@ -761,7 +761,7 @@ export const api = {
           liveMessages: [
             {
               id: "msg-1",
-              sender: "SafeAlert Dispatch",
+              sender: "Safety Circle Dispatch",
               text: "SOS Triggered. Audio and GPS tracking live.",
               timestamp: "5:13 PM",
               type: "SOS",

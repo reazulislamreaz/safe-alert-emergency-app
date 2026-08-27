@@ -462,7 +462,7 @@ export class AlertService {
         },
         liveMessages: {
           create: {
-            sender: "SafeAlert System",
+            sender: "Safety Circle System",
             text:
               mode === AlertMode.TEST
                 ? `Test alert sent for ${emergencyType.label}. Contacts notified.`

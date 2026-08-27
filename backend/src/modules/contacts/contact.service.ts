@@ -546,7 +546,7 @@ export class ContactService {
       title: REFERRAL_COPY.title,
       subtitle: REFERRAL_COPY.subtitle,
       shareUrl,
-      shareText: `${user.fullName} invited you to SafeAlert. Join their safety circle: ${shareUrl}`,
+      shareText: `${user.fullName} invited you to Safety Circle. Join their safety circle: ${shareUrl}`,
       cta: REFERRAL_COPY.cta,
     };
   }

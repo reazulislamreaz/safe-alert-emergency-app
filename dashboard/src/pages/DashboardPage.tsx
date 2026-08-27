@@ -67,7 +67,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigateToTab })
           Dashboard Overview
         </h2>
         <p className="text-xs text-gray-500 mt-0.5">
-          Welcome back, Admin. Here's what's happening with SafeAlert today.
+          Welcome back, Admin. Here's what's happening with Safety Circle today.
         </p>
       </div>
 

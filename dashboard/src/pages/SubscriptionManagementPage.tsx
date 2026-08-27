@@ -112,7 +112,7 @@ export const SubscriptionManagementPage: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'SafeAlert_Transactions.csv';
+    a.download = 'SafetyCircle_Transactions.csv';
     a.click();
   };
 

@@ -90,11 +90,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
       >
         <div className="px-5 sm:px-6 py-6 sm:py-7 flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-[#1D4ED8] flex items-center justify-center font-black text-sm text-white shadow-md border border-blue-400/30 shrink-0">
-            SA
+            SC
           </div>
           <div className="min-w-0">
             <h1 className="font-extrabold text-base text-white tracking-tight leading-tight">
-              SafeAlert
+              Safety Circle
             </h1>
             <p className="text-[11px] text-blue-200/70 font-medium">Admin Panel</p>
           </div>

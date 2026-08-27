@@ -3,10 +3,10 @@ import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 
 export function setupSwagger(app: INestApplication): void {
   const config = new DocumentBuilder()
-    .setTitle("SafeAlert Emergency API")
+    .setTitle("Safety Circle Emergency API")
     .setDescription(
       [
-        "REST + Socket.io API for the SafeAlert emergency response system.",
+        "REST + Socket.io API for the Safety Circle emergency response system.",
         "",
         "**Demo accounts**",
         "- Super Admin (Dashboard): `admin@safealert.app` / `adminpassword` via `POST /api/auth/dashboard/login`",
@@ -56,6 +56,6 @@ export function setupSwagger(app: INestApplication): void {
       operationsSorter: "method",
       docExpansion: "list",
     },
-    customSiteTitle: "SafeAlert API Docs",
+    customSiteTitle: "Safety Circle API Docs",
   });
 }

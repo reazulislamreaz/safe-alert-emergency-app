@@ -2,7 +2,7 @@
   "name": "safe-alert-emergency-app-root",
   "version": "1.0.0",
   "private": true,
-  "description": "SafeAlert Emergency Response System - Monorepo Orchestration",
+  "description": "Safety Circle Emergency Response System - Monorepo Orchestration",
   "scripts": {
     "dev:backend": "pnpm --filter safealert-backend dev",
     "dev:dashboard": "pnpm --filter safealert-dashboard dev",
@@ -22,7 +22,7 @@
     "realtime",
     "webrtc"
   ],
-  "author": "SafeAlert Architecture Team",
+  "author": "Safety Circle Architecture Team",
   "license": "ISC",
   "pnpm": {
     "ignoredBuiltDependencies": ["@scarf/scarf"]

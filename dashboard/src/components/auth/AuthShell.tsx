@@ -15,7 +15,6 @@ export const authBackTitleClass =
 export const authOtpInputClass =
   'min-w-0 flex-1 h-14 text-center text-base font-medium text-[#09003B] rounded-2xl border border-[#E1E1E1] focus:outline-none focus:ring-2 focus:ring-[#3A67D5]/20 focus:border-[#3A67D5] bg-white';
 
-<<<<<<< HEAD
 export const authLabelClass =
   'block text-xs font-normal text-[#09003B] mb-2';
 
@@ -25,15 +24,13 @@ export const authLinkClass =
 export const authMutedClass =
   'text-xs text-[#30302F]';
 
-=======
->>>>>>> 0f7c5155b0c4b261a31d42807139c9a4e9b2756b
 export const AuthLogo: React.FC = () => (
   <div className="flex items-center justify-center gap-2 sm:gap-2.5 mb-5 sm:mb-8">
     <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-[#3B82F6] flex items-center justify-center text-white text-[11px] sm:text-xs font-black tracking-tight shrink-0">
-      SA
+      SC
     </div>
     <span className="text-lg sm:text-[22px] font-semibold text-gray-500 tracking-tight">
-      SafeAlert
+      Safety Circle
     </span>
   </div>
 );

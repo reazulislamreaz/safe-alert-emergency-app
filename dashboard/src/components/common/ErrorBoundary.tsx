@@ -21,7 +21,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('SafeAlert UI Caught Error:', error, errorInfo);
+    console.error('Safety Circle UI Caught Error:', error, errorInfo);
   }
 
   public render() {

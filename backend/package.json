@@ -1,7 +1,7 @@
 {
   "name": "safealert-backend",
   "version": "1.0.0",
-  "description": "NestJS + Prisma + PostgreSQL backend for SafeAlert Emergency Response System",
+  "description": "NestJS + Prisma + PostgreSQL backend for Safety Circle Emergency Response System",
   "private": true,
   "scripts": {
     "dev": "nest start --watch",
@@ -22,7 +22,7 @@
     "postgresql",
     "websockets"
   ],
-  "author": "SafeAlert Architecture Team",
+  "author": "Safety Circle Architecture Team",
   "license": "ISC",
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1117.0",

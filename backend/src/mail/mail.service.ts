@@ -48,7 +48,7 @@ export class MailService implements OnModuleInit {
     }
 
     const fromAddress = env.smtp.from || env.smtp.user;
-    const from = fromAddress.includes("<") ? fromAddress : `"SafeAlert" <${fromAddress}>`;
+    const from = fromAddress.includes("<") ? fromAddress : `"Safety Circle" <${fromAddress}>`;
 
     try {
       await this.transporter.sendMail({
@@ -71,15 +71,15 @@ export class MailService implements OnModuleInit {
   }
 
   async sendPasswordResetOtp(to: string, code: string, expiresInMinutes: number): Promise<void> {
-    const subject = "Your SafeAlert password reset code";
+    const subject = "Your Safety Circle password reset code";
     const text = [
-      `Your SafeAlert verification code is ${code}.`,
+      `Your Safety Circle verification code is ${code}.`,
       `This code expires in ${expiresInMinutes} minutes.`,
       "If you did not request a password reset, you can ignore this email.",
     ].join("\n");
     const html = `
       <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #111827;">
-        <p>Your SafeAlert verification code is:</p>
+        <p>Your Safety Circle verification code is:</p>
         <p style="font-size: 28px; letter-spacing: 6px; font-weight: 700;">${code}</p>
         <p>This code expires in ${expiresInMinutes} minutes.</p>
         <p style="color: #6b7280;">If you did not request a password reset, you can ignore this email.</p>
@@ -89,33 +89,33 @@ export class MailService implements OnModuleInit {
   }
 
   async sendEmailVerificationOtp(to: string, code: string, expiresInMinutes: number): Promise<void> {
-    const subject = "Your SafeAlert email verification code";
+    const subject = "Your Safety Circle email verification code";
     const text = [
-      `Your SafeAlert email verification code is ${code}.`,
+      `Your Safety Circle email verification code is ${code}.`,
       `This code expires in ${expiresInMinutes} minutes.`,
-      "If you did not create a SafeAlert account, you can ignore this email.",
+      "If you did not create a Safety Circle account, you can ignore this email.",
     ].join("\n");
     const html = `
       <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #111827;">
-        <p>Your SafeAlert email verification code is:</p>
+        <p>Your Safety Circle email verification code is:</p>
         <p style="font-size: 28px; letter-spacing: 6px; font-weight: 700;">${code}</p>
         <p>This code expires in ${expiresInMinutes} minutes.</p>
-        <p style="color: #6b7280;">If you did not create a SafeAlert account, you can ignore this email.</p>
+        <p style="color: #6b7280;">If you did not create a Safety Circle account, you can ignore this email.</p>
       </div>
     `;
     await this.sendMail({ to, subject, text, html });
   }
 
   async sendPinResetOtp(to: string, code: string, expiresInMinutes: number): Promise<void> {
-    const subject = "Your SafeAlert PIN reset code";
+    const subject = "Your Safety Circle PIN reset code";
     const text = [
-      `Your SafeAlert PIN reset code is ${code}.`,
+      `Your Safety Circle PIN reset code is ${code}.`,
       `This code expires in ${expiresInMinutes} minutes.`,
       "If you did not request a PIN reset, you can ignore this email.",
     ].join("\n");
     const html = `
       <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #111827;">
-        <p>Your SafeAlert PIN reset code is:</p>
+        <p>Your Safety Circle PIN reset code is:</p>
         <p style="font-size: 28px; letter-spacing: 6px; font-weight: 700;">${code}</p>
         <p>This code expires in ${expiresInMinutes} minutes.</p>
         <p style="color: #6b7280;">If you did not request a PIN reset, you can ignore this email.</p>

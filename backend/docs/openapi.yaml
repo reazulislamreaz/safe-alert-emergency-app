@@ -12,7 +12,7 @@ paths:
               schema:
                 example:
                   status: ok
-                  service: SafeAlert Emergency Backend
+                  service: Safety Circle Emergency Backend
                   timestamp: '2026-08-26T02:42:00.000Z'
                   uptime: 12.5
       summary: Liveness probe
@@ -1915,9 +1915,9 @@ paths:
       tags:
         - Notifications
 info:
-  title: SafeAlert Emergency API
+  title: Safety Circle Emergency API
   description: >-
-    REST + Socket.io API for the SafeAlert emergency response system.
+    REST + Socket.io API for the Safety Circle emergency response system.
 
 
     **Demo accounts**
