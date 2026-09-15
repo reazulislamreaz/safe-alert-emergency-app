@@ -1,7 +1,8 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Camera } from 'lucide-react';
 import { api, RegisterPayload } from '../services/api';
 import { MobileAuthLayout } from '../components/auth/MobileAuthLayout';
+import { FourDigitPinInput } from '../components/auth/FourDigitPinInput';
 import { AuthErrorBanner, AuthSpinner } from '../components/auth/AuthFeedback';
 import {
   authInputClass,
@@ -9,44 +10,58 @@ import {
   authPrimaryBtnClass,
 } from '../components/auth/AuthShell';
 
-const RACE_OPTIONS = [
-  'Prefer not to say',
-  'White',
-  'Black or African American',
-  'Asian',
-  'Hispanic or Latino',
-  'Native American',
-  'Mixed',
-  'Other',
-];
+type RaceOption = { key: string; label: string };
 
 interface CreateAccountPageProps {
   onClose: () => void;
   onRegistered: (session: { email: string; token: string; otpCode?: string }) => void;
 }
 
-function parseEmergencyContact(value: string): { name: string; relation: string } {
-  const [name, ...rest] = value.split(' - ');
-  return {
-    name: (name || value).trim(),
-    relation: rest.join(' - ').trim() || 'Emergency Contact',
-  };
+function toDobIso(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  const parsed = new Date(`${trimmed}T00:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime())) return trimmed;
+  return parsed.toISOString();
 }
 
 export const CreateAccountPage: React.FC<CreateAccountPageProps> = ({ onClose, onRegistered }) => {
   const [photos, setPhotos] = useState<Array<string | null>>([null, null, null]);
   const [fullName, setFullName] = useState('');
-  const [race, setRace] = useState('');
+  const [raceKey, setRaceKey] = useState('');
+  const [raceOptions, setRaceOptions] = useState<RaceOption[]>([]);
   const [dob, setDob] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [location, setLocation] = useState('');
-  const [emergencyContact, setEmergencyContact] = useState('');
+  const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
+  const [selectedPin, setSelectedPin] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const fileRefs = useRef<Array<HTMLInputElement | null>>([]);
 
   const photoCount = photos.filter(Boolean).length;
+  const uploadedUrls = photos.filter((photo): photo is string => Boolean(photo));
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await api.getRaces();
+        if (cancelled) return;
+        const options = Array.isArray(data?.options) ? (data.options as RaceOption[]) : [];
+        setRaceOptions(options);
+        setRaceKey((current) => current || options[0]?.key || '');
+      } catch {
+        if (!cancelled) {
+          setRaceOptions([]);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handlePhoto = async (index: number, file?: File) => {
     if (!file) return;
@@ -69,40 +84,76 @@ export const CreateAccountPage: React.FC<CreateAccountPageProps> = ({ onClose, o
     e.preventDefault();
     setErrorMessage(null);
 
-    if (photoCount < 3) {
+    const trimmedFullName = fullName.trim();
+    const trimmedEmail = email.trim();
+    const trimmedPhone = phone.trim();
+    const trimmedEmergency = emergencyContactPhone.trim();
+    const trimmedLocation = location.trim();
+    const dobIso = toDobIso(dob);
+    const password = selectedPin.join();
+
+    if (uploadedUrls.length < 3) {
       setErrorMessage('Please add 3 profile photos.');
       return;
     }
 
-    if (!email.trim()) {
+    if (trimmedFullName.length < 2) {
+      setErrorMessage('Full name must be at least 2 characters.');
+      return;
+    }
+
+    if (!trimmedEmail) {
       setErrorMessage('Email address is required.');
       return;
     }
 
-    const contact = parseEmergencyContact(emergencyContact);
-    if (!contact.name) {
-      setErrorMessage('Emergency contact is required.');
+    if (!trimmedPhone || trimmedPhone.replace(/\D/g, '').length < 7) {
+      setErrorMessage('Please enter a valid mobile number.');
       return;
     }
 
-    const payload: RegisterPayload = {
-      fullName: fullName.trim(),
-      email: email.trim(),
-      phone: phone.trim() || undefined,
-      dob: dob || undefined,
-      race: race || undefined,
-      location: location.trim() || undefined,
-      emergencyContactName: contact.name,
-      emergencyContactRelation: contact.relation,
-      emergencyContactPhone: phone.trim() || undefined,
-      profilePhotos: photos.filter((photo): photo is string => Boolean(photo)),
+    if (!/^\d{4}$/.test(password)) {
+      setErrorMessage('Please enter an exactly 4-digit PIN.');
+      return;
+    }
+
+    if (!raceKey) {
+      setErrorMessage('Please select a race option.');
+      return;
+    }
+
+    if (!trimmedEmergency || trimmedEmergency.replace(/\D/g, '').length < 7) {
+      setErrorMessage('Please enter a valid emergency contact phone number.');
+      return;
+    }
+
+    if (!dobIso) {
+      setErrorMessage('Date of birth is required.');
+      return;
+    }
+
+    if (!trimmedLocation) {
+      setErrorMessage('Location is required.');
+      return;
+    }
+
+    const finalPayload: RegisterPayload = {
+      fullName: trimmedFullName,
+      email: trimmedEmail,
+      phone: trimmedPhone,
+      password,
+      race: raceKey,
+      emergencyContactPhone: trimmedEmergency,
+      dob: dobIso,
+      location: trimmedLocation,
+      profilePhotos: uploadedUrls,
     };
 
     setIsLoading(true);
     try {
-      const data = await api.register(payload);
+      const data = await api.register(finalPayload);
       onRegistered({
-        email: email.trim().toLowerCase(),
+        email: trimmedEmail.toLowerCase(),
         token: data.token,
         otpCode: data.otpCode,
       });
@@ -195,7 +246,7 @@ export const CreateAccountPage: React.FC<CreateAccountPageProps> = ({ onClose, o
         <div className="space-y-4">
           <div>
             <label htmlFor="reg-name" className={authLabelClass}>
-              Full name
+              Full name <span className="text-[#DC2626]">*</span>
             </label>
             <input
               id="reg-name"
@@ -208,29 +259,31 @@ export const CreateAccountPage: React.FC<CreateAccountPageProps> = ({ onClose, o
           </div>
           <div>
             <label htmlFor="reg-race" className={authLabelClass}>
-              Race(Optional)
+              Race
             </label>
             <select
               id="reg-race"
-              value={race}
-              onChange={(e) => setRace(e.target.value)}
+              value={raceKey}
+              onChange={(e) => setRaceKey(e.target.value)}
               className={`${authInputClass} appearance-none`}
+              required
             >
-              <option value="">White</option>
-              {RACE_OPTIONS.map((option) => (
-                <option key={option} value={option}>
-                  {option}
+              {raceOptions.length === 0 && <option value="">Loading…</option>}
+              {raceOptions.map((option) => (
+                <option key={option.key} value={option.key}>
+                  {option.label}
                 </option>
               ))}
             </select>
           </div>
           <div>
             <label htmlFor="reg-dob" className={authLabelClass}>
-              Date of Birth
+              Date of Birth <span className="text-[#DC2626]">*</span>
             </label>
             <input
               id="reg-dob"
               type="date"
+              required
               value={dob}
               onChange={(e) => setDob(e.target.value)}
               className={authInputClass}
@@ -253,11 +306,12 @@ export const CreateAccountPage: React.FC<CreateAccountPageProps> = ({ onClose, o
           </div>
           <div>
             <label htmlFor="reg-phone" className={authLabelClass}>
-              Mobile Number (Optional)
+              Mobile Number <span className="text-[#DC2626]">*</span>
             </label>
             <input
               id="reg-phone"
               type="tel"
+              required
               autoComplete="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
@@ -267,10 +321,11 @@ export const CreateAccountPage: React.FC<CreateAccountPageProps> = ({ onClose, o
           </div>
           <div>
             <label htmlFor="reg-location" className={authLabelClass}>
-              Location
+              Location <span className="text-[#DC2626]">*</span>
             </label>
             <input
               id="reg-location"
+              required
               value={location}
               onChange={(e) => setLocation(e.target.value)}
               placeholder="New York, NY"
@@ -278,16 +333,28 @@ export const CreateAccountPage: React.FC<CreateAccountPageProps> = ({ onClose, o
             />
           </div>
           <div>
-            <label htmlFor="reg-contact" className={authLabelClass}>
-              Emergency Contact
+            <label htmlFor="reg-emergency-phone" className={authLabelClass}>
+              Emergency Contact Phone <span className="text-[#DC2626]">*</span>
             </label>
             <input
-              id="reg-contact"
+              id="reg-emergency-phone"
+              type="tel"
               required
-              value={emergencyContact}
-              onChange={(e) => setEmergencyContact(e.target.value)}
-              placeholder="James Johnson - Father"
+              autoComplete="tel"
+              value={emergencyContactPhone}
+              onChange={(e) => setEmergencyContactPhone(e.target.value)}
+              placeholder="+1 (555) 987-6543"
               className={authInputClass}
+            />
+          </div>
+          <div>
+            <FourDigitPinInput
+              value={selectedPin.join('')}
+              onChange={(pin) => {
+                setSelectedPin(pin.split(''));
+                setErrorMessage(null);
+              }}
+              label="Create 4-digit PIN *"
             />
           </div>
         </div>

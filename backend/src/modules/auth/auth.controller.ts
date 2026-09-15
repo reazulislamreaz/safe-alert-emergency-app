@@ -48,7 +48,10 @@ export class AuthController {
 
   @Post("register")
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: "Register a citizen account (email required, phone optional)" })
+  @ApiOperation({
+    summary:
+      "Register a citizen account (fullName, email, phone, password/PIN, race, emergencyContactPhone, dob, location, profilePhotos)",
+  })
   @ApiCreatedResponse({ description: "Account created; email OTP dispatched" })
   async register(@Body() dto: RegisterDto) {
     const data = await this.authService.register(dto);
@@ -168,7 +171,7 @@ export class AuthController {
 
   @Post("login")
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Citizen login with email + 4-digit PIN (or password)" })
+  @ApiOperation({ summary: "Citizen login with email + password" })
   @ApiUnauthorizedResponse({ description: "Invalid credentials" })
   @ApiForbiddenResponse({ description: "Super Admin must use dashboard login" })
   async login(@Body() dto: LoginDto) {

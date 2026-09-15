@@ -1,5 +1,5 @@
-import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsArray, IsEmail, IsOptional, IsString, Matches, MinLength, ArrayMaxSize } from "class-validator";
+import { ApiProperty } from "@nestjs/swagger";
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsEmail, IsString, Matches, MinLength } from "class-validator";
 
 export class RegisterDto {
   @ApiProperty({ example: "Jordan Lee" })
@@ -11,55 +11,46 @@ export class RegisterDto {
   @IsEmail({}, { message: "Invalid email address" })
   email!: string;
 
-  @ApiPropertyOptional({ example: "+1 (555) 321-0987" })
-  @IsOptional()
+  @ApiProperty({ example: "+1 (555) 321-0987" })
   @IsString()
   @MinLength(7, { message: "Invalid phone number format" })
-  phone?: string;
+  phone!: string;
 
-  @ApiPropertyOptional({ example: "1998-05-14" })
-  @IsOptional()
+  @ApiProperty({
+    example: "1234",
+    description: "Citizen 4-digit PIN used as the account password",
+  })
   @IsString()
-  dob?: string;
+  @Matches(/^\d{4}$/, { message: "Password must be an exactly 4-digit PIN" })
+  password!: string;
 
-  @ApiPropertyOptional({ example: "White" })
-  @IsOptional()
+  @ApiProperty({ example: "WHITE" })
   @IsString()
-  race?: string;
+  @MinLength(1, { message: "Race is required" })
+  race!: string;
 
-  @ApiPropertyOptional({ example: "New York, NY" })
-  @IsOptional()
+  @ApiProperty({ example: "+1 (555) 987-6543" })
   @IsString()
-  location?: string;
+  @MinLength(7, { message: "Invalid emergency contact phone number" })
+  emergencyContactPhone!: string;
 
-  @ApiProperty({ example: "James Johnson" })
+  @ApiProperty({ example: "1998-05-14T00:00:00.000Z" })
   @IsString()
-  @MinLength(2, { message: "Emergency contact name required" })
-  emergencyContactName!: string;
+  @MinLength(4, { message: "Date of birth is required" })
+  dob!: string;
 
-  @ApiPropertyOptional({ example: "+1 (555) 987-6543" })
-  @IsOptional()
+  @ApiProperty({ example: "New York, NY" })
   @IsString()
-  emergencyContactPhone?: string;
+  @MinLength(1, { message: "Location is required" })
+  location!: string;
 
-  @ApiPropertyOptional({ example: "Father" })
-  @IsOptional()
-  @IsString()
-  emergencyContactRelation?: string;
-
-  @ApiPropertyOptional({
+  @ApiProperty({
     type: [String],
     example: ["https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=300"],
   })
-  @IsOptional()
   @IsArray()
-  @ArrayMaxSize(3, { message: "Profile Photos * — 0/3 required (max 3)" })
+  @ArrayMinSize(3, { message: "Profile Photos * — 3/3 required" })
+  @ArrayMaxSize(3, { message: "Profile Photos * — max 3" })
   @IsString({ each: true })
-  profilePhotos?: string[];
-
-  @ApiPropertyOptional({ example: "password123" })
-  @IsOptional()
-  @IsString()
-  @MinLength(6, { message: "Password must be at least 6 characters" })
-  password?: string;
+  profilePhotos!: string[];
 }

@@ -10,7 +10,7 @@ export function setupSwagger(app: INestApplication): void {
         "",
         "**Demo accounts**",
         "- Super Admin (Dashboard): `admin@safealert.app` / `adminpassword` via `POST /api/auth/dashboard/login`",
-        "- Citizen (Sarah): `sarah.johnson@example.com` / PIN `1234` via `POST /api/auth/login`",
+        "- Citizen (Sarah): `sarah.johnson@example.com` / password `1234` via `POST /api/auth/login`",
         "- Phone OTP for Sarah: `123456`",
         "",
         "Roles: `SUPER_ADMIN` (Dashboard only) and `USER` (App only).",

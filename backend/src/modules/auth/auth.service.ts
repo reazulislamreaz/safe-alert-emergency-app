@@ -34,8 +34,8 @@ export class AuthService {
 
   async register(dto: RegisterDto) {
     const email = dto.email.toLowerCase();
-    const phone = dto.phone?.trim() || null;
-    const phoneDigits = phone ? digitsOnly(phone) : "";
+    const phone = dto.phone.trim();
+    const phoneDigits = digitsOnly(phone);
 
     if (isDesignatedAdminEmail(email)) {
       throw new BadRequestException("This email is reserved for the Super Admin account.");
@@ -63,27 +63,28 @@ export class AuthService {
       }
     }
 
-    const passwordHash = dto.password ? await hash(dto.password, 10) : null;
+    const credentialHash = await hash(dto.password, 10);
     const userId = `usr-${crypto.randomUUID().slice(0, 8)}`;
     const contactId = `ct-${crypto.randomUUID().slice(0, 8)}`;
     const groupId = `grp-${crypto.randomUUID().slice(0, 8)}`;
     const memberId = `mem-${crypto.randomUUID().slice(0, 8)}`;
-    const emergencyPhone = dto.emergencyContactPhone || phone || "N/A";
-    const emergencyRelation = dto.emergencyContactRelation || "Emergency Contact";
+    const emergencyPhone = dto.emergencyContactPhone.trim();
+    const emergencyContactName = "Emergency Contact";
+    const emergencyRelation = "Emergency Contact";
 
     const user = await this.prisma.user.create({
       data: {
         id: userId,
-        fullName: dto.fullName,
+        fullName: dto.fullName.trim(),
         email,
         phone,
         phoneDigits,
-        pinHash: null,
-        passwordHash,
+        pinHash: credentialHash,
+        passwordHash: credentialHash,
         dob: dto.dob,
         race: dto.race,
-        location: dto.location,
-        emergencyContactName: dto.emergencyContactName,
+        location: dto.location.trim(),
+        emergencyContactName,
         role: Role.USER,
         emergencyContactPhone: emergencyPhone,
         emergencyContactRelation: emergencyRelation,
@@ -94,7 +95,7 @@ export class AuthService {
         contacts: {
           create: {
             id: contactId,
-            name: dto.emergencyContactName,
+            name: emergencyContactName,
             phone: emergencyPhone,
             phoneDigits: digitsOnly(emergencyPhone) || "0",
             relationship: emergencyRelation,
@@ -111,7 +112,7 @@ export class AuthService {
               create: {
                 id: memberId,
                 contactId,
-                name: dto.emergencyContactName,
+                name: emergencyContactName,
                 phone: emergencyPhone,
                 relationship: emergencyRelation,
               },
@@ -128,7 +129,7 @@ export class AuthService {
     userId: string,
     dto: RegisterDto,
     email: string,
-    phone: string | null,
+    phone: string,
     phoneDigits: string,
   ) {
     if (phoneDigits.length >= 7) {
@@ -140,22 +141,24 @@ export class AuthService {
       }
     }
 
-    const emergencyPhone = dto.emergencyContactPhone || phone || "N/A";
-    const emergencyRelation = dto.emergencyContactRelation || "Emergency Contact";
-    const passwordHash = dto.password ? await hash(dto.password, 10) : undefined;
+    const emergencyPhone = dto.emergencyContactPhone.trim();
+    const emergencyContactName = "Emergency Contact";
+    const emergencyRelation = "Emergency Contact";
+    const credentialHash = await hash(dto.password, 10);
 
     const user = await this.prisma.user.update({
       where: { id: userId },
       data: {
-        fullName: dto.fullName,
+        fullName: dto.fullName.trim(),
         email,
         phone,
         phoneDigits,
-        ...(passwordHash ? { passwordHash } : {}),
+        passwordHash: credentialHash,
+        pinHash: credentialHash,
         dob: dto.dob,
         race: dto.race,
-        location: dto.location,
-        emergencyContactName: dto.emergencyContactName,
+        location: dto.location.trim(),
+        emergencyContactName,
         emergencyContactPhone: emergencyPhone,
         emergencyContactRelation: emergencyRelation,
         profilePhotos: requireStoredImageUrls(dto.profilePhotos) ?? [],
@@ -163,7 +166,6 @@ export class AuthService {
           dto.profilePhotos?.[0] ||
           "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
         isVerified: false,
-        pinHash: null,
         faceIdEnabled: false,
         faceIdCredentialId: null,
       },
@@ -442,43 +444,19 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
-    const identity = (dto.email || dto.emailOrPhone || "").toLowerCase().trim();
-    if (!identity) {
+    const email = dto.email.toLowerCase().trim();
+    if (!email) {
       throw new BadRequestException("Email is required.");
     }
 
-    const cleanPhone = digitsOnly(dto.emailOrPhone || "");
-
-    const user = await this.prisma.user.findFirst({
-      where: {
-        OR: [
-          { email: identity },
-          ...(cleanPhone.length >= 7 ? [{ phoneDigits: cleanPhone }] : []),
-        ],
-      },
-    });
+    const user = await this.prisma.user.findUnique({ where: { email } });
 
     if (!user) {
       throw new UnauthorizedException("Invalid credentials. Account not found.");
     }
 
-    if (dto.password) {
-      if (!user.passwordHash || !(await compare(dto.password, user.passwordHash))) {
-        throw new UnauthorizedException("Incorrect password.");
-      }
-    } else if (dto.pin) {
-      if (!user.pinHash) {
-        throw new UnauthorizedException(
-          "PIN login is not enabled for this account. Use Face ID instead.",
-        );
-      }
-      if (!(await compare(dto.pin, user.pinHash))) {
-        throw new UnauthorizedException("Incorrect security PIN.");
-      }
-    } else {
-      throw new UnauthorizedException(
-        "Please provide your security PIN or password to log in.",
-      );
+    if (!user.passwordHash || !(await compare(dto.password, user.passwordHash))) {
+      throw new UnauthorizedException("Incorrect password.");
     }
 
     if (user.role === Role.USER && !user.isVerified) {

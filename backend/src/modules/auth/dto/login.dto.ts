@@ -1,39 +1,19 @@
-import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsEmail, IsOptional, IsString, Matches, MinLength } from "class-validator";
+import { ApiProperty } from "@nestjs/swagger";
+import { IsEmail, IsString, MinLength } from "class-validator";
 
 export class LoginDto {
   @ApiProperty({
-    example: "sarah.johnson@example.com",
-    description: "Citizen login email (preferred). Legacy emailOrPhone still accepted.",
+    example: "colero1040@dd2car.com",
+    description: "Citizen login email",
   })
-  @IsOptional()
   @IsEmail({}, { message: "Valid email address is required" })
-  email?: string;
+  email!: string;
 
-  @ApiPropertyOptional({
-    example: "sarah.johnson@example.com",
-    description: "Legacy field: email or phone. Prefer email.",
+  @ApiProperty({
+    example: "1234",
+    description: "Citizen account password (4-digit PIN from registration)",
   })
-  @IsOptional()
   @IsString()
-  @MinLength(3, { message: "Email or phone number is required" })
-  emailOrPhone?: string;
-
-  @ApiPropertyOptional({
-    example: "4821",
-    description: "Citizen 4-digit PIN. Send this or password.",
-  })
-  @IsOptional()
-  @IsString()
-  @Matches(/^\d{4}$/, { message: "PIN must be exactly 4 digits" })
-  pin?: string;
-
-  @ApiPropertyOptional({
-    example: "password123",
-    description: "Citizen password login. Super Admin must use POST /api/auth/dashboard/login.",
-  })
-  @IsOptional()
-  @IsString()
-  @MinLength(4)
-  password?: string;
+  @MinLength(4, { message: "Password is required" })
+  password!: string;
 }

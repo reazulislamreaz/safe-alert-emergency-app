@@ -492,7 +492,7 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
         isVerified: true,
         isPhoneVerified: true,
         pinHash: hashSecret("1234"),
-        passwordHash: hashSecret("password123"),
+        passwordHash: hashSecret("1234"),
         dob: "1998-05-14",
         race: "White",
         location: "New York, NY",
@@ -547,6 +547,7 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
         isVerified: true,
         isPhoneVerified: true,
         pinHash: hashSecret("1111"),
+        passwordHash: hashSecret("1111"),
         createdAt: new Date("2026-06-10T12:30:00Z"),
       },
       {
@@ -560,6 +561,7 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
         isVerified: true,
         isPhoneVerified: true,
         pinHash: hashSecret("2222"),
+        passwordHash: hashSecret("2222"),
         createdAt: new Date("2026-05-20T08:15:00Z"),
       },
       {
@@ -573,6 +575,7 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
         isVerified: true,
         isPhoneVerified: true,
         pinHash: hashSecret("1234"),
+        passwordHash: hashSecret("1234"),
         createdAt: new Date("2026-04-12T14:45:00Z"),
       },
       {
@@ -586,6 +589,7 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
         isVerified: true,
         isPhoneVerified: true,
         pinHash: hashSecret("4444"),
+        passwordHash: hashSecret("4444"),
         createdAt: new Date("2026-07-02T19:20:00Z"),
       },
       {
@@ -599,6 +603,7 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
         isVerified: true,
         isPhoneVerified: true,
         pinHash: hashSecret("5555"),
+        passwordHash: hashSecret("5555"),
         createdAt: new Date("2026-08-01T11:00:00Z"),
       },
     ],

@@ -49,15 +49,13 @@ let appConfigCache: AppConfig | null = null;
 export type RegisterPayload = {
   fullName: string;
   email: string;
-  phone?: string;
-  dob?: string;
-  race?: string;
-  location?: string;
-  emergencyContactName: string;
-  emergencyContactPhone?: string;
-  emergencyContactRelation?: string;
-  profilePhotos?: string[];
-  password?: string;
+  phone: string;
+  password: string;
+  race: string;
+  emergencyContactPhone: string;
+  dob: string;
+  location: string;
+  profilePhotos: string[];
 };
 
 function readApiError(data: unknown, fallback: string): string {
@@ -168,13 +166,13 @@ export const api = {
 
   async login(
     email: string,
-    pin: string,
+    password: string,
     remember: boolean = true,
   ): Promise<{ user: User; token: string }> {
     const res = await fetch(`${API_BASE}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, pin }),
+      body: JSON.stringify({ email, password }),
     });
 
     const data = await res.json();
