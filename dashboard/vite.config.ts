@@ -3,6 +3,9 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
+  optimizeDeps: {
+    include: ['zego-express-engine-webrtc'],
+  },
   server: {
     port: 3000,
     proxy: {

@@ -60,6 +60,14 @@ export class ContactsController {
     return { success: true, data };
   }
 
+  @Get("users/search")
+  @ApiOperation({ summary: "Search registered users by name or email (Add Contact)" })
+  @ApiQuery({ name: "q", required: true, example: "sarah@gmail.com" })
+  async searchUsers(@CurrentUser() user: JwtPayload, @Query("q") query?: string) {
+    const data = await this.contactService.searchRegisteredUsers(user.sub, query || "");
+    return { success: true, data };
+  }
+
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: "Add a contact (Add Contact modal)" })

@@ -539,6 +539,7 @@ export class AlertService {
 
   async getCallSession(id: string, userId: string) {
     const alert = await this.requireAccessible(id, userId);
+    const viewer = await this.requireUser(userId);
     const dto = toAlertDto(alert);
     const appId = env.zegoAppId;
     const secret = env.zegoServerSecret;
@@ -547,6 +548,11 @@ export class AlertService {
       token = generateZegoToken04(appId, userId, secret, 3600, "");
     }
 
+    const server =
+      appId && token
+        ? env.zegoServer || `wss://webliveroom${appId}-api.cool.zego.im/ws`
+        : null;
+
     return {
       alertId: dto.id,
       roomId: dto.roomId,
@@ -554,9 +560,10 @@ export class AlertService {
       groupLabel: "Emergency Group",
       durationLabel: dto.durationLabel,
       userId,
-      userName: dto.userName,
+      userName: viewer.fullName,
       appId: appId || null,
       token,
+      server,
       demo: !token,
       participants: dto.activeCallParticipants,
       quickResponses: QUICK_RESPONSES.map((item) => ({ ...item })),
@@ -689,20 +696,42 @@ export class AlertService {
 
   async updateParticipant(alertId: string, userId: string, dto: UpdateParticipantDto) {
     const alert = await this.requireAccessible(alertId, userId);
+    const viewer = await this.requireUser(userId);
+    const status = dto.status ?? "CONNECTED";
+    const selfParticipantId = `part-${userId}`;
+    let matched = false;
+
     const participants = ((alert.participants as CallParticipant[] | null) ?? []).map((participant) => {
-      const matched =
+      const matchedSelf =
+        participant.id === selfParticipantId ||
         (dto.participantId && participant.id === dto.participantId) ||
-        (dto.contactId && participant.contactId === dto.contactId);
-      if (!matched) {
+        (dto.contactId && participant.contactId === dto.contactId) ||
+        participant.name === viewer.fullName;
+      if (!matchedSelf) {
         return participant;
       }
-      const status = dto.status ?? "CONNECTED";
+      matched = true;
       return {
         ...participant,
         status,
         responderStatus: status === "CONNECTED" ? "JOINED" : "CALLING",
       };
     });
+
+    if (!matched) {
+      participants.push({
+        id: selfParticipantId,
+        contactId: null,
+        name: viewer.fullName,
+        displayName: viewer.fullName.split(" ")[0],
+        initials: initialsFrom(viewer.fullName),
+        relationship: alert.userId === userId ? "Sender" : "Responder",
+        status,
+        responderStatus: status === "CONNECTED" ? "JOINED" : "CALLING",
+        color: PARTICIPANT_COLORS[alert.userId === userId ? 0 : 1],
+        isSender: alert.userId === userId,
+      });
+    }
 
     const updated = await this.prisma.alert.update({
       where: { id: alertId },

@@ -871,6 +871,26 @@ export const api = {
     return data.data;
   },
 
+  async updateAlertParticipant(
+    alertId: string,
+    payload: {
+      participantId?: string;
+      contactId?: string;
+      status?: 'CONNECTED' | 'CALLING';
+    },
+  ) {
+    const res = await fetch(`${API_BASE}/alerts/${alertId}/participants`, {
+      method: 'POST',
+      headers: this.authHeaders(),
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to update call participant'));
+    }
+    return data.data;
+  },
+
   async cancelAlert(alertId: string, payload: { reason?: string; notes?: string; pin?: string }) {
     const res = await fetch(`${API_BASE}/alerts/${alertId}/cancel`, {
       method: 'POST',
@@ -1336,8 +1356,9 @@ export const api = {
   },
 
   async createContact(payload: {
-    name: string;
-    phone: string;
+    userId?: string;
+    name?: string;
+    phone?: string;
     relationship?: string;
     status?: string;
     groupId?: string;
@@ -1352,6 +1373,30 @@ export const api = {
       throw new Error(data.error || 'Failed to add contact');
     }
     return data.data;
+  },
+
+  async searchRegisteredUsers(query: string) {
+    const params = new URLSearchParams();
+    if (query.trim()) params.set('q', query.trim());
+    const suffix = params.toString() ? `?${params.toString()}` : '';
+    const res = await fetch(`${API_BASE}/contacts/users/search${suffix}`, {
+      headers: this.authHeaders(false),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Failed to search users');
+    }
+    return data.data as {
+      query: string;
+      users: Array<{
+        id: string;
+        fullName: string;
+        email: string;
+        phone?: string | null;
+        avatar?: string | null;
+        initials: string;
+      }>;
+    };
   },
 
   async updateContact(

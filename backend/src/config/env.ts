@@ -48,6 +48,7 @@ export const env = {
   databaseUrl: process.env.DATABASE_URL || "",
   zegoAppId: process.env.ZEGO_APP_ID ? parseInt(process.env.ZEGO_APP_ID, 10) : 0,
   zegoServerSecret: process.env.ZEGO_SERVER_SECRET || "",
+  zegoServer: process.env.ZEGO_SERVER || "",
   s3: {
     region: process.env.AWS_REGION || "us-east-1",
     bucket: process.env.AWS_S3_BUCKET || process.env.AWS_S3_BUCKET_NAME || "",

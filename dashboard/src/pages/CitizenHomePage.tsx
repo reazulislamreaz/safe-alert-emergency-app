@@ -7,6 +7,7 @@ import { AlertsTabPage } from './citizen/AlertsTabPage';
 import { LiveAlertPage } from './citizen/LiveAlertPage';
 import { AlertChatSheet } from './citizen/AlertChatSheet';
 import { AlertCallSheet } from './citizen/AlertCallSheet';
+import { ContactsTabPage } from './citizen/ContactsTabPage';
 import { authPrimaryBtnClass } from '../components/auth/AuthShell';
 import { ChevronLeft } from 'lucide-react';
 
@@ -88,9 +89,7 @@ export const CitizenHomePage: React.FC<CitizenHomePageProps> = ({
                 body={`${user.fullName} is signed in. Use Alerts to respond to circle emergencies.`}
               />
             )}
-            {!overlay && tab === 'contacts' && (
-              <SimplePane title="Contacts" body="Your emergency groups are listed on the Alerts tab under MY GROUPS." />
-            )}
+            {!overlay && tab === 'contacts' && <ContactsTabPage />}
             {!overlay && tab === 'journal' && (
               <SimplePane title="Journal" body="Incident journals will appear here after an alert is resolved." />
             )}

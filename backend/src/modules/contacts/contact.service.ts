@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { Prisma, SubscriptionTier } from "@prisma/client";
+import { Prisma, Role, SubscriptionTier } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { digitsOnly } from "../../common/utils/phone";
 import { toContactDto, toGroupDto, toMemberDto } from "../../common/mappers/contact.mapper";
@@ -89,16 +89,39 @@ export class ContactService {
       throw new BadRequestException("Status is required.");
     }
 
-    const phoneDigits = digitsOnly(dto.phone);
-    if (phoneDigits.length < 7) {
-      throw new BadRequestException("Enter a valid phone number.");
+    let name = dto.name?.trim() || "";
+    let phone = dto.phone?.trim() || "";
+    let phoneDigits = phone ? digitsOnly(phone) : "";
+
+    if (dto.userId?.trim()) {
+      const target = await this.prisma.user.findUnique({ where: { id: dto.userId.trim() } });
+      if (!target || target.role !== Role.USER) {
+        throw new BadRequestException("That user could not be found.");
+      }
+      if (!target.isVerified) {
+        throw new BadRequestException("That user has not verified their email yet.");
+      }
+      if (target.id === userId) {
+        throw new BadRequestException("You cannot add yourself as a contact.");
+      }
+
+      name = target.fullName.trim();
+      phone = (target.phone || target.email).trim();
+      phoneDigits = digitsOnly(target.phone || "") || `uid-${target.id}`;
+    }
+
+    if (name.length < 2) {
+      throw new BadRequestException("Select a registered user to add as a contact.");
+    }
+    if (!phoneDigits || phoneDigits.length < 3) {
+      throw new BadRequestException("Selected user is missing contact details.");
     }
 
     const duplicate = await this.prisma.contact.findFirst({
       where: { userId, phoneDigits },
     });
     if (duplicate) {
-      throw new BadRequestException("A contact with this phone number already exists.");
+      throw new BadRequestException("That person is already in your contacts.");
     }
 
     if (dto.groupId) {
@@ -110,8 +133,8 @@ export class ContactService {
         data: {
           id: `ct-${crypto.randomUUID().slice(0, 8)}`,
           userId,
-          name: dto.name.trim(),
-          phone: dto.phone.trim(),
+          name,
+          phone,
           phoneDigits,
           relationship,
         },
@@ -138,6 +161,68 @@ export class ContactService {
     }
 
     return toContactDto(contact);
+  }
+
+  async searchRegisteredUsers(userId: string, queryRaw: string) {
+    const query = queryRaw.trim();
+    if (query.length < 2) {
+      return { users: [], query };
+    }
+
+    const existing = await this.prisma.contact.findMany({
+      where: { userId },
+      select: { phoneDigits: true, phone: true, name: true },
+    });
+    const existingDigits = new Set(existing.map((item) => item.phoneDigits));
+    const existingPhones = new Set(
+      existing.map((item) => item.phone.trim().toLowerCase()).filter(Boolean),
+    );
+
+    const users = await this.prisma.user.findMany({
+      where: {
+        role: Role.USER,
+        isVerified: true,
+        id: { not: userId },
+        OR: [
+          { fullName: { contains: query, mode: "insensitive" } },
+          { email: { contains: query, mode: "insensitive" } },
+        ],
+      },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        phone: true,
+        avatar: true,
+      },
+      orderBy: { fullName: "asc" },
+      take: 20,
+    });
+
+    return {
+      query,
+      users: users
+        .filter((user) => {
+          const digits = digitsOnly(user.phone || "") || `uid-${user.id}`;
+          if (existingDigits.has(digits)) return false;
+          if (user.email && existingPhones.has(user.email.toLowerCase())) return false;
+          if (user.phone && existingPhones.has(user.phone.trim().toLowerCase())) return false;
+          return true;
+        })
+        .map((user) => ({
+          id: user.id,
+          fullName: user.fullName,
+          email: user.email,
+          phone: user.phone,
+          avatar: user.avatar,
+          initials: user.fullName
+            .split(" ")
+            .filter(Boolean)
+            .map((part) => part[0]?.toUpperCase() ?? "")
+            .join("")
+            .slice(0, 2),
+        })),
+    };
   }
 
   async updateContact(userId: string, contactId: string, dto: UpdateContactDto) {

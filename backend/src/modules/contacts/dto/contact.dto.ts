@@ -32,10 +32,20 @@ export class AddMemberDto {
 }
 
 export class CreateContactDto {
-  @ApiProperty({ example: "James Johnson" })
+  @ApiPropertyOptional({
+    example: "usr-sarah-101",
+    description: "Registered user to add as a contact (preferred). Name/phone are taken from their profile.",
+  })
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  userId?: string;
+
+  @ApiPropertyOptional({ example: "James Johnson", description: "Legacy manual name (prefer userId)" })
+  @IsOptional()
   @IsString()
   @MinLength(2, { message: "Contact name is required" })
-  name!: string;
+  name?: string;
 
   @ApiPropertyOptional({
     example: "Father",
@@ -50,10 +60,11 @@ export class CreateContactDto {
   @IsString()
   status?: string;
 
-  @ApiProperty({ example: "+1 (555) 111-2222" })
+  @ApiPropertyOptional({ example: "+1 (555) 111-2222", description: "Legacy manual phone (prefer userId)" })
+  @IsOptional()
   @IsString()
   @MinLength(7, { message: "Enter a valid phone number" })
-  phone!: string;
+  phone?: string;
 
   @ApiPropertyOptional({ example: "grp-family-01" })
   @IsOptional()
