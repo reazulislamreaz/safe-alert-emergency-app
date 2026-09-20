@@ -6,6 +6,10 @@ import {
   TelemetryPoint,
 } from "@prisma/client";
 import { ALERT_MODES } from "../../modules/alerts/alert.constants";
+import {
+  buildBatteryRecommendation,
+  buildShareableLocation,
+} from "../utils/location-share";
 
 export const alertInclude = {
   telemetryHistory: { orderBy: { timestamp: "asc" as const } },
@@ -47,6 +51,14 @@ export function modeLabel(mode: string, source?: string): string {
 
 export function toAlertDto(alert: AlertRecord) {
   const participants = (alert.participants as CallParticipant[] | null) ?? [];
+  const latestBattery = alert.telemetryHistory.length
+    ? alert.telemetryHistory[alert.telemetryHistory.length - 1]?.batteryLevel
+    : null;
+  const activeMinutes =
+    alert.status === "BROADCASTING"
+      ? Math.floor((Date.now() - alert.triggeredAt.getTime()) / 60000)
+      : 0;
+  const modeMeta = ALERT_MODES.find((item) => item.key === alert.mode);
   return {
     id: alert.id,
     userId: alert.userId,
@@ -65,6 +77,19 @@ export function toAlertDto(alert: AlertRecord) {
       longitude: alert.longitude,
       address: alert.address,
     },
+    shareableLocation: buildShareableLocation({
+      latitude: alert.latitude,
+      longitude: alert.longitude,
+      address: alert.address,
+    }),
+    soundKey: modeMeta?.soundKey ?? "emergency_alert",
+    soundUrl: modeMeta?.soundUrl ?? "/sounds/emergency-alert.mp3",
+    allowsManualAlarm: modeMeta?.allowsManualAlarm ?? alert.mode === "EMERGENCY",
+    batteryRecommendation: buildBatteryRecommendation({
+      batteryLevel: latestBattery,
+      alertActiveMinutes: activeMinutes,
+    }),
+    followUpSentAt: alert.followUpSentAt?.toISOString() ?? null,
     liveLocationActive: alert.status === "BROADCASTING",
     durationLabel: formatDuration(alert.triggeredAt, alert.resolvedAt ?? new Date()),
     roomId: alert.roomId ?? `safealert-${alert.id}`,
@@ -99,6 +124,9 @@ export function toAlertDto(alert: AlertRecord) {
       text: message.text,
       timestamp: message.timestamp,
       type: message.type,
+      mediaUrl: message.mediaUrl ?? null,
+      mediaType: message.mediaType ?? "NONE",
+      mimeType: message.mimeType ?? null,
     })),
     triggeredAt: alert.triggeredAt.toISOString(),
     resolvedAt: alert.resolvedAt?.toISOString(),

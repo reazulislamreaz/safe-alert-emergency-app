@@ -97,6 +97,17 @@ export class SubscriptionsController {
     const data = await this.profileService.cancel(user.sub, dto);
     return { success: true, data };
   }
+
+  @Post("redeem-promo")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Redeem a promotional premium access code" })
+  async redeemPromo(
+    @CurrentUser() user: JwtPayload,
+    @Body() body: { code: string },
+  ) {
+    const data = await this.profileService.redeemPromo(user.sub, body.code || "");
+    return { success: true, data };
+  }
 }
 
 @ApiTags("Legal")

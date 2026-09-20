@@ -107,6 +107,7 @@ export class AuthService {
             name: "Family (Primary)",
             color: "#2563EB",
             isDefaultSOS: true,
+            kind: "FAMILY_FRIENDS",
             memberCount: 1,
             members: {
               create: {
@@ -122,7 +123,56 @@ export class AuthService {
       },
     });
 
+    if (dto.inviteToken?.trim()) {
+      try {
+        await this.claimInviteToken(user.id, dto.inviteToken.trim());
+      } catch {
+        // Registration succeeds even if invite claim fails; client can retry claim.
+      }
+    }
+
     return this.issueRegistrationSession(user);
+  }
+
+  private async claimInviteToken(userId: string, token: string) {
+    const invite = await this.prisma.groupInvitation.findFirst({ where: { token } });
+    if (!invite || invite.useCount >= invite.maxUses) {
+      return;
+    }
+    if (invite.expiresAt && invite.expiresAt.getTime() < Date.now()) {
+      return;
+    }
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    const already = await this.prisma.contactMember.findFirst({
+      where: { groupId: invite.groupId, phoneDigits: user.phoneDigits },
+    });
+    if (already) {
+      return;
+    }
+    await this.prisma.contactMember.create({
+      data: {
+        id: `mem-${crypto.randomUUID().slice(0, 8)}`,
+        groupId: invite.groupId,
+        name: user.fullName,
+        phone: user.phone || "N/A",
+        phoneDigits: user.phoneDigits,
+        relationship: "Member",
+      },
+    });
+    await this.prisma.contactGroup.update({
+      where: { id: invite.groupId },
+      data: { memberCount: { increment: 1 } },
+    });
+    const nextUseCount = invite.useCount + 1;
+    await this.prisma.groupInvitation.update({
+      where: { id: invite.id },
+      data: {
+        useCount: nextUseCount,
+        inviteeUserId: userId,
+        respondedAt: new Date(),
+        status: nextUseCount >= invite.maxUses ? "ACCEPTED" : "PENDING",
+      },
+    });
   }
 
   private async resumeIncompleteRegistration(

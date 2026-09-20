@@ -1,0 +1,89 @@
+# Additive Safety Circle client-requirement endpoints (Flutter + React consumers)
+# These paths are implemented in NestJS; merge into openapi.yaml / regenerate via Swagger as needed.
+
+paths:
+  /api/contacts/referral/{token}:
+    get:
+      summary: Resolve referral/invite token (public)
+      tags: [Contacts]
+  /api/contacts/referral/{token}/claim:
+    post:
+      summary: Claim referral token after signup
+      tags: [Contacts]
+  /api/alerts/{id}/location-share:
+    get:
+      summary: Copy-ready live location for authorized viewers
+      tags: [Alerts]
+  /api/alerts/{id}/alarm:
+    post:
+      summary: Intentionally trigger loud emergency alarm (never auto)
+      tags: [Alerts]
+  /api/safety-countdowns:
+    post:
+      summary: Start 30-minute safety countdown
+      tags: [Safety Countdowns]
+  /api/safety-countdowns/current:
+    get:
+      summary: Active countdown (server-authoritative)
+      tags: [Safety Countdowns]
+  /api/safety-countdowns/{id}/confirm-safe:
+    post:
+      summary: Confirm safe before expiry
+      tags: [Safety Countdowns]
+  /api/safety-countdowns/{id}/cancel:
+    post:
+      summary: Cancel countdown
+      tags: [Safety Countdowns]
+  /api/location-requests:
+    post:
+      summary: Request location in Family/Friends circle only
+      tags: [Location Requests]
+  /api/location-requests/inbox:
+    get:
+      summary: Location request inbox
+      tags: [Location Requests]
+  /api/location-requests/{id}/respond:
+    post:
+      summary: Approve or decline location request
+      tags: [Location Requests]
+  /api/dashboard/promo-codes:
+    get:
+      summary: List promotional premium codes
+      tags: [Dashboard]
+    post:
+      summary: Create promotional premium code
+      tags: [Dashboard]
+  /api/dashboard/promo-codes/{id}:
+    patch:
+      summary: Update/disable promotional code
+      tags: [Dashboard]
+  /api/dashboard/incidents/{alertId}:
+    get:
+      summary: Command panel incident aggregator
+      tags: [Dashboard]
+  /api/subscriptions/redeem-promo:
+    post:
+      summary: Redeem promotional premium access code
+      tags: [Subscriptions]
+  /api/uploads/media:
+    post:
+      summary: Upload chat photos/videos
+      tags: [Uploads]
+  /api/messages/conversations:
+    get:
+      summary: List 1-on-1 conversations
+      tags: [Messages]
+    post:
+      summary: Start or get conversation
+      tags: [Messages]
+  /api/messages/conversations/{id}:
+    get:
+      summary: Get conversation messages
+      tags: [Messages]
+    post:
+      summary: Send text/photo/video message
+      tags: [Messages]
+  /api/bystander/relay:
+    post:
+      summary: One-time bystander-assisted message
+      tags: [Bystander]

@@ -210,7 +210,36 @@ export class NotificationService {
     });
   }
 
-  private async createForUser(data: {
+  async notifyFollowUpAlert(params: {
+    ownerId: string;
+    ownerName: string;
+    alertId: string;
+    body: string;
+    memberPhones: string[];
+  }) {
+    const phones = [...new Set(params.memberPhones.map(digitsOnly).filter((value) => value.length >= 7))];
+    const recipients = phones.length
+      ? await this.prisma.user.findMany({
+          where: { phoneDigits: { in: phones }, NOT: { id: params.ownerId } },
+          select: { id: true },
+        })
+      : [];
+
+    await Promise.all(
+      recipients.map((recipient) =>
+        this.createForUser({
+          userId: recipient.id,
+          type: NotificationType.FOLLOW_UP_ALERT,
+          title: "Emergency still active",
+          body: params.body,
+          refLabel: "Follow-up",
+          alertId: params.alertId,
+        }),
+      ),
+    );
+  }
+
+  async createForUser(data: {
     userId: string;
     type: NotificationType;
     title: string;
@@ -236,3 +265,4 @@ export class NotificationService {
     return dto;
   }
 }
+

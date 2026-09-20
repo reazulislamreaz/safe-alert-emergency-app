@@ -179,6 +179,25 @@ export class AlertsController {
     return { success: true, data };
   }
 
+  @Get(":id/location-share")
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: "Copy-ready live location for authorized viewers" })
+  @ApiParam({ name: "id", example: "alt-active-991" })
+  async locationShare(@Param("id") id: string, @CurrentUser() user: JwtPayload) {
+    const data = await this.alertService.getLocationShare(id, user.sub);
+    return { success: true, data };
+  }
+
+  @Post(":id/alarm")
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Intentionally trigger a loud emergency alarm (never auto)" })
+  @ApiParam({ name: "id", example: "alt-active-991" })
+  async alarm(@Param("id") id: string, @CurrentUser() user: JwtPayload) {
+    const data = await this.alertService.triggerAlarm(id, user.sub);
+    return { success: true, data };
+  }
+
   @Post(":id/respond")
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)

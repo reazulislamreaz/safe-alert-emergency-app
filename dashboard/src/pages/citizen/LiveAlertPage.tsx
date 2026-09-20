@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CheckCircle, ChevronLeft, MapPin, MessageCircle, Video } from 'lucide-react';
+import { CheckCircle, ChevronLeft, Copy, MapPin, MessageCircle, Volume2, Video } from 'lucide-react';
 import { api } from '../../services/api';
 import { socketService } from '../../services/socket';
 import { AlertResponderView } from '../../types';
@@ -41,10 +41,35 @@ export const LiveAlertPage: React.FC<LiveAlertPageProps> = ({
   const [isActing, setIsActing] = useState(false);
   const [now, setNow] = useState(Date.now());
 
+  const [copyStatus, setCopyStatus] = useState<string | null>(null);
+
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, []);
+
+  const copyLocation = async () => {
+    try {
+      const share =
+        (alert as any)?.shareableLocation ||
+        (await api.getAlertLocationShare(alertId));
+      await navigator.clipboard.writeText(share.copiedText);
+      setCopyStatus('Location copied');
+      setTimeout(() => setCopyStatus(null), 2000);
+    } catch (err: unknown) {
+      setErrorMessage(err instanceof Error ? err.message : 'Could not copy location.');
+    }
+  };
+
+  const triggerAlarm = async () => {
+    try {
+      await api.triggerAlertAlarm(alertId);
+      setCopyStatus('Loud alarm triggered intentionally');
+      setTimeout(() => setCopyStatus(null), 2000);
+    } catch (err: unknown) {
+      setErrorMessage(err instanceof Error ? err.message : 'Could not trigger alarm.');
+    }
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -187,6 +212,36 @@ export const LiveAlertPage: React.FC<LiveAlertPageProps> = ({
             <span className="text-xs font-semibold text-[#00AA1D]">{alert.actions.messageLabel}</span>
           </button>
         </div>
+
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={copyLocation}
+            className="flex-1 h-12 rounded-2xl bg-[#F8FAFC] border border-[#E1E1E1] flex items-center justify-center gap-2 touch-manipulation"
+          >
+            <Copy className="size-4 text-[#09003B]" />
+            <span className="text-xs font-semibold text-[#09003B]">Copy Location</span>
+          </button>
+          <button
+            type="button"
+            onClick={triggerAlarm}
+            className="flex-1 h-12 rounded-2xl bg-[#FEF2F2] border border-[#FECACA] flex items-center justify-center gap-2 touch-manipulation"
+          >
+            <Volume2 className="size-4 text-[#EB0909]" />
+            <span className="text-xs font-semibold text-[#EB0909]">Sound Alarm</span>
+          </button>
+        </div>
+        {copyStatus && <p className="text-xs text-center text-[#00AA1D] font-medium">{copyStatus}</p>}
+        {(alert as any).batteryRecommendation?.show && (
+          <div className="rounded-2xl bg-[#FFFBEB] border border-[#FDE68A] px-3 py-2.5">
+            <p className="text-xs font-semibold text-[#92400E]">
+              {(alert as any).batteryRecommendation.title}
+            </p>
+            <p className="text-[11px] text-[#78350F] mt-1 leading-4">
+              {(alert as any).batteryRecommendation.body}
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="px-4 pb-6 pt-2 space-y-4 shrink-0">

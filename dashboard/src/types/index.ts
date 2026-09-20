@@ -313,6 +313,11 @@ export interface LiveGroupItem {
   status: 'SOS active' | 'Idle' | 'Monitoring';
   lat: number;
   lng: number;
+  address?: string | null;
+  alertId?: string | null;
+  emergencyType?: string | null;
+  subscriberUserId?: string;
+  subscriberName?: string;
   members: GroupMember[];
 }
 

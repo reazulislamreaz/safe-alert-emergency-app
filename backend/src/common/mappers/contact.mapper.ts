@@ -1,6 +1,11 @@
-import { Contact, ContactGroup, ContactMember } from "@prisma/client";
+import {
+  Contact,
+  ContactGroup,
+  ContactGroupKind,
+  ContactMember,
+} from "@prisma/client";
 
-type MemberWithGroup = ContactMember & { group: Pick<ContactGroup, "id" | "name" | "color"> };
+type MemberWithGroup = ContactMember & { group: Pick<ContactGroup, "id" | "name" | "color" | "kind"> };
 type ContactWithMemberships = Contact & { memberships: MemberWithGroup[] };
 type GroupWithMembers = ContactGroup & { members: ContactMember[] };
 
@@ -81,6 +86,8 @@ export function toGroupDto(
     tag: groupTagFromName(group.name),
     color: group.color,
     isDefaultSOS: group.isDefaultSOS,
+    kind: group.kind ?? ContactGroupKind.GENERAL,
+    allowsLocationRequests: (group.kind ?? ContactGroupKind.GENERAL) === ContactGroupKind.FAMILY_FRIENDS,
     memberCount,
     memberLimit: cap,
     memberLabel: cap ? `${memberCount}/${cap} members` : `${memberCount} members`,

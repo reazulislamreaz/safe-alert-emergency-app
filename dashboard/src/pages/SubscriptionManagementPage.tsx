@@ -8,11 +8,17 @@ import {
   Download 
 } from 'lucide-react';
 import { SubscriptionItem, TransactionItem } from '../types';
-import { api } from '../services/api';
+import { api, PromoCodeItem } from '../services/api';
 
 export const SubscriptionManagementPage: React.FC = () => {
   const [plans, setPlans] = useState<SubscriptionItem[]>([]);
   const [transactions, setTransactions] = useState<TransactionItem[]>([]);
+  const [promoCodes, setPromoCodes] = useState<PromoCodeItem[]>([]);
+  const [promoCode, setPromoCode] = useState('');
+  const [promoCampaign, setPromoCampaign] = useState('');
+  const [promoMonths, setPromoMonths] = useState<6 | 12>(6);
+  const [promoMax, setPromoMax] = useState('1');
+  const [promoError, setPromoError] = useState<string | null>(null);
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingPlan, setEditingPlan] = useState<SubscriptionItem | null>(null);
@@ -28,11 +34,17 @@ export const SubscriptionManagementPage: React.FC = () => {
     setTransactions(data.transactions);
   };
 
+  const loadPromoCodes = async () => {
+    const data = await api.listPromoCodes();
+    setPromoCodes(data.items || []);
+  };
+
   useEffect(() => {
     loadSubscriptions().catch(() => {
       setPlans([]);
       setTransactions([]);
     });
+    loadPromoCodes().catch(() => setPromoCodes([]));
   }, []);
 
   const handleOpenAdd = () => {
@@ -116,6 +128,25 @@ export const SubscriptionManagementPage: React.FC = () => {
     a.click();
   };
 
+  const handleCreatePromo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPromoError(null);
+    try {
+      await api.createPromoCode({
+        code: promoCode.trim(),
+        campaignName: promoCampaign.trim(),
+        durationMonths: promoMonths,
+        maxRedemptions: parseInt(promoMax, 10) || 1,
+      });
+      setPromoCode('');
+      setPromoCampaign('');
+      setPromoMax('1');
+      await loadPromoCodes();
+    } catch (error) {
+      setPromoError(error instanceof Error ? error.message : 'Failed to create code');
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header & Add Button */}
@@ -125,7 +156,7 @@ export const SubscriptionManagementPage: React.FC = () => {
             Subscription Management
           </h2>
           <p className="text-xs text-gray-500 mt-0.5">
-            Manage plans, track revenue, and monitor transactions.
+            Manage plans, promotional access codes, and transactions.
           </p>
         </div>
 
@@ -136,6 +167,96 @@ export const SubscriptionManagementPage: React.FC = () => {
           <Plus className="w-4 h-4" />
           Add Subscription
         </button>
+      </div>
+
+      <div className="figma-card p-4 sm:p-6 space-y-4">
+        <div>
+          <h3 className="text-sm font-bold text-gray-900">Promotional premium access codes</h3>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Create 6- or 12-month premium codes with redemption limits. Does not change existing subscribe/cancel flows.
+          </p>
+        </div>
+        <form onSubmit={handleCreatePromo} className="grid grid-cols-1 md:grid-cols-5 gap-3">
+          <input
+            required
+            value={promoCode}
+            onChange={(e) => setPromoCode(e.target.value)}
+            placeholder="Code (e.g. SAFE6MO)"
+            className="border border-gray-200 rounded-xl px-3 py-2 text-xs"
+          />
+          <input
+            required
+            value={promoCampaign}
+            onChange={(e) => setPromoCampaign(e.target.value)}
+            placeholder="Campaign name"
+            className="border border-gray-200 rounded-xl px-3 py-2 text-xs"
+          />
+          <select
+            value={promoMonths}
+            onChange={(e) => setPromoMonths(Number(e.target.value) as 6 | 12)}
+            className="border border-gray-200 rounded-xl px-3 py-2 text-xs"
+          >
+            <option value={6}>6 months</option>
+            <option value={12}>12 months</option>
+          </select>
+          <input
+            value={promoMax}
+            onChange={(e) => setPromoMax(e.target.value)}
+            placeholder="Max redemptions"
+            className="border border-gray-200 rounded-xl px-3 py-2 text-xs"
+          />
+          <button type="submit" className="bg-[#2563EB] text-white text-xs font-bold rounded-xl px-3 py-2">
+            Create code
+          </button>
+        </form>
+        {promoError && <p className="text-xs text-red-600">{promoError}</p>}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="text-gray-400 border-b border-gray-100">
+                <th className="py-2 font-semibold">Code</th>
+                <th className="py-2 font-semibold">Campaign</th>
+                <th className="py-2 font-semibold">Duration</th>
+                <th className="py-2 font-semibold">Redemptions</th>
+                <th className="py-2 font-semibold">Status</th>
+                <th className="py-2 font-semibold"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {promoCodes.map((item) => (
+                <tr key={item.id} className="border-b border-gray-50">
+                  <td className="py-2 font-mono font-bold text-gray-900">{item.code}</td>
+                  <td className="py-2 text-gray-700">{item.campaignName}</td>
+                  <td className="py-2 text-gray-700">{item.durationMonths} mo</td>
+                  <td className="py-2 text-gray-700">
+                    {item.redemptionCount}/{item.maxRedemptions}
+                  </td>
+                  <td className="py-2 text-gray-700">{item.status}</td>
+                  <td className="py-2 text-right">
+                    {item.status === 'ACTIVE' && (
+                      <button
+                        type="button"
+                        className="text-red-500 font-semibold"
+                        onClick={() =>
+                          api.updatePromoCode(item.id, { status: 'DISABLED' }).then(loadPromoCodes)
+                        }
+                      >
+                        Disable
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {promoCodes.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="py-4 text-gray-400">
+                    No promotional codes yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Top 2 Subscription Cards */}

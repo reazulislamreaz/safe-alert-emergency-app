@@ -590,8 +590,19 @@ export class DashboardService {
         status,
         lat: alert?.latitude ?? 0,
         lng: alert?.longitude ?? 0,
+        address: alert?.address ?? null,
+        alertId: alert?.id ?? null,
+        emergencyType: alert?.emergencyTypeLabel ?? null,
+        subscriberUserId: group.userId,
+        subscriberName: group.user.fullName,
         members,
       };
+    });
+
+    mapped.sort((a, b) => {
+      const rank = (status: string) =>
+        status === "SOS active" ? 0 : status === "Monitoring" ? 1 : 2;
+      return rank(a.status) - rank(b.status);
     });
 
     const counts = {
@@ -832,5 +843,230 @@ export class DashboardService {
       return this.prisma.user.count({ where: { subscriptionTier: SubscriptionTier.FREE } });
     }
     return plan.subscriberCount;
+  }
+
+  async listPromoCodes() {
+    const codes = await this.prisma.promoCode.findMany({
+      include: {
+        redemptions: {
+          include: { user: { select: { id: true, fullName: true, email: true } } },
+          orderBy: { redeemedAt: "desc" },
+          take: 50,
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    return { items: codes.map((code) => this.toPromoDto(code)) };
+  }
+
+  async createPromoCode(dto: {
+    code: string;
+    campaignName: string;
+    durationMonths: 6 | 12;
+    maxRedemptions?: number;
+    expiresAt?: string;
+  }) {
+    const code = dto.code.trim().toUpperCase();
+    const existing = await this.prisma.promoCode.findUnique({ where: { code } });
+    if (existing) {
+      throw new ConflictException("A promotional code with this value already exists.");
+    }
+    const created = await this.prisma.promoCode.create({
+      data: {
+        code,
+        campaignName: dto.campaignName.trim(),
+        durationMonths: dto.durationMonths,
+        maxRedemptions: dto.maxRedemptions ?? 1,
+        expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null,
+      },
+      include: { redemptions: true },
+    });
+    return this.toPromoDto(created);
+  }
+
+  async updatePromoCode(
+    id: string,
+    dto: {
+      campaignName?: string;
+      status?: "ACTIVE" | "DISABLED" | "EXPIRED";
+      maxRedemptions?: number;
+      expiresAt?: string | null;
+    },
+  ) {
+    const existing = await this.prisma.promoCode.findUnique({ where: { id } });
+    if (!existing) {
+      throw new NotFoundException("Promotional code not found.");
+    }
+    const updated = await this.prisma.promoCode.update({
+      where: { id },
+      data: {
+        ...(dto.campaignName ? { campaignName: dto.campaignName.trim() } : {}),
+        ...(dto.status ? { status: dto.status } : {}),
+        ...(dto.maxRedemptions ? { maxRedemptions: dto.maxRedemptions } : {}),
+        ...(dto.expiresAt !== undefined
+          ? { expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null }
+          : {}),
+      },
+      include: {
+        redemptions: {
+          include: { user: { select: { id: true, fullName: true, email: true } } },
+          orderBy: { redeemedAt: "desc" },
+          take: 50,
+        },
+      },
+    });
+    return this.toPromoDto(updated);
+  }
+
+  async getIncidentPanel(alertId: string, operatorUserId: string) {
+    const alert = await this.prisma.alert.findUnique({
+      where: { id: alertId },
+      include: {
+        telemetryHistory: { orderBy: { timestamp: "asc" } },
+        notifiedGroups: true,
+        liveMessages: { orderBy: { createdAt: "asc" } },
+        user: { select: { id: true, fullName: true, email: true, phone: true, subscriptionTier: true } },
+      },
+    });
+    if (!alert) {
+      throw new NotFoundException("Incident not found.");
+    }
+
+    // Future-ready coverage check (Super Admin always allowed)
+    const coverage = await this.prisma.dashboardCoverage.findFirst({
+      where: { operatorUserId, subscriberUserId: alert.userId },
+    });
+    const operator = await this.prisma.user.findUnique({
+      where: { id: operatorUserId },
+      select: { role: true },
+    });
+    if (operator?.role !== "SUPER_ADMIN" && !coverage) {
+      throw new NotFoundException("Incident not found.");
+    }
+
+    const journals = await this.prisma.journal.findMany({
+      where: { userId: alert.userId, triggeredAt: { gte: alert.triggeredAt } },
+      orderBy: { triggeredAt: "asc" },
+      take: 20,
+    });
+
+    const mapsUrl = `https://maps.google.com/?q=${alert.latitude},${alert.longitude}`;
+    const copiedText = [
+      alert.address,
+      `GPS: ${alert.latitude.toFixed(6)}, ${alert.longitude.toFixed(6)}`,
+      mapsUrl,
+    ].join("\n");
+
+    const timeline = [
+      ...alert.liveMessages.map((message) => ({
+        kind: "message" as const,
+        at: message.createdAt.toISOString(),
+        label: message.timestamp,
+        text: message.text,
+        sender: message.sender,
+        mediaUrl: message.mediaUrl,
+        mediaType: message.mediaType,
+      })),
+      ...alert.telemetryHistory.map((point) => ({
+        kind: "telemetry" as const,
+        at: point.timestamp.toISOString(),
+        label: point.timestamp.toISOString(),
+        text: `Location update · battery ${point.batteryLevel}%`,
+        latitude: point.latitude,
+        longitude: point.longitude,
+      })),
+      ...journals.map((journal) => ({
+        kind: "journal" as const,
+        at: journal.triggeredAt.toISOString(),
+        label: journal.type,
+        text: journal.body,
+      })),
+    ].sort((a, b) => a.at.localeCompare(b.at));
+
+    return {
+      alertId: alert.id,
+      subscriber: {
+        id: alert.user.id,
+        fullName: alert.user.fullName,
+        email: alert.user.email,
+        phone: alert.user.phone,
+        subscriptionTier: alert.user.subscriptionTier,
+      },
+      activeEmergency: alert.status === AlertStatus.BROADCASTING || alert.status === AlertStatus.TRIGGERED,
+      status: alert.status,
+      emergencyType: alert.emergencyTypeLabel,
+      severity: alert.severity,
+      mode: alert.mode,
+      liveLocation: {
+        latitude: alert.latitude,
+        longitude: alert.longitude,
+        address: alert.address,
+      },
+      shareableLocation: {
+        address: alert.address,
+        latitude: alert.latitude,
+        longitude: alert.longitude,
+        mapsUrl,
+        copiedText,
+      },
+      roomId: alert.roomId,
+      participants: alert.participants,
+      notifiedGroups: alert.notifiedGroups,
+      messages: alert.liveMessages,
+      timeline,
+      triggeredAt: alert.triggeredAt.toISOString(),
+      resolvedAt: alert.resolvedAt?.toISOString() ?? null,
+      resolutionReason: alert.resolutionReason,
+      resolutionNotes: alert.resolutionNotes,
+      actions: {
+        copyLocation: true,
+        messaging: true,
+        videoCall: true,
+        resolve: alert.status === AlertStatus.BROADCASTING,
+      },
+    };
+  }
+
+  private toPromoDto(code: {
+    id: string;
+    code: string;
+    campaignName: string;
+    durationMonths: number;
+    maxRedemptions: number;
+    redemptionCount: number;
+    expiresAt: Date | null;
+    status: string;
+    createdAt: Date;
+    updatedAt: Date;
+    redemptions?: Array<{
+      id: string;
+      redeemedAt: Date;
+      grantedUntil: Date;
+      user?: { id: string; fullName: string; email: string };
+      userId?: string;
+    }>;
+  }) {
+    const expired = Boolean(code.expiresAt && code.expiresAt.getTime() < Date.now());
+    return {
+      id: code.id,
+      code: code.code,
+      campaignName: code.campaignName,
+      durationMonths: code.durationMonths,
+      maxRedemptions: code.maxRedemptions,
+      redemptionCount: code.redemptionCount,
+      remainingRedemptions: Math.max(0, code.maxRedemptions - code.redemptionCount),
+      expiresAt: code.expiresAt?.toISOString() ?? null,
+      status: expired && code.status === "ACTIVE" ? "EXPIRED" : code.status,
+      createdAt: code.createdAt.toISOString(),
+      updatedAt: code.updatedAt.toISOString(),
+      redemptions: (code.redemptions ?? []).map((item) => ({
+        id: item.id,
+        userId: item.user?.id ?? item.userId,
+        userName: item.user?.fullName,
+        userEmail: item.user?.email,
+        redeemedAt: item.redeemedAt.toISOString(),
+        grantedUntil: item.grantedUntil.toISOString(),
+      })),
+    };
   }
 }

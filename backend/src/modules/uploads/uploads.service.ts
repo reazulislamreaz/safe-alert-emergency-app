@@ -9,6 +9,8 @@ import {
   UPLOAD_EXTENSIONS,
   UPLOAD_MAX_BYTES,
   UPLOAD_MAX_FILES,
+  UPLOAD_MEDIA_MAX_BYTES,
+  UPLOAD_MEDIA_MIME_TYPES,
   UPLOAD_MIME_TYPES,
 } from "./uploads.constants";
 
@@ -123,9 +125,9 @@ export class UploadsService {
     return `/api/uploads/files/${key}`;
   }
 
-  private buildKey(contentType: string, userId?: string): string {
+  private buildKey(contentType: string, userId?: string, folder = "photos"): string {
     const ext = UPLOAD_EXTENSIONS[contentType] ?? "jpg";
-    const prefix = userId ? `users/${userId}/photos` : "pending";
+    const prefix = userId ? `users/${userId}/${folder}` : "pending";
     return `${prefix}/${randomUUID()}.${ext}`;
   }
 
@@ -136,6 +138,63 @@ export class UploadsService {
     }
     if (size > UPLOAD_MAX_BYTES) {
       throw new BadRequestException("Each photo must be 5 MB or smaller.");
+    }
+    if (fileName && fileName.includes("..")) {
+      throw new BadRequestException("Invalid file name.");
+    }
+  }
+
+  async uploadMediaFiles(files: Express.Multer.File[], userId?: string): Promise<StoredImage[]> {
+    if (!files?.length) {
+      throw new BadRequestException("Choose at least one photo or video to upload.");
+    }
+    if (files.length > UPLOAD_MAX_FILES) {
+      throw new BadRequestException(`You can upload up to ${UPLOAD_MAX_FILES} files.`);
+    }
+    const stored: StoredImage[] = [];
+    for (const file of files) {
+      stored.push(await this.uploadMediaFile(file, userId));
+    }
+    return stored;
+  }
+
+  async uploadMediaFile(file: Express.Multer.File, userId?: string): Promise<StoredImage> {
+    this.assertMedia(file.mimetype, file.size, file.originalname);
+    const key = this.buildKey(file.mimetype, userId, "media");
+    if (this.usesS3()) {
+      await this.s3!.send(
+        new PutObjectCommand({
+          Bucket: env.s3.bucket,
+          Key: key,
+          Body: file.buffer,
+          ContentType: file.mimetype,
+          CacheControl: "public, max-age=31536000",
+        }),
+      );
+    } else {
+      const dest = join(this.localDir, key);
+      await mkdir(dirname(dest), { recursive: true });
+      await writeFile(dest, file.buffer);
+    }
+    return {
+      key,
+      url: this.publicUrl(key),
+      contentType: file.mimetype,
+      size: file.size,
+    };
+  }
+
+  private assertMedia(contentType: string, size: number, fileName?: string) {
+    const mime = contentType?.toLowerCase();
+    if (!UPLOAD_MEDIA_MIME_TYPES.includes(mime as (typeof UPLOAD_MEDIA_MIME_TYPES)[number])) {
+      throw new BadRequestException("Only images (JPEG/PNG/WebP/GIF) or videos (MP4/MOV/WebM) are allowed.");
+    }
+    const isVideo = mime.startsWith("video/");
+    const max = isVideo ? UPLOAD_MEDIA_MAX_BYTES : UPLOAD_MAX_BYTES;
+    if (size > max) {
+      throw new BadRequestException(
+        isVideo ? "Each video must be 50 MB or smaller." : "Each photo must be 5 MB or smaller.",
+      );
     }
     if (fileName && fileName.includes("..")) {
       throw new BadRequestException("Invalid file name.");

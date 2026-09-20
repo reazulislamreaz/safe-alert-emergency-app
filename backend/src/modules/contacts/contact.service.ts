@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { Prisma, Role, SubscriptionTier } from "@prisma/client";
+import { Prisma, Role, SubscriptionTier, ContactGroupKind } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { digitsOnly } from "../../common/utils/phone";
 import { toContactDto, toGroupDto, toMemberDto } from "../../common/mappers/contact.mapper";
@@ -343,6 +343,10 @@ export class ContactService {
     this.assertMemberCap(memberIds.length, plan.maxMembersPerGroup);
 
     const contacts = await this.loadOwnedContacts(userId, memberIds);
+    const inferredKind =
+      dto.kind === "FAMILY_FRIENDS" || /family|friend/i.test(dto.name)
+        ? ContactGroupKind.FAMILY_FRIENDS
+        : ContactGroupKind.GENERAL;
 
     const group = await this.prisma.contactGroup.create({
       data: {
@@ -351,6 +355,7 @@ export class ContactService {
         name: dto.name.trim(),
         color: dto.color || "#3A67D5",
         isDefaultSOS: true,
+        kind: inferredKind,
         memberCount: contacts.length,
         members: {
           create: contacts.map((contact) => ({
@@ -358,6 +363,7 @@ export class ContactService {
             contactId: contact.id,
             name: contact.name,
             phone: contact.phone,
+            phoneDigits: contact.phoneDigits,
             relationship: contact.relationship,
           })),
         },
@@ -482,6 +488,8 @@ export class ContactService {
     const group = await this.requireGroup(userId, groupId);
     const inviter = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
     const targets: Array<{ phone: string; name: string }> = [];
+    const baseUrl = (process.env.APP_PUBLIC_URL || "https://safealert.app").replace(/\/$/, "");
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
     if (dto.contactId) {
       const contact = await this.requireContact(userId, dto.contactId);
@@ -504,10 +512,19 @@ export class ContactService {
         where: { groupId, inviteePhoneDigits: phoneDigits, status: "PENDING" },
       });
       if (existing) {
-        created.push(existing);
+        let token = existing.token;
+        if (!token) {
+          token = `inv_${crypto.randomUUID().replace(/-/g, "")}`;
+          await this.prisma.groupInvitation.update({
+            where: { id: existing.id },
+            data: { token, expiresAt, maxUses: 1 },
+          });
+        }
+        created.push({ ...existing, token, expiresAt: existing.expiresAt ?? expiresAt });
         continue;
       }
       const invitee = await this.prisma.user.findFirst({ where: { phoneDigits } });
+      const token = `inv_${crypto.randomUUID().replace(/-/g, "")}`;
       const invite = await this.prisma.groupInvitation.create({
         data: {
           id: `inv-${crypto.randomUUID().slice(0, 8)}`,
@@ -517,6 +534,10 @@ export class ContactService {
           inviteePhone: target.phone,
           inviteePhoneDigits: phoneDigits,
           inviteeName: target.name,
+          token,
+          expiresAt,
+          maxUses: 1,
+          useCount: 0,
         },
       });
       if (invitee) {
@@ -532,11 +553,183 @@ export class ContactService {
     return {
       groupId,
       invited: created.length,
-      invitations: created.map((invite) => ({
-        id: invite.id,
-        phone: invite.inviteePhone,
-        status: invite.status,
-      })),
+      invitations: created.map((invite) => {
+        const shareUrl = invite.token ? `${baseUrl}/invite/${invite.token}` : null;
+        return {
+          id: invite.id,
+          phone: invite.inviteePhone,
+          status: invite.status,
+          token: invite.token,
+          shareUrl,
+          shareText: shareUrl
+            ? `${inviter.fullName} invited you to join their Safety Circle (${group.name}). Download/sign up: ${shareUrl}`
+            : undefined,
+          expiresAt: invite.expiresAt?.toISOString?.() ?? (invite.expiresAt as Date)?.toISOString?.() ?? null,
+        };
+      }),
+    };
+  }
+
+  async resolveReferralToken(token: string) {
+    const invite = await this.prisma.groupInvitation.findFirst({
+      where: { token },
+      include: {
+        group: { select: { id: true, name: true } },
+        inviter: { select: { fullName: true } },
+      },
+    });
+
+    if (!invite) {
+      return {
+        status: "unavailable" as const,
+        message: "This invitation link is invalid or unavailable.",
+        downloadUrl: process.env.APP_DOWNLOAD_URL || "https://safealert.app/download",
+      };
+    }
+
+    if (invite.status === "ACCEPTED" || invite.useCount >= invite.maxUses) {
+      return {
+        status: "already_used" as const,
+        message: "This invitation has already been used.",
+        groupName: invite.group.name,
+        inviterName: invite.inviter.fullName.split(" ")[0],
+        downloadUrl: process.env.APP_DOWNLOAD_URL || "https://safealert.app/download",
+      };
+    }
+
+    if (invite.status === "DECLINED") {
+      return {
+        status: "unavailable" as const,
+        message: "This invitation is no longer available.",
+        downloadUrl: process.env.APP_DOWNLOAD_URL || "https://safealert.app/download",
+      };
+    }
+
+    if (invite.expiresAt && invite.expiresAt.getTime() < Date.now()) {
+      return {
+        status: "expired" as const,
+        message: "This invitation link has expired.",
+        groupName: invite.group.name,
+        inviterName: invite.inviter.fullName.split(" ")[0],
+        downloadUrl: process.env.APP_DOWNLOAD_URL || "https://safealert.app/download",
+      };
+    }
+
+    return {
+      status: "valid" as const,
+      message: "Invitation is valid. Sign up or log in to join the Safety Circle.",
+      token: invite.token,
+      groupId: invite.group.id,
+      groupName: invite.group.name,
+      inviterName: invite.inviter.fullName.split(" ")[0],
+      expiresAt: invite.expiresAt?.toISOString() ?? null,
+      downloadUrl: process.env.APP_DOWNLOAD_URL || "https://safealert.app/download",
+      signUpPath: `/create-account?invite=${invite.token}`,
+    };
+  }
+
+  async claimReferralToken(userId: string, token: string) {
+    const invite = await this.prisma.groupInvitation.findFirst({
+      where: { token },
+      include: { group: true },
+    });
+    if (!invite) {
+      throw new NotFoundException("This invitation link is invalid or unavailable.");
+    }
+    if (invite.status === "DECLINED") {
+      throw new BadRequestException("This invitation is no longer available.");
+    }
+    if (invite.expiresAt && invite.expiresAt.getTime() < Date.now()) {
+      throw new BadRequestException("This invitation link has expired.");
+    }
+
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    const already = await this.prisma.contactMember.findFirst({
+      where: { groupId: invite.groupId, phoneDigits: user.phoneDigits },
+    });
+    if (already) {
+      return { id: invite.id, status: "ACCEPTED", groupId: invite.groupId, alreadyMember: true };
+    }
+
+    if (invite.useCount >= invite.maxUses && invite.status === "ACCEPTED") {
+      throw new BadRequestException("This invitation has already been used.");
+    }
+    if (invite.useCount >= invite.maxUses) {
+      throw new BadRequestException("This invitation has already been used.");
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.contactMember.create({
+        data: {
+          id: `mem-${crypto.randomUUID().slice(0, 8)}`,
+          groupId: invite.groupId,
+          name: user.fullName,
+          phone: user.phone || "N/A",
+          phoneDigits: user.phoneDigits,
+          relationship: "Member",
+        },
+      });
+      await this.syncMemberCount(tx, invite.groupId);
+      const nextUseCount = invite.useCount + 1;
+      await tx.groupInvitation.update({
+        where: { id: invite.id },
+        data: {
+          useCount: nextUseCount,
+          inviteeUserId: userId,
+          respondedAt: new Date(),
+          status: nextUseCount >= invite.maxUses ? "ACCEPTED" : "PENDING",
+        },
+      });
+    });
+
+    return { id: invite.id, status: "ACCEPTED", groupId: invite.groupId, alreadyMember: false };
+  }
+
+  async getReferral(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException("User account not found.");
+    }
+
+    const baseUrl = (process.env.APP_PUBLIC_URL || "https://safealert.app").replace(/\/$/, "");
+    const primaryGroup = await this.prisma.contactGroup.findFirst({
+      where: { userId },
+      orderBy: [{ isDefaultSOS: "desc" }, { name: "asc" }],
+    });
+
+    let shareUrl = `${baseUrl}/invite/${user.id}`;
+    let token: string | null = null;
+
+    if (primaryGroup) {
+      const tokenValue = `inv_${crypto.randomUUID().replace(/-/g, "")}`;
+      const invite = await this.prisma.groupInvitation.create({
+        data: {
+          id: `inv-${crypto.randomUUID().slice(0, 8)}`,
+          groupId: primaryGroup.id,
+          inviterId: userId,
+          inviteePhone: "pending",
+          inviteePhoneDigits: `ref${Date.now()}`,
+          inviteeName: "Referral link",
+          token: tokenValue,
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          maxUses: 25,
+          useCount: 0,
+        },
+      });
+      token = invite.token;
+      shareUrl = `${baseUrl}/invite/${tokenValue}`;
+    }
+
+    return {
+      title: REFERRAL_COPY.title,
+      subtitle: REFERRAL_COPY.subtitle,
+      shareUrl,
+      shareText: `${user.fullName} invited you to Safety Circle. Join their safety circle: ${shareUrl}`,
+      cta: REFERRAL_COPY.cta,
+      token,
+      groupId: primaryGroup?.id ?? null,
+      channels: ["text", "email", "share_sheet"],
+      downloadUrl: process.env.APP_DOWNLOAD_URL || "https://safealert.app/download",
     };
   }
 
@@ -615,25 +808,14 @@ export class ContactService {
 
     const updated = await this.prisma.groupInvitation.update({
       where: { id: invite.id },
-      data: { status, respondedAt: new Date(), inviteeUserId: userId },
+      data: {
+        status,
+        respondedAt: new Date(),
+        inviteeUserId: userId,
+        ...(status === "ACCEPTED" ? { useCount: { increment: 1 } } : {}),
+      },
     });
     return { id: updated.id, status: updated.status, groupId: updated.groupId };
-  }
-
-  async getReferral(userId: string) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user) {
-      throw new NotFoundException("User account not found.");
-    }
-
-    const shareUrl = `https://safealert.app/invite/${user.id}`;
-    return {
-      title: REFERRAL_COPY.title,
-      subtitle: REFERRAL_COPY.subtitle,
-      shareUrl,
-      shareText: `${user.fullName} invited you to Safety Circle. Join their safety circle: ${shareUrl}`,
-      cta: REFERRAL_COPY.cta,
-    };
   }
 
   async getPlanUsage(userId: string) {

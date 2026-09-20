@@ -26,6 +26,7 @@ import { CreateEmergencyTypeDto, UpdateEmergencyTypeDto } from "./dto/emergency-
 import { CreateSubscriptionPlanDto, UpdateSubscriptionPlanDto } from "./dto/subscription.dto";
 import { UpdateLegalPageDto } from "./dto/legal.dto";
 import { UpdateDashboardProfileDto } from "./dto/profile.dto";
+import { CreatePromoCodeDto, UpdatePromoCodeDto } from "./dto/promo-code.dto";
 import { DashboardService } from "./dashboard.service";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { DashboardAdminGuard } from "../../common/guards/dashboard-admin.guard";
@@ -223,6 +224,35 @@ export class DashboardController {
   @ApiOperation({ summary: "Historical incident journals (all users)" })
   async journals() {
     const data = await this.dashboardService.getJournals();
+    return { success: true, data };
+  }
+
+  @Get("promo-codes")
+  @ApiOperation({ summary: "List promotional premium access codes" })
+  async listPromoCodes() {
+    const data = await this.dashboardService.listPromoCodes();
+    return { success: true, data };
+  }
+
+  @Post("promo-codes")
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: "Create a promotional premium access code" })
+  async createPromoCode(@Body() dto: CreatePromoCodeDto) {
+    const data = await this.dashboardService.createPromoCode(dto);
+    return { success: true, data };
+  }
+
+  @Patch("promo-codes/:id")
+  @ApiOperation({ summary: "Update / disable a promotional code" })
+  async updatePromoCode(@Param("id") id: string, @Body() dto: UpdatePromoCodeDto) {
+    const data = await this.dashboardService.updatePromoCode(id, dto);
+    return { success: true, data };
+  }
+
+  @Get("incidents/:alertId")
+  @ApiOperation({ summary: "Command panel: per-subscriber active incident detail" })
+  async incidentPanel(@Param("alertId") alertId: string, @CurrentUser() user: JwtPayload) {
+    const data = await this.dashboardService.getIncidentPanel(alertId, user.sub);
     return { success: true, data };
   }
 }

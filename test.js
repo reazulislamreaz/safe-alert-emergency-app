@@ -99,3 +99,17 @@ for (let i = 0 ; i < arr.length ; i++)
 console.log("Largest:", largest);
 console.log("Second Largest:", secondLargest);
 */
+
+function average(n){
+
+ if(n%2===0)
+{
+  console.log(n,""+ " is even number")
+
+}
+else if (n%2===1){
+  console.log(n,"is odd number")
+}
+}
+const result = average(10)
+console.log(result)

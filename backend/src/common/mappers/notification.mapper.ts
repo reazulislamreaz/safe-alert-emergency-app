@@ -31,6 +31,12 @@ export function notificationTitle(type: NotificationType): string {
   if (type === NotificationType.CONTACT_ADDED) return "Someone added you";
   if (type === NotificationType.GROUP_INVITE) return "Group invitation";
   if (type === NotificationType.RESPONDER_UPDATE) return "Someone is responding";
+  if (type === NotificationType.SAFETY_COUNTDOWN) return "Safety countdown";
+  if (type === NotificationType.FOLLOW_UP_ALERT) return "Emergency still active";
+  if (type === NotificationType.LOCATION_REQUEST) return "Location request";
+  if (type === NotificationType.BYSTANDER) return "Bystander-assisted message";
+  if (type === NotificationType.PROMO) return "Premium access";
+  if (type === NotificationType.COUNTDOWN_ESCALATED) return "Countdown escalated";
   return "Subscription Alert";
 }
 

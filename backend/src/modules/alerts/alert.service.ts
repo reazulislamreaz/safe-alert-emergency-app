@@ -1,8 +1,10 @@
 import {
   BadRequestException,
   ForbiddenException,
+  Inject,
   Injectable,
   NotFoundException,
+  forwardRef,
 } from "@nestjs/common";
 import { compare } from "bcryptjs";
 import {
@@ -13,9 +15,11 @@ import {
   InvitationStatus,
   JournalEntryType,
   JournalSource,
+  MediaType,
   MessageType,
   Prisma,
   Role,
+  ScheduledJobType,
 } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { RealtimeService } from "../../realtime/realtime.service";
@@ -32,6 +36,7 @@ import {
   CANCEL_REASONS,
   DEFAULT_EMERGENCY_TYPE_ID,
   emergencyEmoji,
+  NOTIFICATION_SOUNDS,
   PARTICIPANT_COLORS,
   QUICK_RESPONSES,
 } from "./alert.constants";
@@ -45,7 +50,12 @@ import {
 } from "./dto/alert.dto";
 import { generateZegoToken04 } from "./zego.util";
 import { NotificationService } from "../notifications/notification.service";
+import { JobsService } from "../jobs/jobs.service";
 import { digitsOnly } from "../../common/utils/phone";
+import {
+  buildBatteryRecommendation,
+  buildShareableLocation,
+} from "../../common/utils/location-share";
 
 const groupWithMembers = {
   members: { orderBy: { name: "asc" as const } },
@@ -57,6 +67,8 @@ export class AlertService {
     private readonly prisma: PrismaService,
     private readonly realtime: RealtimeService,
     private readonly notifications: NotificationService,
+    @Inject(forwardRef(() => JobsService))
+    private readonly jobs: JobsService,
   ) {}
 
   getModes() {
@@ -65,6 +77,7 @@ export class AlertService {
       prompt: "How Should we alert?",
       subtitle: "This will immediately notify your emergency contacts and share your live location.",
       continueLabel: "Continue",
+      sounds: NOTIFICATION_SOUNDS,
       modes: ALERT_MODES.map((mode) => ({ ...mode })),
     };
   }
@@ -183,6 +196,13 @@ export class AlertService {
         badge: entry.type === "TEST" ? "Test" : entry.source === "ALERT" ? "Safe" : "Update",
       })),
       activeAlert: active ? toAlertDto(active) : null,
+      batteryRecommendation: buildBatteryRecommendation({
+        batteryLevel: active?.telemetryHistory?.[active.telemetryHistory.length - 1]?.batteryLevel,
+        alertActiveMinutes: active
+          ? Math.floor((Date.now() - active.triggeredAt.getTime()) / 60000)
+          : 0,
+      }),
+      sounds: NOTIFICATION_SOUNDS,
     };
   }
 
@@ -485,6 +505,11 @@ export class AlertService {
       groupNames: groups.map((group) => group.name),
       memberPhones: groups.flatMap((group) => group.members.map((member) => member.phone)),
     });
+    await this.jobs.enqueue(
+      ScheduledJobType.ALERT_FOLLOW_UP,
+      alert.id,
+      new Date(Date.now() + 5 * 60 * 1000),
+    );
     return dto;
   }
 
@@ -620,6 +645,7 @@ export class AlertService {
     text: string,
     type: MessageType = MessageType.USER,
     senderUserId?: string,
+    media?: { mediaUrl?: string; mediaType?: MediaType; mimeType?: string },
   ) {
     const existing = await this.prisma.alert.findUnique({ where: { id: alertId } });
     if (!existing) {
@@ -636,6 +662,9 @@ export class AlertService {
             text,
             timestamp: clockLabel(),
             type,
+            mediaUrl: media?.mediaUrl,
+            mediaType: media?.mediaType ?? MediaType.NONE,
+            mimeType: media?.mimeType,
           },
         },
       },
@@ -652,18 +681,32 @@ export class AlertService {
 
   async sendMessage(alertId: string, userId: string, dto: SendAlertMessageDto) {
     const alert = await this.requireAccessible(alertId, userId);
-    const text = dto.text.trim();
-    if (!text) {
-      throw new BadRequestException("Type your message...");
+    const text = (dto.text ?? "").trim();
+    const mediaUrl = dto.mediaUrl?.trim();
+    if (!text && !mediaUrl) {
+      throw new BadRequestException("Type your message or attach media...");
+    }
+
+    let mediaType: MediaType = MediaType.NONE;
+    if (mediaUrl) {
+      const mime = (dto.mimeType || "").toLowerCase();
+      if (mime.startsWith("video/") || dto.mediaType === "VIDEO") {
+        mediaType = MediaType.VIDEO;
+      } else {
+        mediaType = MediaType.IMAGE;
+      }
     }
 
     const sender = await this.requireUser(userId);
     const updated = await this.addMessage(
       alert.id,
       sender.fullName.split(" ")[0],
-      text,
+      text || (mediaType === MediaType.VIDEO ? "📹 Video" : "📷 Photo"),
       MessageType.USER,
       sender.id,
+      mediaUrl
+        ? { mediaUrl, mediaType, mimeType: dto.mimeType }
+        : undefined,
     );
     if (updated) {
       this.realtime.emitToRoom(`room:${alertId}`, "alert:messages:update", updated.liveMessages);
@@ -671,6 +714,41 @@ export class AlertService {
 
     const fresh = await this.requireAlert(alertId);
     return this.toChatThread(fresh, userId, dto.groupId);
+  }
+
+  async getLocationShare(alertId: string, userId: string) {
+    const alert = await this.requireAccessible(alertId, userId);
+    return buildShareableLocation({
+      latitude: alert.latitude,
+      longitude: alert.longitude,
+      address: alert.address,
+    });
+  }
+
+  async triggerAlarm(alertId: string, userId: string) {
+    const alert = await this.requireAccessible(alertId, userId);
+    if (alert.status !== AlertStatus.BROADCASTING) {
+      throw new BadRequestException("Alarm is only available during an active alert.");
+    }
+    const actor = await this.requireUser(userId);
+    const payload = {
+      alertId,
+      triggeredBy: actor.fullName.split(" ")[0],
+      triggeredByUserId: actor.id,
+      soundKey: "emergency_alert",
+      soundUrl: "/sounds/emergency-alert.mp3",
+      intentional: true,
+      at: new Date().toISOString(),
+    };
+    this.realtime.emitToRoom(`room:${alertId}`, "alert:alarm", payload);
+    this.realtime.emitToRoom("room:admin", "admin:alert:alarm", payload);
+    await this.addMessage(
+      alertId,
+      "Safety Circle System",
+      `🔊 Loud emergency alarm triggered intentionally by ${actor.fullName.split(" ")[0]}.`,
+      MessageType.SOS,
+    );
+    return payload;
   }
 
   async quickResponse(alertId: string, userId: string, dto: QuickResponseDto) {
@@ -819,6 +897,8 @@ export class AlertService {
         },
       }),
     ]);
+
+    await this.jobs.cancel(ScheduledJobType.ALERT_FOLLOW_UP, alertId);
 
     const dto = toAlertDto(resolved);
     const payload = {
@@ -1009,6 +1089,9 @@ export class AlertService {
         text: message.text,
         timestamp: message.timestamp,
         type: message.type,
+        mediaUrl: message.mediaUrl ?? null,
+        mediaType: message.mediaType ?? "NONE",
+        mimeType: message.mimeType ?? null,
         isMine: isOwnMessage(message.senderUserId, message.sender, message.type, viewer),
       })),
     };

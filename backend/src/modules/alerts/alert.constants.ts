@@ -10,6 +10,9 @@ export const ALERT_MODES = [
     description: "Loud siren, visible alert, full notification to all emergency contacts.",
     tags: ["Siren", "Full Alert", "Visible"],
     color: "#DC2626",
+    soundKey: "emergency_alert",
+    soundUrl: "/sounds/emergency-alert.mp3",
+    allowsManualAlarm: true,
   },
   {
     key: "SILENT" as const,
@@ -18,9 +21,25 @@ export const ALERT_MODES = [
     description: "Discreet alert. No sound. Contacts are notified quietly with live location.",
     tags: ["No Sound", "Discreet", "Safe"],
     color: "#3A67D5",
+    soundKey: "circle_notify",
+    soundUrl: "/sounds/circle-notify.mp3",
+    allowsManualAlarm: false,
     warning: "Starting a video call in Silent Mode may reveal your surroundings or identity.",
   },
 ];
+
+export const NOTIFICATION_SOUNDS = {
+  circleNotify: {
+    soundKey: "circle_notify",
+    soundUrl: "/sounds/circle-notify.mp3",
+    label: "Safety Circle notification",
+  },
+  emergencyAlert: {
+    soundKey: "emergency_alert",
+    soundUrl: "/sounds/emergency-alert.mp3",
+    label: "Emergency alert",
+  },
+} as const;
 
 export const CANCEL_REASONS = [
   {

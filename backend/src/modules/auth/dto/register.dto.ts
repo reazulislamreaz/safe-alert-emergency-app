@@ -1,5 +1,5 @@
-import { ApiProperty } from "@nestjs/swagger";
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsEmail, IsString, Matches, MinLength } from "class-validator";
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsEmail, IsOptional, IsString, Matches, MinLength } from "class-validator";
 
 export class RegisterDto {
   @ApiProperty({ example: "Jordan Lee" })
@@ -53,4 +53,12 @@ export class RegisterDto {
   @ArrayMaxSize(3, { message: "Profile Photos * — max 3" })
   @IsString({ each: true })
   profilePhotos!: string[];
+
+  @ApiPropertyOptional({
+    example: "inv_abc123token",
+    description: "Optional Safety Circle referral token claimed after registration",
+  })
+  @IsOptional()
+  @IsString()
+  inviteToken?: string;
 }

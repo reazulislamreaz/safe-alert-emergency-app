@@ -112,6 +112,15 @@ export class CreateGroupDto {
   color?: string;
 
   @ApiPropertyOptional({
+    enum: ["FAMILY_FRIENDS", "GENERAL"],
+    example: "FAMILY_FRIENDS",
+    description: "Family/Friends groups allow location requests",
+  })
+  @IsOptional()
+  @IsString()
+  kind?: "FAMILY_FRIENDS" | "GENERAL";
+
+  @ApiPropertyOptional({
     type: [String],
     example: ["ct-james-01"],
     description: "Contact IDs to add as members (capped by plan, 5 on Free)",

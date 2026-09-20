@@ -29,11 +29,57 @@ export const AlertsTabPage: React.FC<AlertsTabPageProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const [countdown, setCountdown] = useState<{
+    id: string;
+    remainingLabel: string;
+    status: string;
+  } | null>(null);
+  const [referralShare, setReferralShare] = useState<string | null>(null);
+
   const loadInbox = useCallback(async (nextTab: 'active' | 'past' = tab) => {
     const data = (await api.getAlertInbox(nextTab)) as AlertInbox;
     setInbox(data);
     setTab(data.selectedTab);
   }, [tab]);
+
+  useEffect(() => {
+    api.getCurrentSafetyCountdown()
+      .then((data) => setCountdown(data))
+      .catch(() => setCountdown(null));
+  }, []);
+
+  const startCountdown = async () => {
+    try {
+      const data = await api.startSafetyCountdown();
+      setCountdown(data);
+    } catch (err: unknown) {
+      setErrorMessage(err instanceof Error ? err.message : 'Could not start countdown.');
+    }
+  };
+
+  const confirmCountdownSafe = async () => {
+    if (!countdown?.id) return;
+    try {
+      await api.confirmSafetyCountdown(countdown.id);
+      setCountdown(null);
+    } catch (err: unknown) {
+      setErrorMessage(err instanceof Error ? err.message : 'Could not confirm safe.');
+    }
+  };
+
+  const shareReferral = async () => {
+    try {
+      const data = await api.getContactReferral();
+      setReferralShare(data.shareUrl);
+      if (navigator.share) {
+        await navigator.share({ title: data.title, text: data.shareText, url: data.shareUrl });
+      } else if (data.shareText) {
+        await navigator.clipboard.writeText(data.shareText);
+      }
+    } catch (err: unknown) {
+      setErrorMessage(err instanceof Error ? err.message : 'Could not load referral.');
+    }
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -128,6 +174,42 @@ export const AlertsTabPage: React.FC<AlertsTabPageProps> = ({
 
       <div className="flex-1 overflow-y-auto px-4 pt-10 pb-4 space-y-6">
         <AuthErrorBanner message={errorMessage} />
+
+        <section className="rounded-2xl border border-[#E1E1E1] bg-[#F8FAFC] p-3 space-y-2">
+          <p className="text-xs font-bold text-[#09003B]">Safety tools</p>
+          {countdown ? (
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-[#EB0909] tabular-nums">
+                Countdown {countdown.remainingLabel}
+              </p>
+              <button
+                type="button"
+                onClick={confirmCountdownSafe}
+                className="rounded-full bg-[#00AA1D] px-3 py-1.5 text-xs font-bold text-white"
+              >
+                I'm Safe
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={startCountdown}
+              className="w-full rounded-xl bg-white border border-[#E1E1E1] px-3 py-2 text-xs font-semibold text-[#09003B]"
+            >
+              Start 30-min safety countdown
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={shareReferral}
+            className="w-full rounded-xl bg-white border border-[#E1E1E1] px-3 py-2 text-xs font-semibold text-[#3A67D5]"
+          >
+            Share Safety Circle referral link
+          </button>
+          {referralShare && (
+            <p className="text-[10px] text-[#30302F] break-all">{referralShare}</p>
+          )}
+        </section>
 
         {isLoading && !inbox && (
           <div className="flex justify-center py-16">

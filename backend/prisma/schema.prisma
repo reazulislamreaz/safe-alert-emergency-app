@@ -73,12 +73,62 @@ enum NotificationType {
   SUBSCRIPTION
   GROUP_INVITE
   RESPONDER_UPDATE
+  SAFETY_COUNTDOWN
+  FOLLOW_UP_ALERT
+  LOCATION_REQUEST
+  BYSTANDER
+  PROMO
+  COUNTDOWN_ESCALATED
 }
 
 enum InvitationStatus {
   PENDING
   ACCEPTED
   DECLINED
+}
+
+enum ContactGroupKind {
+  FAMILY_FRIENDS
+  GENERAL
+}
+
+enum SafetyCountdownStatus {
+  ACTIVE
+  CONFIRMED_SAFE
+  CANCELLED
+  ESCALATED
+}
+
+enum ScheduledJobType {
+  COUNTDOWN_EXPIRE
+  ALERT_FOLLOW_UP
+}
+
+enum ScheduledJobStatus {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
+  CANCELLED
+}
+
+enum LocationRequestStatus {
+  PENDING
+  APPROVED
+  DECLINED
+  EXPIRED
+}
+
+enum PromoCodeStatus {
+  ACTIVE
+  DISABLED
+  EXPIRED
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+  NONE
 }
 
 model User {
@@ -116,6 +166,17 @@ model User {
   notifications             Notification[]
   sentInvitations           GroupInvitation[] @relation("InvitationInviter")
   receivedInvitations       GroupInvitation[] @relation("InvitationInvitee")
+  safetyCountdowns          SafetyCountdown[]
+  locationRequestsSent      LocationRequest[] @relation("LocationRequester")
+  locationRequestsReceived  LocationRequest[] @relation("LocationTarget")
+  promoRedemptions          PromoRedemption[]
+  coverageAsOperator        DashboardCoverage[] @relation("CoverageOperator")
+  coverageAsSubscriber      DashboardCoverage[] @relation("CoverageSubscriber")
+  conversationsAsUserA      Conversation[]    @relation("ConversationUserA")
+  conversationsAsUserB      Conversation[]    @relation("ConversationUserB")
+  directMessagesSent        DirectMessage[]
+  bystanderRelaysSent       BystanderRelay[]  @relation("BystanderSender")
+  bystanderRelaysReceived   BystanderRelay[]  @relation("BystanderTarget")
 
   @@index([phoneDigits])
   @@index([role])
@@ -166,11 +227,15 @@ model ContactGroup {
   name         String
   color        String             @default("#3A67D5")
   isDefaultSOS Boolean            @default(true)
+  kind         ContactGroupKind   @default(GENERAL)
   memberCount  Int                @default(0)
   members      ContactMember[]
   invitations  GroupInvitation[]
+  locationRequests LocationRequest[]
+  bystanderRelays  BystanderRelay[]
 
   @@index([userId])
+  @@index([kind])
   @@map("contact_groups")
 }
 
@@ -204,12 +269,17 @@ model GroupInvitation {
   inviteePhoneDigits String
   inviteeName        String?
   status             InvitationStatus @default(PENDING)
+  token              String?          @unique
+  expiresAt          DateTime?
+  maxUses            Int              @default(1)
+  useCount           Int              @default(0)
   createdAt          DateTime         @default(now())
   respondedAt        DateTime?
 
   @@index([inviteePhoneDigits, status])
   @@index([inviteeUserId, status])
   @@index([groupId])
+  @@index([token])
   @@map("group_invitations")
 }
 
@@ -252,6 +322,9 @@ model Alert {
   resolvedAt           DateTime?
   resolutionReason     String?
   resolutionNotes      String?
+  followUpSentAt       DateTime?
+  safetyCountdowns     SafetyCountdown[]
+  bystanderRelays      BystanderRelay[]
 
   @@index([userId])
   @@index([status])
@@ -296,6 +369,9 @@ model LiveMessage {
   text          String
   timestamp     String
   type          MessageType @default(USER)
+  mediaUrl      String?
+  mediaType     MediaType   @default(NONE)
+  mimeType      String?
   createdAt     DateTime    @default(now())
 
   @@index([alertId])
@@ -323,7 +399,7 @@ model Journal {
   id               String           @id @default(uuid())
   userId           String
   user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type             JournalEntryType @default(UPDATE)
+  type             JournalEntryType @default(INCIDENT)
   body             String           @default("")
   source           JournalSource    @default(MANUAL)
   emergencyType    String?
@@ -369,4 +445,163 @@ model RevokedToken {
 
   @@index([expiresAt])
   @@map("revoked_tokens")
+}
+
+model SafetyCountdown {
+  id          String                 @id @default(uuid())
+  userId      String
+  user        User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status      SafetyCountdownStatus  @default(ACTIVE)
+  startedAt   DateTime               @default(now())
+  expiresAt   DateTime
+  confirmedAt DateTime?
+  cancelledAt DateTime?
+  escalatedAt DateTime?
+  alertId     String?
+  alert       Alert?                 @relation(fields: [alertId], references: [id], onDelete: SetNull)
+  notes       String?
+
+  @@index([userId, status])
+  @@index([expiresAt, status])
+  @@map("safety_countdowns")
+}
+
+model ScheduledJob {
+  id          String             @id @default(uuid())
+  type        ScheduledJobType
+  refId       String
+  runAt       DateTime
+  status      ScheduledJobStatus @default(PENDING)
+  attempts    Int                @default(0)
+  lastError   String?
+  processedAt DateTime?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@unique([type, refId])
+  @@index([status, runAt])
+  @@map("scheduled_jobs")
+}
+
+model LocationRequest {
+  id              String                @id @default(uuid())
+  requesterId     String
+  requester       User                  @relation("LocationRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  targetUserId    String
+  target          User                  @relation("LocationTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+  groupId         String
+  group           ContactGroup          @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  status          LocationRequestStatus @default(PENDING)
+  latitude        Float?
+  longitude       Float?
+  address         String?
+  respondedAt     DateTime?
+  expiresAt       DateTime?
+  createdAt       DateTime              @default(now())
+
+  @@index([targetUserId, status])
+  @@index([requesterId, status])
+  @@index([groupId])
+  @@map("location_requests")
+}
+
+model PromoCode {
+  id              String          @id @default(uuid())
+  code            String          @unique
+  campaignName    String
+  durationMonths  Int
+  maxRedemptions  Int             @default(1)
+  redemptionCount Int             @default(0)
+  expiresAt       DateTime?
+  status          PromoCodeStatus @default(ACTIVE)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  redemptions     PromoRedemption[]
+
+  @@index([status])
+  @@map("promo_codes")
+}
+
+model PromoRedemption {
+  id         String    @id @default(uuid())
+  promoCodeId String
+  promoCode  PromoCode @relation(fields: [promoCodeId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  redeemedAt DateTime  @default(now())
+  grantedUntil DateTime
+
+  @@unique([promoCodeId, userId])
+  @@index([userId])
+  @@map("promo_redemptions")
+}
+
+/// Future-ready: operator → subscriber coverage. Super Admin currently sees all.
+model DashboardCoverage {
+  id               String   @id @default(uuid())
+  operatorUserId   String
+  operator         User     @relation("CoverageOperator", fields: [operatorUserId], references: [id], onDelete: Cascade)
+  subscriberUserId String
+  subscriber       User     @relation("CoverageSubscriber", fields: [subscriberUserId], references: [id], onDelete: Cascade)
+  createdAt        DateTime @default(now())
+
+  @@unique([operatorUserId, subscriberUserId])
+  @@index([operatorUserId])
+  @@index([subscriberUserId])
+  @@map("dashboard_coverage")
+}
+
+model Conversation {
+  id           String          @id @default(uuid())
+  userAId      String
+  userA        User            @relation("ConversationUserA", fields: [userAId], references: [id], onDelete: Cascade)
+  userBId      String
+  userB        User            @relation("ConversationUserB", fields: [userBId], references: [id], onDelete: Cascade)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  messages     DirectMessage[]
+
+  @@unique([userAId, userBId])
+  @@index([userAId])
+  @@index([userBId])
+  @@map("conversations")
+}
+
+model DirectMessage {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderUserId   String
+  sender         User         @relation(fields: [senderUserId], references: [id], onDelete: Cascade)
+  text           String       @default("")
+  mediaUrl       String?
+  mediaType      MediaType    @default(NONE)
+  mimeType       String?
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
+  @@index([senderUserId])
+  @@map("direct_messages")
+}
+
+model BystanderRelay {
+  id               String   @id @default(uuid())
+  senderUserId     String
+  sender           User     @relation("BystanderSender", fields: [senderUserId], references: [id], onDelete: Cascade)
+  targetUserId     String?
+  target           User?    @relation("BystanderTarget", fields: [targetUserId], references: [id], onDelete: SetNull)
+  targetPhone      String
+  targetPhoneDigits String
+  targetName       String?
+  groupId          String
+  group            ContactGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  alertId          String?
+  alert            Alert?   @relation(fields: [alertId], references: [id], onDelete: SetNull)
+  message          String
+  createdAt        DateTime @default(now())
+
+  @@index([senderUserId])
+  @@index([groupId])
+  @@index([alertId])
+  @@map("bystander_relays")
 }

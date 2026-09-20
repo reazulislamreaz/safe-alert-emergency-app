@@ -135,16 +135,31 @@ export class UpdateParticipantDto {
 }
 
 export class SendAlertMessageDto {
-  @ApiProperty({ example: "I see your location, heading towards you now!" })
+  @ApiPropertyOptional({ example: "I see your location, heading towards you now!" })
+  @IsOptional()
   @IsString()
-  @MinLength(1)
   @MaxLength(2000)
-  text!: string;
+  text?: string;
 
   @ApiPropertyOptional({ example: "grp-family-01", description: "Chat thread group (Figma: Family)" })
   @IsOptional()
   @IsString()
   groupId?: string;
+
+  @ApiPropertyOptional({ example: "/api/uploads/files/users/x/media/photo.jpg" })
+  @IsOptional()
+  @IsString()
+  mediaUrl?: string;
+
+  @ApiPropertyOptional({ enum: ["IMAGE", "VIDEO", "NONE"], example: "IMAGE" })
+  @IsOptional()
+  @IsString()
+  mediaType?: "IMAGE" | "VIDEO" | "NONE";
+
+  @ApiPropertyOptional({ example: "image/jpeg" })
+  @IsOptional()
+  @IsString()
+  mimeType?: string;
 }
 
 export class RespondAlertDto {

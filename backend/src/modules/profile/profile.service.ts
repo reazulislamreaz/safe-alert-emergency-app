@@ -366,4 +366,96 @@ export class ProfileService {
       isCurrent: user.subscriptionTier === catalog.tier,
     };
   }
+
+  async redeemPromo(userId: string, codeRaw: string) {
+    const codeValue = codeRaw.trim().toUpperCase();
+    const promo = await this.prisma.promoCode.findUnique({ where: { code: codeValue } });
+    if (!promo) {
+      throw new BadRequestException("Invalid promotional code.");
+    }
+    if (promo.status !== "ACTIVE") {
+      throw new BadRequestException("This promotional code is not active.");
+    }
+    if (promo.expiresAt && promo.expiresAt.getTime() < Date.now()) {
+      await this.prisma.promoCode.update({
+        where: { id: promo.id },
+        data: { status: "EXPIRED" },
+      });
+      throw new BadRequestException("This promotional code has expired.");
+    }
+    if (promo.redemptionCount >= promo.maxRedemptions) {
+      throw new BadRequestException("This promotional code has reached its redemption limit.");
+    }
+
+    const existing = await this.prisma.promoRedemption.findUnique({
+      where: { promoCodeId_userId: { promoCodeId: promo.id, userId } },
+    });
+    if (existing) {
+      throw new BadRequestException("You have already redeemed this promotional code.");
+    }
+
+    const user = await this.requireUser(userId);
+    const now = new Date();
+    const grantedUntil = new Date(now);
+    grantedUntil.setMonth(grantedUntil.getMonth() + promo.durationMonths);
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.promoCode.updateMany({
+        where: {
+          id: promo.id,
+          status: "ACTIVE",
+          redemptionCount: { lt: promo.maxRedemptions },
+        },
+        data: { redemptionCount: { increment: 1 } },
+      });
+      if (!claimed.count) {
+        throw new BadRequestException("This promotional code has reached its redemption limit.");
+      }
+
+      await tx.promoRedemption.create({
+        data: {
+          promoCodeId: promo.id,
+          userId,
+          grantedUntil,
+        },
+      });
+
+      const wasFree = user.subscriptionTier === SubscriptionTier.FREE;
+      const next = await tx.user.update({
+        where: { id: userId },
+        data: {
+          subscriptionTier: SubscriptionTier.PREMIUM,
+          subscriptionStartedAt: user.subscriptionStartedAt ?? now,
+          subscriptionRenewsAt: grantedUntil,
+          subscriptionCancelledAt: null,
+          subscriptionCancelReason: null,
+          trialEndsAt: null,
+        },
+      });
+
+      if (wasFree) {
+        await tx.subscriptionPlan.update({
+          where: { id: PLAN_CATALOG.PREMIUM.id },
+          data: { subscriberCount: { increment: 1 } },
+        });
+        await tx.subscriptionPlan.update({
+          where: { id: PLAN_CATALOG.FREE.id },
+          data: { subscriberCount: { decrement: 1 } },
+        });
+      }
+
+      return next;
+    });
+
+    return {
+      ...this.toSubscriptionPayload(updated),
+      promo: {
+        code: promo.code,
+        campaignName: promo.campaignName,
+        durationMonths: promo.durationMonths,
+        grantedUntil: grantedUntil.toISOString(),
+      },
+      token: this.tokenFor(updated),
+    };
+  }
 }

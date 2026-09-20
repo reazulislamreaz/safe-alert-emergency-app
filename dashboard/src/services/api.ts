@@ -800,8 +800,8 @@ export const api = {
 
   async resolveAlert(alertId: string, payload: {
     reason: "SAFE" | "FALSE_ALARM" | "TEST";
-    notes: string;
-    pin: string;
+    notes?: string;
+    pin?: string;
     userId?: string;
   }): Promise<ActiveAlert> {
     const res = await fetch(`${API_BASE}/alerts/${alertId}/resolve`, {
@@ -1536,4 +1536,155 @@ export const api = {
     }
     return data.data;
   },
+
+  async getIncidentPanel(alertId: string) {
+    const res = await fetch(`${API_BASE}/dashboard/incidents/${alertId}`, {
+      headers: this.authHeaders(false),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to load incident panel'));
+    }
+    return data.data;
+  },
+
+  async getAlertLocationShare(alertId: string) {
+    const res = await fetch(`${API_BASE}/alerts/${alertId}/location-share`, {
+      headers: this.authHeaders(false),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to load shareable location'));
+    }
+    return data.data as {
+      address: string;
+      latitude: number;
+      longitude: number;
+      mapsUrl: string;
+      copiedText: string;
+    };
+  },
+
+  async triggerAlertAlarm(alertId: string) {
+    const res = await fetch(`${API_BASE}/alerts/${alertId}/alarm`, {
+      method: 'POST',
+      headers: this.authHeaders(false),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to trigger alarm'));
+    }
+    return data.data;
+  },
+
+  async listPromoCodes() {
+    const res = await fetch(`${API_BASE}/dashboard/promo-codes`, {
+      headers: this.authHeaders(false),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to load promo codes'));
+    }
+    return data.data as { items: PromoCodeItem[] };
+  },
+
+  async createPromoCode(payload: {
+    code: string;
+    campaignName: string;
+    durationMonths: 6 | 12;
+    maxRedemptions?: number;
+    expiresAt?: string;
+  }) {
+    const res = await fetch(`${API_BASE}/dashboard/promo-codes`, {
+      method: 'POST',
+      headers: this.authHeaders(),
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to create promo code'));
+    }
+    return data.data as PromoCodeItem;
+  },
+
+  async updatePromoCode(
+    id: string,
+    payload: { campaignName?: string; status?: string; maxRedemptions?: number; expiresAt?: string | null },
+  ) {
+    const res = await fetch(`${API_BASE}/dashboard/promo-codes/${id}`, {
+      method: 'PATCH',
+      headers: this.authHeaders(),
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to update promo code'));
+    }
+    return data.data as PromoCodeItem;
+  },
+
+  async startSafetyCountdown(notes?: string) {
+    const res = await fetch(`${API_BASE}/safety-countdowns`, {
+      method: 'POST',
+      headers: this.authHeaders(),
+      body: JSON.stringify({ notes }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to start safety countdown'));
+    }
+    return data.data;
+  },
+
+  async getCurrentSafetyCountdown() {
+    const res = await fetch(`${API_BASE}/safety-countdowns/current`, {
+      headers: this.authHeaders(false),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to load safety countdown'));
+    }
+    return data.data;
+  },
+
+  async confirmSafetyCountdown(id: string) {
+    const res = await fetch(`${API_BASE}/safety-countdowns/${id}/confirm-safe`, {
+      method: 'POST',
+      headers: this.authHeaders(false),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to confirm safe'));
+    }
+    return data.data;
+  },
+
+  async resolveReferralToken(token: string) {
+    const res = await fetch(`${API_BASE}/contacts/referral/${encodeURIComponent(token)}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to resolve referral'));
+    }
+    return data.data;
+  },
+};
+
+export type PromoCodeItem = {
+  id: string;
+  code: string;
+  campaignName: string;
+  durationMonths: number;
+  maxRedemptions: number;
+  redemptionCount: number;
+  remainingRedemptions: number;
+  expiresAt: string | null;
+  status: string;
+  createdAt: string;
+  redemptions?: Array<{
+    id: string;
+    userName?: string;
+    userEmail?: string;
+    redeemedAt: string;
+    grantedUntil: string;
+  }>;
 };

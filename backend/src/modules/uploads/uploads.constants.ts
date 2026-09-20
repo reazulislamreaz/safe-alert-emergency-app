@@ -2,6 +2,7 @@ import { BadRequestException } from "@nestjs/common";
 
 export const UPLOAD_MAX_FILES = 3;
 export const UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
+export const UPLOAD_MEDIA_MAX_BYTES = 50 * 1024 * 1024;
 export const UPLOAD_MIME_TYPES = [
   "image/jpeg",
   "image/jpg",
@@ -10,12 +11,22 @@ export const UPLOAD_MIME_TYPES = [
   "image/gif",
 ] as const;
 
+export const UPLOAD_MEDIA_MIME_TYPES = [
+  ...UPLOAD_MIME_TYPES,
+  "video/mp4",
+  "video/quicktime",
+  "video/webm",
+] as const;
+
 export const UPLOAD_EXTENSIONS: Record<string, string> = {
   "image/jpeg": "jpg",
   "image/jpg": "jpg",
   "image/png": "png",
   "image/webp": "webp",
   "image/gif": "gif",
+  "video/mp4": "mp4",
+  "video/quicktime": "mov",
+  "video/webm": "webm",
 };
 
 export function isStoredImageUrl(value: string): boolean {
