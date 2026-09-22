@@ -1,4 +1,5 @@
 import { Notification, NotificationType } from "@prisma/client";
+import { SOUND_KEYS } from "../utils/location-share";
 
 export const NOTIFICATION_EMPTY = {
   title: "Notification",
@@ -7,7 +8,29 @@ export const NOTIFICATION_EMPTY = {
   seeMoreLabel: "See More",
 };
 
+export function soundForNotificationType(type: NotificationType): {
+  soundKey: string;
+  soundUrl: string;
+} {
+  switch (type) {
+    case NotificationType.ALERT_RECEIVED:
+    case NotificationType.DIRECT_ALERT:
+    case NotificationType.FOLLOW_UP_ALERT:
+    case NotificationType.COUNTDOWN_ESCALATED:
+      return {
+        soundKey: SOUND_KEYS.EMERGENCY_ALERT,
+        soundUrl: "/sounds/emergency-alert.mp3",
+      };
+    default:
+      return {
+        soundKey: SOUND_KEYS.CIRCLE_NOTIFY,
+        soundUrl: "/sounds/circle-notify.mp3",
+      };
+  }
+}
+
 export function toNotificationDto(item: Notification) {
+  const sound = soundForNotificationType(item.type);
   return {
     id: item.id,
     type: item.type,
@@ -16,6 +39,8 @@ export function toNotificationDto(item: Notification) {
     refLabel: item.refLabel,
     alertId: item.alertId,
     contactId: item.contactId,
+    soundKey: sound.soundKey,
+    soundUrl: sound.soundUrl,
     read: Boolean(item.readAt),
     timeLabel: formatNotificationTime(item.createdAt),
     createdAt: item.createdAt.toISOString(),

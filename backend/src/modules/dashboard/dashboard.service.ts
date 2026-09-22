@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { AlertStatus, Prisma, Severity, SubscriptionPlan, SubscriptionTier } from "@prisma/client";
+import { AlertStatus, Prisma, ScheduledJobStatus, ScheduledJobType, Severity, SubscriptionPlan, SubscriptionTier } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { toPublicUser } from "../../common/mappers/user.mapper";
 import { digitsOnly } from "../../common/utils/phone";
@@ -507,9 +507,32 @@ export class DashboardService {
     return { id, deleted: true };
   }
 
-  async getLiveGroups() {
+  async getLiveGroups(operatorUserId?: string) {
+    let coveredSubscriberIds: string[] | null = null;
+    if (operatorUserId) {
+      const operator = await this.prisma.user.findUnique({
+        where: { id: operatorUserId },
+        select: { role: true },
+      });
+      if (operator?.role === "SECURITY_OPERATOR") {
+        const rows = await this.prisma.dashboardCoverage.findMany({
+          where: { operatorUserId },
+          select: { subscriberUserId: true },
+        });
+        coveredSubscriberIds = rows.map((row) => row.subscriberUserId);
+        if (!coveredSubscriberIds.length) {
+          return {
+            groups: [],
+            counts: { all: 0, sos: 0, fire: 0, medical: 0, police: 0, natural: 0, idle: 0 },
+            isolation: "coverage",
+          };
+        }
+      }
+    }
+
     const [groups, notifiedRows, activeAlerts] = await Promise.all([
       this.prisma.contactGroup.findMany({
+        where: coveredSubscriberIds ? { userId: { in: coveredSubscriberIds } } : undefined,
         include: {
           user: { select: { id: true, fullName: true } },
           members: true,
@@ -521,7 +544,10 @@ export class DashboardService {
         orderBy: { alert: { triggeredAt: "desc" } },
       }),
       this.prisma.alert.findMany({
-        where: { status: { in: [AlertStatus.BROADCASTING, AlertStatus.TRIGGERED] } },
+        where: {
+          status: { in: [AlertStatus.BROADCASTING, AlertStatus.TRIGGERED] },
+          ...(coveredSubscriberIds ? { userId: { in: coveredSubscriberIds } } : {}),
+        },
         orderBy: { triggeredAt: "desc" },
       }),
     ]);
@@ -615,7 +641,7 @@ export class DashboardService {
       idle: mapped.filter((group) => group.status === "Idle").length,
     };
 
-    return { groups: mapped, counts };
+    return { groups: mapped, counts, isolation: coveredSubscriberIds ? "coverage" : "global" };
   }
 
   async getLegalPage(slug: string) {
@@ -871,16 +897,38 @@ export class DashboardService {
     if (existing) {
       throw new ConflictException("A promotional code with this value already exists.");
     }
+    const expiresAt = dto.expiresAt ? new Date(dto.expiresAt) : null;
     const created = await this.prisma.promoCode.create({
       data: {
         code,
         campaignName: dto.campaignName.trim(),
         durationMonths: dto.durationMonths,
         maxRedemptions: dto.maxRedemptions ?? 1,
-        expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null,
+        expiresAt,
       },
       include: { redemptions: true },
     });
+    if (expiresAt) {
+      // Best-effort schedule — JobsService may be injected later; sweep also handles expiry
+      await this.prisma.scheduledJob.upsert({
+        where: {
+          type_refId: { type: ScheduledJobType.PROMO_EXPIRE, refId: created.id },
+        },
+        create: {
+          type: ScheduledJobType.PROMO_EXPIRE,
+          refId: created.id,
+          runAt: expiresAt,
+          status: ScheduledJobStatus.PENDING,
+        },
+        update: {
+          runAt: expiresAt,
+          status: ScheduledJobStatus.PENDING,
+          attempts: 0,
+          lastError: null,
+          processedAt: null,
+        },
+      }).catch(() => undefined);
+    }
     return this.toPromoDto(created);
   }
 
@@ -1025,6 +1073,71 @@ export class DashboardService {
         resolve: alert.status === AlertStatus.BROADCASTING,
       },
     };
+  }
+
+  async listCoverage() {
+    const rows = await this.prisma.dashboardCoverage.findMany({
+      include: {
+        operator: { select: { id: true, fullName: true, email: true, role: true } },
+        subscriber: { select: { id: true, fullName: true, email: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    return {
+      items: rows.map((row) => ({
+        id: row.id,
+        operatorUserId: row.operatorUserId,
+        operatorName: row.operator.fullName,
+        operatorEmail: row.operator.email,
+        subscriberUserId: row.subscriberUserId,
+        subscriberName: row.subscriber.fullName,
+        subscriberEmail: row.subscriber.email,
+        createdAt: row.createdAt.toISOString(),
+      })),
+    };
+  }
+
+  async assignCoverage(operatorUserId: string, subscriberUserId: string) {
+    const operator = await this.prisma.user.findUnique({ where: { id: operatorUserId } });
+    const subscriber = await this.prisma.user.findUnique({ where: { id: subscriberUserId } });
+    if (!operator || operator.role !== "SECURITY_OPERATOR") {
+      throw new BadRequestException("Operator must be a SECURITY_OPERATOR user.");
+    }
+    if (!subscriber) {
+      throw new NotFoundException("Subscriber not found.");
+    }
+    const row = await this.prisma.dashboardCoverage.upsert({
+      where: {
+        operatorUserId_subscriberUserId: { operatorUserId, subscriberUserId },
+      },
+      create: { operatorUserId, subscriberUserId },
+      update: {},
+    });
+    return { id: row.id, operatorUserId, subscriberUserId };
+  }
+
+  async removeCoverage(id: string) {
+    const existing = await this.prisma.dashboardCoverage.findUnique({ where: { id } });
+    if (!existing) {
+      throw new NotFoundException("Coverage assignment not found.");
+    }
+    await this.prisma.dashboardCoverage.delete({ where: { id } });
+    return { id, deleted: true };
+  }
+
+  async promoteSecurityOperator(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException("User not found.");
+    }
+    if (user.role === "SUPER_ADMIN") {
+      throw new BadRequestException("Cannot change Super Admin role.");
+    }
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: { role: "SECURITY_OPERATOR" },
+    });
+    return toPublicUser(updated);
   }
 
   private toPromoDto(code: {

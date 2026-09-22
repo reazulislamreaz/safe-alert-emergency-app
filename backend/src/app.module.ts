@@ -46,5 +46,6 @@ import { CoverageService } from "./common/auth/coverage.service";
   ],
   controllers: [HealthController, ConfigController],
   providers: [AlertsGateway, CoverageService],
+  exports: [CoverageService],
 })
 export class AppModule {}

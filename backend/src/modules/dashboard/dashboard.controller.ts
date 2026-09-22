@@ -5,6 +5,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  BadRequestException,
   NotFoundException,
   Param,
   Patch,
@@ -159,8 +160,8 @@ export class DashboardController {
 
   @Get("live-groups")
   @ApiOperation({ summary: "Live contact groups with SOS status and members" })
-  async liveGroups() {
-    const data = await this.dashboardService.getLiveGroups();
+  async liveGroups(@CurrentUser() user: JwtPayload) {
+    const data = await this.dashboardService.getLiveGroups(user.sub);
     return { success: true, data };
   }
 
@@ -253,6 +254,42 @@ export class DashboardController {
   @ApiOperation({ summary: "Command panel: per-subscriber active incident detail" })
   async incidentPanel(@Param("alertId") alertId: string, @CurrentUser() user: JwtPayload) {
     const data = await this.dashboardService.getIncidentPanel(alertId, user.sub);
+    return { success: true, data };
+  }
+
+  @Get("coverage")
+  @ApiOperation({ summary: "List operator → subscriber coverage assignments" })
+  async listCoverage() {
+    const data = await this.dashboardService.listCoverage();
+    return { success: true, data };
+  }
+
+  @Post("coverage")
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: "Assign a SECURITY_OPERATOR to a subscriber" })
+  async assignCoverage(@Body() body: { operatorUserId?: string; subscriberUserId?: string }) {
+    if (!body.operatorUserId?.trim() || !body.subscriberUserId?.trim()) {
+      throw new BadRequestException("operatorUserId and subscriberUserId are required.");
+    }
+    const data = await this.dashboardService.assignCoverage(
+      body.operatorUserId.trim(),
+      body.subscriberUserId.trim(),
+    );
+    return { success: true, data };
+  }
+
+  @Delete("coverage/:id")
+  @ApiOperation({ summary: "Remove a coverage assignment" })
+  async removeCoverage(@Param("id") id: string) {
+    const data = await this.dashboardService.removeCoverage(id);
+    return { success: true, data };
+  }
+
+  @Post("operators/:userId/promote")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Promote a user to SECURITY_OPERATOR" })
+  async promoteOperator(@Param("userId") userId: string) {
+    const data = await this.dashboardService.promoteSecurityOperator(userId);
     return { success: true, data };
   }
 }

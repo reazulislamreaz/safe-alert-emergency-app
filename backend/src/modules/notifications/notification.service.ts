@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { Injectable, Logger, NotFoundException, Optional } from "@nestjs/common";
 import { NotificationType, Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { RealtimeService } from "../../realtime/realtime.service";
@@ -8,14 +8,18 @@ import {
   notificationTitle,
   toNotificationDto,
 } from "../../common/mappers/notification.mapper";
+import { PushService } from "./push.service";
 
 const PAGE_SIZE = 20;
 
 @Injectable()
 export class NotificationService {
+  private readonly logger = new Logger(NotificationService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly realtime: RealtimeService,
+    @Optional() private readonly push?: PushService,
   ) {}
 
   async list(userId: string, query?: string, limit = PAGE_SIZE) {
@@ -87,12 +91,14 @@ export class NotificationService {
     source: string;
     groupNames: string[];
     memberPhones: string[];
+    mode?: string;
   }) {
     const groupsLabel = params.groupNames.length
       ? params.groupNames.join(" and ")
       : "your emergency contacts";
     const isDirect = params.source === "SOS" || params.source === "QUICK";
     const ownerType = isDirect ? NotificationType.DIRECT_ALERT : NotificationType.ALERT_RECEIVED;
+    const silent = params.mode === "SILENT";
 
     await this.createForUser({
       userId: params.ownerId,
@@ -101,6 +107,7 @@ export class NotificationService {
       body: `Your emergency alert was sent to ${groupsLabel}.`,
       refLabel: params.groupNames[0] ?? params.alertId,
       alertId: params.alertId,
+      forceSoundKey: silent ? "circle_notify" : undefined,
     });
 
     const phones = [...new Set(params.memberPhones.map(digitsOnly).filter((value) => value.length >= 7))];
@@ -119,9 +126,12 @@ export class NotificationService {
           userId: recipient.id,
           type: NotificationType.ALERT_RECEIVED,
           title: notificationTitle(NotificationType.ALERT_RECEIVED),
-          body: `${params.ownerName} triggered an emergency alert. Live location is sharing.`,
+          body: silent
+            ? `${params.ownerName} sent a discreet Safety Circle alert. Live location is sharing.`
+            : `${params.ownerName} triggered an emergency alert. Live location is sharing.`,
           refLabel: "Live now",
           alertId: params.alertId,
+          forceSoundKey: silent ? "circle_notify" : "emergency_alert",
         }),
       ),
     );
@@ -247,6 +257,7 @@ export class NotificationService {
     refLabel?: string;
     alertId?: string;
     contactId?: string;
+    forceSoundKey?: string;
   }) {
     const item = await this.prisma.notification.create({
       data: {
@@ -261,8 +272,31 @@ export class NotificationService {
       },
     });
     const dto = toNotificationDto(item);
+    if (data.forceSoundKey === "circle_notify") {
+      dto.soundKey = "circle_notify";
+      dto.soundUrl = "/sounds/circle-notify.mp3";
+    } else if (data.forceSoundKey === "emergency_alert") {
+      dto.soundKey = "emergency_alert";
+      dto.soundUrl = "/sounds/emergency-alert.mp3";
+    }
     this.realtime.emitToRoom(`user:${data.userId}`, "notification:new", dto);
+
+    if (this.push) {
+      void this.push
+        .sendToUser({
+          userId: data.userId,
+          type: data.type,
+          title: data.title,
+          body: data.body,
+          alertId: data.alertId,
+          data: data.forceSoundKey ? { soundKey: data.forceSoundKey } : undefined,
+        })
+        .catch((error) => {
+          const message = error instanceof Error ? error.message : String(error);
+          this.logger.warn(`Push delivery failed: ${message}`);
+        });
+    }
+
     return dto;
   }
 }
-

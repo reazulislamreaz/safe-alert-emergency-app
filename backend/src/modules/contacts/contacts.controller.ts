@@ -83,6 +83,34 @@ export class ContactsController {
     return { success: true, data };
   }
 
+  @Post("referral/send-email")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Email a Safety Circle referral link (optional server delivery)" })
+  async sendReferralEmail(
+    @CurrentUser() user: JwtPayload,
+    @Body() body: { email?: string },
+  ) {
+    if (!body.email?.trim()) {
+      throw new BadRequestException("Email is required.");
+    }
+    const data = await this.contactService.sendReferralEmail(user.sub, body.email);
+    return { success: true, data };
+  }
+
+  @Post("referral/send-sms")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "SMS a Safety Circle referral link via SMS_WEBHOOK_URL" })
+  async sendReferralSms(
+    @CurrentUser() user: JwtPayload,
+    @Body() body: { phone?: string },
+  ) {
+    if (!body.phone?.trim()) {
+      throw new BadRequestException("Phone is required.");
+    }
+    const data = await this.contactService.sendReferralSms(user.sub, body.phone);
+    return { success: true, data };
+  }
+
   @Get("statuses")
   @ApiOperation({ summary: "Status dropdown values for Add Contact" })
   async statuses() {

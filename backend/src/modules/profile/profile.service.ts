@@ -6,7 +6,7 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
-import { SubscriptionTier, User } from "@prisma/client";
+import { NotificationType, ScheduledJobType, SubscriptionTier, User } from "@prisma/client";
 import { compare } from "bcryptjs";
 import { PrismaService } from "../../prisma/prisma.service";
 import { digitsOnly, maskPhone } from "../../common/utils/phone";
@@ -23,6 +23,8 @@ import {
 import { CancelSubscriptionDto, SubscribeDto, UpdateProfileDto } from "./dto/profile.dto";
 import { requireStoredImageUrls } from "../uploads/uploads.constants";
 import { UploadsService } from "../uploads/uploads.service";
+import { JobsService } from "../jobs/jobs.service";
+import { NotificationService } from "../notifications/notification.service";
 
 const MS_DAY = 24 * 60 * 60 * 1000;
 
@@ -32,6 +34,8 @@ export class ProfileService {
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly uploads: UploadsService,
+    private readonly jobs: JobsService,
+    private readonly notifications: NotificationService,
   ) {}
 
   async getProfile(userId: string) {
@@ -396,8 +400,15 @@ export class ProfileService {
 
     const user = await this.requireUser(userId);
     const now = new Date();
-    const grantedUntil = new Date(now);
-    grantedUntil.setMonth(grantedUntil.getMonth() + promo.durationMonths);
+    const grantEnd = new Date(now);
+    grantEnd.setMonth(grantEnd.getMonth() + promo.durationMonths);
+    // Never shorten an existing premium period
+    const grantedUntil =
+      user.subscriptionTier === SubscriptionTier.PREMIUM &&
+      user.subscriptionRenewsAt &&
+      user.subscriptionRenewsAt.getTime() > grantEnd.getTime()
+        ? user.subscriptionRenewsAt
+        : grantEnd;
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const claimed = await tx.promoCode.updateMany({
@@ -405,11 +416,12 @@ export class ProfileService {
           id: promo.id,
           status: "ACTIVE",
           redemptionCount: { lt: promo.maxRedemptions },
+          OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
         },
         data: { redemptionCount: { increment: 1 } },
       });
       if (!claimed.count) {
-        throw new BadRequestException("This promotional code has reached its redemption limit.");
+        throw new BadRequestException("This promotional code has reached its redemption limit or expired.");
       }
 
       await tx.promoRedemption.create({
@@ -445,6 +457,16 @@ export class ProfileService {
       }
 
       return next;
+    });
+
+    await this.jobs.enqueue(ScheduledJobType.PREMIUM_EXPIRE, userId, grantedUntil);
+
+    await this.notifications.createForUser({
+      userId,
+      type: NotificationType.PROMO,
+      title: "Premium access unlocked",
+      body: `Promo ${promo.code} applied. Premium is active until ${grantedUntil.toLocaleDateString()}.`,
+      refLabel: promo.campaignName,
     });
 
     return {

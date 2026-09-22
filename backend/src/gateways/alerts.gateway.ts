@@ -185,7 +185,12 @@ export class AlertsGateway
       this.logger.warn(`admin:subscribe denied for ${socket.id}`);
       return;
     }
-    socket.join("room:admin");
+    // Super Admin joins global admin room; operators join scoped room only
+    if (user?.role === "SECURITY_OPERATOR") {
+      socket.join(`room:admin:operator:${user.sub}`);
+    } else {
+      socket.join("room:admin");
+    }
     socket.emit("admin:metrics", await this.dashboardService.getOverviewMetrics());
   }
 }

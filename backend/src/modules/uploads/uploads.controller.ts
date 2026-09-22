@@ -17,7 +17,7 @@ import {
   ApiTags,
 } from "@nestjs/swagger";
 import { memoryStorage } from "multer";
-import { OptionalJwtGuard } from "../../common/guards/optional-jwt.guard";
+import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { JwtPayload } from "../../config/env";
 import { UploadsService } from "./uploads.service";
@@ -27,7 +27,7 @@ import { UPLOAD_MAX_BYTES, UPLOAD_MAX_FILES, UPLOAD_MEDIA_MAX_BYTES } from "./up
 @ApiTags("Uploads")
 @ApiBearerAuth("access-token")
 @Controller("api/uploads")
-@UseGuards(OptionalJwtGuard)
+@UseGuards(JwtAuthGuard)
 export class UploadsController {
   constructor(private readonly uploads: UploadsService) {}
 
@@ -55,9 +55,9 @@ export class UploadsController {
   @ApiOperation({ summary: "Upload profile photos (JPEG/PNG/WebP/GIF, max 3, 5 MB each) to S3" })
   async upload(
     @UploadedFiles() files: Express.Multer.File[],
-    @CurrentUser() user?: JwtPayload,
+    @CurrentUser() user: JwtPayload,
   ) {
-    const stored = await this.uploads.uploadFiles(files ?? [], user?.sub);
+    const stored = await this.uploads.uploadFiles(files ?? [], user.sub);
     return {
       success: true,
       data: {
@@ -70,8 +70,8 @@ export class UploadsController {
   @Post("presign")
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: "Presigned S3 PUT URL for direct browser/mobile upload" })
-  async presign(@Body() dto: PresignUploadDto, @CurrentUser() user?: JwtPayload) {
-    const data = await this.uploads.presign(dto.contentType, dto.fileName, user?.sub);
+  async presign(@Body() dto: PresignUploadDto, @CurrentUser() user: JwtPayload) {
+    const data = await this.uploads.presign(dto.contentType, dto.fileName, user.sub);
     return { success: true, data };
   }
 
@@ -99,9 +99,9 @@ export class UploadsController {
   @ApiOperation({ summary: "Upload chat media (images + videos) for messaging" })
   async uploadMedia(
     @UploadedFiles() files: Express.Multer.File[],
-    @CurrentUser() user?: JwtPayload,
+    @CurrentUser() user: JwtPayload,
   ) {
-    const stored = await this.uploads.uploadMediaFiles(files ?? [], user?.sub);
+    const stored = await this.uploads.uploadMediaFiles(files ?? [], user.sub);
     return {
       success: true,
       data: {

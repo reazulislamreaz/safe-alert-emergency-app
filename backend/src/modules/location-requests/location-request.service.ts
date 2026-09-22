@@ -8,9 +8,11 @@ import {
   ContactGroupKind,
   LocationRequestStatus,
   NotificationType,
+  ScheduledJobType,
 } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { NotificationService } from "../notifications/notification.service";
+import { JobsService } from "../jobs/jobs.service";
 import { buildShareableLocation } from "../../common/utils/location-share";
 import {
   CreateLocationRequestDto,
@@ -22,6 +24,7 @@ export class LocationRequestService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationService,
+    private readonly jobs: JobsService,
   ) {}
 
   async create(requesterId: string, dto: CreateLocationRequestDto) {
@@ -71,15 +74,18 @@ export class LocationRequestService {
       return this.toDto(pending, requester.fullName, target.fullName);
     }
 
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
     const request = await this.prisma.locationRequest.create({
       data: {
         requesterId,
         targetUserId: dto.targetUserId,
         groupId: dto.groupId,
         status: LocationRequestStatus.PENDING,
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        expiresAt,
       },
     });
+
+    await this.jobs.enqueue(ScheduledJobType.LOCATION_REQUEST_EXPIRE, request.id, expiresAt);
 
     await this.notifications.createForUser({
       userId: dto.targetUserId,
@@ -87,6 +93,7 @@ export class LocationRequestService {
       title: "Location request",
       body: `${requester.fullName.split(" ")[0]} requested your location in ${group.name}.`,
       refLabel: group.name,
+      contactId: request.id,
     });
 
     return this.toDto(request, requester.fullName, target.fullName);
@@ -138,6 +145,7 @@ export class LocationRequestService {
         where: { id },
         data: { status: LocationRequestStatus.EXPIRED, respondedAt: new Date() },
       });
+      await this.jobs.cancel(ScheduledJobType.LOCATION_REQUEST_EXPIRE, id);
       throw new BadRequestException("This location request has expired.");
     }
 
@@ -149,12 +157,14 @@ export class LocationRequestService {
           respondedAt: new Date(),
         },
       });
+      await this.jobs.cancel(ScheduledJobType.LOCATION_REQUEST_EXPIRE, id);
       await this.notifications.createForUser({
         userId: request.requesterId,
         type: NotificationType.LOCATION_REQUEST,
         title: "Location request declined",
         body: `${request.target.fullName.split(" ")[0]} declined your location request.`,
         refLabel: "Declined",
+        contactId: id,
       });
       return this.toDto(updated, request.requester.fullName, request.target.fullName);
     }
@@ -174,6 +184,7 @@ export class LocationRequestService {
         address,
       },
     });
+    await this.jobs.cancel(ScheduledJobType.LOCATION_REQUEST_EXPIRE, id);
 
     await this.notifications.createForUser({
       userId: request.requesterId,
@@ -181,6 +192,7 @@ export class LocationRequestService {
       title: "Location shared",
       body: `${request.target.fullName.split(" ")[0]} shared their location once.`,
       refLabel: "Approved",
+      contactId: id,
     });
 
     const dtoOut = this.toDto(updated, request.requester.fullName, request.target.fullName);
@@ -225,7 +237,6 @@ export class LocationRequestService {
       respondedAt: request.respondedAt?.toISOString() ?? null,
       expiresAt: request.expiresAt?.toISOString() ?? null,
       createdAt: request.createdAt.toISOString(),
-      // One-shot only — never expose ongoing tracking capability
       ongoingAccess: false,
     };
   }

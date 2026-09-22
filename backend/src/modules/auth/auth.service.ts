@@ -139,6 +139,9 @@ export class AuthService {
     if (!invite || invite.useCount >= invite.maxUses) {
       return;
     }
+    if (invite.status === "DECLINED") {
+      return;
+    }
     if (invite.expiresAt && invite.expiresAt.getTime() < Date.now()) {
       return;
     }
@@ -220,6 +223,14 @@ export class AuthService {
         faceIdCredentialId: null,
       },
     });
+
+    if (dto.inviteToken?.trim()) {
+      try {
+        await this.claimInviteToken(user.id, dto.inviteToken.trim());
+      } catch {
+        // Registration succeeds even if invite claim fails; client can retry claim.
+      }
+    }
 
     return this.issueRegistrationSession(user);
   }
@@ -584,12 +595,16 @@ export class AuthService {
 
     await this.dashboardAdmin.ensureSingleAdmin();
     const fresh = await this.prisma.user.findUnique({ where: { id: user.id } });
-    if (
-      !fresh ||
-      fresh.role !== Role.SUPER_ADMIN ||
-      !isDesignatedAdminEmail(fresh.email)
-    ) {
-      throw new ForbiddenException("Dashboard access is limited to the Super Admin account.");
+    if (!fresh) {
+      throw new ForbiddenException("Dashboard access is limited to approved operator accounts.");
+    }
+
+    const isSuper = fresh.role === Role.SUPER_ADMIN && isDesignatedAdminEmail(fresh.email);
+    const isOperator = fresh.role === Role.SECURITY_OPERATOR;
+    if (!isSuper && !isOperator) {
+      throw new ForbiddenException(
+        "Dashboard access requires Super Admin or an approved Security Operator account.",
+      );
     }
 
     const token = this.signToken(

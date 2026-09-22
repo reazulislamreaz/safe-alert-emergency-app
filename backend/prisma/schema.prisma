@@ -10,6 +10,7 @@ datasource db {
 enum Role {
   USER
   SUPER_ADMIN
+  SECURITY_OPERATOR
 }
 
 enum SubscriptionTier {
@@ -102,6 +103,9 @@ enum SafetyCountdownStatus {
 enum ScheduledJobType {
   COUNTDOWN_EXPIRE
   ALERT_FOLLOW_UP
+  PROMO_EXPIRE
+  PREMIUM_EXPIRE
+  LOCATION_REQUEST_EXPIRE
 }
 
 enum ScheduledJobStatus {
@@ -177,6 +181,7 @@ model User {
   directMessagesSent        DirectMessage[]
   bystanderRelaysSent       BystanderRelay[]  @relation("BystanderSender")
   bystanderRelaysReceived   BystanderRelay[]  @relation("BystanderTarget")
+  devicePushTokens          DevicePushToken[]
 
   @@index([phoneDigits])
   @@index([role])
@@ -340,7 +345,8 @@ model TelemetryPoint {
   accuracy     Float    @default(3)
   speed        Float    @default(0)
   heading      Float    @default(0)
-  batteryLevel Float    @default(85)
+  /// Null when the client did not report battery — do not invent a default.
+  batteryLevel Float?
   timestamp    DateTime @default(now())
 
   @@index([alertId])
@@ -408,12 +414,16 @@ model Journal {
   resolutionReason String?
   resolutionNotes  String?
   location         String?
+  /// Snapshot of emergency media (from live messages) at close time.
+  mediaItems       Json             @default("[]")
+  alertId          String?
   triggeredAt      DateTime         @default(now())
   duration         String?
   createdAt        DateTime         @default(now())
 
   @@index([userId])
   @@index([triggeredAt])
+  @@index([alertId])
   @@map("journals")
 }
 
@@ -598,10 +608,29 @@ model BystanderRelay {
   alertId          String?
   alert            Alert?   @relation(fields: [alertId], references: [id], onDelete: SetNull)
   message          String
+  /// Email/SMS delivery channel used for non-app recipients (if any).
+  outboundChannel  String?
+  outboundStatus   String?
   createdAt        DateTime @default(now())
 
+  /// One-time: a sender may relay to a given circle contact only once.
+  @@unique([senderUserId, groupId, targetPhoneDigits])
   @@index([senderUserId])
   @@index([groupId])
   @@index([alertId])
   @@map("bystander_relays")
+}
+
+model DevicePushToken {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token      String
+  platform   String   @default("unknown")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([userId, token])
+  @@index([userId])
+  @@map("device_push_tokens")
 }

@@ -12,6 +12,7 @@ import { AddMemberDto, CreateContactDto, CreateGroupDto, UpdateContactDto, Updat
 import { CONTACT_STATUSES, CONTACTS_EMPTY, GROUPS_EMPTY, GROUP_COLORS, REFERRAL_COPY } from "./contact.constants";
 import { NotificationService } from "../notifications/notification.service";
 import { RealtimeService } from "../../realtime/realtime.service";
+import { MailService } from "../../mail/mail.service";
 
 export type ListContactsOptions = {
   query?: string;
@@ -33,6 +34,7 @@ export class ContactService {
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationService,
     private readonly realtime: RealtimeService,
+    private readonly mail: MailService,
   ) {}
 
   getStatuses() {
@@ -692,15 +694,42 @@ export class ContactService {
     }
 
     const baseUrl = (process.env.APP_PUBLIC_URL || "https://safealert.app").replace(/\/$/, "");
-    const primaryGroup = await this.prisma.contactGroup.findFirst({
+    let primaryGroup = await this.prisma.contactGroup.findFirst({
       where: { userId },
       orderBy: [{ isDefaultSOS: "desc" }, { name: "asc" }],
     });
 
-    let shareUrl = `${baseUrl}/invite/${user.id}`;
-    let token: string | null = null;
+    // Ensure a resolvable invite target always exists
+    if (!primaryGroup) {
+      primaryGroup = await this.prisma.contactGroup.create({
+        data: {
+          id: `grp-${crypto.randomUUID().slice(0, 8)}`,
+          userId,
+          name: "My Safety Circle",
+          color: "#3A67D5",
+          isDefaultSOS: true,
+          memberCount: 0,
+        },
+      });
+    }
 
-    if (primaryGroup) {
+    // Reuse an open multi-use referral invite when available
+    const existing = await this.prisma.groupInvitation.findFirst({
+      where: {
+        groupId: primaryGroup.id,
+        inviterId: userId,
+        inviteeName: "Referral link",
+        status: "PENDING",
+        useCount: { lt: 25 },
+        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    let token: string;
+    if (existing?.token) {
+      token = existing.token;
+    } else {
       const tokenValue = `inv_${crypto.randomUUID().replace(/-/g, "")}`;
       const invite = await this.prisma.groupInvitation.create({
         data: {
@@ -716,9 +745,10 @@ export class ContactService {
           useCount: 0,
         },
       });
-      token = invite.token;
-      shareUrl = `${baseUrl}/invite/${tokenValue}`;
+      token = invite.token!;
     }
+
+    const shareUrl = `${baseUrl}/invite/${token}`;
 
     return {
       title: REFERRAL_COPY.title,
@@ -727,10 +757,63 @@ export class ContactService {
       shareText: `${user.fullName} invited you to Safety Circle. Join their safety circle: ${shareUrl}`,
       cta: REFERRAL_COPY.cta,
       token,
-      groupId: primaryGroup?.id ?? null,
+      groupId: primaryGroup.id,
       channels: ["text", "email", "share_sheet"],
       downloadUrl: process.env.APP_DOWNLOAD_URL || "https://safealert.app/download",
+      deepLinkPath: `/invite/${token}`,
+      signUpPath: `/create-account?invite=${token}`,
     };
+  }
+
+  /** Optional server-side email delivery of a referral / invite link. */
+  async sendReferralEmail(userId: string, toEmail: string) {
+    const email = toEmail.trim().toLowerCase();
+    if (!email.includes("@")) {
+      throw new BadRequestException("Enter a valid email address.");
+    }
+    const referral = await this.getReferral(userId);
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    if (!this.mail.isConfigured()) {
+      return {
+        delivered: false,
+        shareUrl: referral.shareUrl,
+        message: "Email is not configured. Share the link manually via SMS or share sheet.",
+      };
+    }
+    await this.mail.sendMail({
+      to: email,
+      subject: `${user.fullName.split(" ")[0]} invited you to Safety Circle`,
+      text: `${user.fullName} invited you to join their Safety Circle.\n\nOpen this link to download/sign up and join:\n${referral.shareUrl}`,
+      html: `<p><strong>${user.fullName}</strong> invited you to join their Safety Circle.</p><p><a href="${referral.shareUrl}">Join Safety Circle</a></p>`,
+    });
+    return { delivered: true, shareUrl: referral.shareUrl, channel: "email" };
+  }
+
+  /** Optional SMS webhook delivery for referral links. */
+  async sendReferralSms(userId: string, toPhone: string) {
+    const phone = toPhone.trim();
+    if (digitsOnly(phone).length < 7) {
+      throw new BadRequestException("Enter a valid phone number.");
+    }
+    const referral = await this.getReferral(userId);
+    const smsUrl = process.env.SMS_WEBHOOK_URL?.trim();
+    if (!smsUrl) {
+      return {
+        delivered: false,
+        shareUrl: referral.shareUrl,
+        shareText: referral.shareText,
+        message: "SMS webhook is not configured. Share the link manually.",
+      };
+    }
+    const response = await fetch(smsUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ to: phone, body: referral.shareText, from: "Safety Circle" }),
+    });
+    if (!response.ok) {
+      throw new BadRequestException("Failed to send SMS invitation. Try sharing the link manually.");
+    }
+    return { delivered: true, shareUrl: referral.shareUrl, channel: "sms" };
   }
 
   async listInvitations(userId: string) {

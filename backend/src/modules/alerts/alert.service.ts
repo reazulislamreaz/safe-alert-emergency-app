@@ -56,6 +56,8 @@ import {
   buildBatteryRecommendation,
   buildShareableLocation,
 } from "../../common/utils/location-share";
+import { reverseGeocode } from "../../common/utils/geocode";
+import { assertStoredMediaUrl } from "../../common/utils/media-url";
 
 const groupWithMembers = {
   members: { orderBy: { name: "asc" as const } },
@@ -496,7 +498,9 @@ export class AlertService {
     });
 
     const dto = withSentScreen(toAlertDto(alert));
-    this.realtime.emit("admin:alert:new", dto);
+    // Coverage-scoped admin fan-out (Super Admin still on room:admin)
+    this.realtime.emitToRoom("room:admin", "admin:alert:new", dto);
+    await this.emitAdminAlertForSubscriber(alert.userId, "admin:alert:new", dto);
     await this.notifications.notifyAlertOpened({
       ownerId: user.id,
       ownerName: firstName,
@@ -504,6 +508,7 @@ export class AlertService {
       source,
       groupNames: groups.map((group) => group.name),
       memberPhones: groups.flatMap((group) => group.members.map((member) => member.phone)),
+      mode,
     });
     await this.jobs.enqueue(
       ScheduledJobType.ALERT_FOLLOW_UP,
@@ -595,9 +600,30 @@ export class AlertService {
     };
   }
 
-  async getActiveAlerts() {
+  async getActiveAlerts(operatorUserId?: string) {
+    let coveredSubscriberIds: string[] | null = null;
+    if (operatorUserId) {
+      const operator = await this.prisma.user.findUnique({
+        where: { id: operatorUserId },
+        select: { role: true },
+      });
+      if (operator?.role === Role.SECURITY_OPERATOR) {
+        const rows = await this.prisma.dashboardCoverage.findMany({
+          where: { operatorUserId },
+          select: { subscriberUserId: true },
+        });
+        coveredSubscriberIds = rows.map((row) => row.subscriberUserId);
+        if (!coveredSubscriberIds.length) {
+          return [];
+        }
+      }
+    }
+
     const alerts = await this.prisma.alert.findMany({
-      where: { status: AlertStatus.BROADCASTING },
+      where: {
+        status: AlertStatus.BROADCASTING,
+        ...(coveredSubscriberIds ? { userId: { in: coveredSubscriberIds } } : {}),
+      },
       include: alertInclude,
       orderBy: { triggeredAt: "desc" },
     });
@@ -607,11 +633,14 @@ export class AlertService {
   async updateTelemetry(alertId: string, userId: string, point: TelemetryDto) {
     await this.requireOwned(alertId, userId);
 
+    const address = await reverseGeocode(point.latitude, point.longitude);
+
     const alert = await this.prisma.alert.update({
       where: { id: alertId },
       data: {
         latitude: point.latitude,
         longitude: point.longitude,
+        address,
         telemetryHistory: {
           create: {
             latitude: point.latitude,
@@ -619,7 +648,9 @@ export class AlertService {
             speed: point.speed ?? 0,
             heading: point.heading ?? 0,
             accuracy: point.accuracy ?? 3,
-            batteryLevel: point.batteryLevel ?? 85,
+            ...(typeof point.batteryLevel === "number"
+              ? { batteryLevel: point.batteryLevel }
+              : { batteryLevel: null }),
           },
         },
       },
@@ -633,6 +664,10 @@ export class AlertService {
       latestPoint: dto.telemetryHistory[dto.telemetryHistory.length - 1],
     });
     this.realtime.emitToRoom("room:admin", "admin:alert:telemetry", {
+      alertId,
+      location: dto.location,
+    });
+    await this.emitAdminAlertForSubscriber(alert.userId, "admin:alert:telemetry", {
       alertId,
       location: dto.location,
     });
@@ -652,6 +687,13 @@ export class AlertService {
       return null;
     }
 
+    // Authorize human senders — system messages may omit senderUserId
+    if (senderUserId) {
+      await this.requireAccessible(alertId, senderUserId);
+    }
+
+    const mediaUrl = media?.mediaUrl ? assertStoredMediaUrl(media.mediaUrl) : undefined;
+
     const alert = await this.prisma.alert.update({
       where: { id: alertId },
       data: {
@@ -662,7 +704,7 @@ export class AlertService {
             text,
             timestamp: clockLabel(),
             type,
-            mediaUrl: media?.mediaUrl,
+            mediaUrl,
             mediaType: media?.mediaType ?? MediaType.NONE,
             mimeType: media?.mimeType,
           },
@@ -682,7 +724,7 @@ export class AlertService {
   async sendMessage(alertId: string, userId: string, dto: SendAlertMessageDto) {
     const alert = await this.requireAccessible(alertId, userId);
     const text = (dto.text ?? "").trim();
-    const mediaUrl = dto.mediaUrl?.trim();
+    const mediaUrl = assertStoredMediaUrl(dto.mediaUrl);
     if (!text && !mediaUrl) {
       throw new BadRequestException("Type your message or attach media...");
     }
@@ -718,6 +760,9 @@ export class AlertService {
 
   async getLocationShare(alertId: string, userId: string) {
     const alert = await this.requireAccessible(alertId, userId);
+    if (alert.status !== AlertStatus.BROADCASTING) {
+      throw new BadRequestException("Live location is only available during an active emergency.");
+    }
     return buildShareableLocation({
       latitude: alert.latitude,
       longitude: alert.longitude,
@@ -868,6 +913,18 @@ export class AlertService {
     const firstName = owner.fullName.split(" ")[0];
     const cancelledBody = `${firstName} has cancelled their emergency safety alert and indicated that it was a ${reasonPhrase(reasonMeta.key)}.`;
 
+    const mediaItems = alert.liveMessages
+      .filter((message) => message.mediaUrl && message.mediaType !== MediaType.NONE)
+      .map((message) => ({
+        mediaUrl: message.mediaUrl,
+        mediaType: message.mediaType,
+        mimeType: message.mimeType,
+        sender: message.sender,
+        text: message.text,
+        createdAt: message.createdAt.toISOString(),
+        timestamp: message.timestamp,
+      }));
+
     const [resolved] = await this.prisma.$transaction([
       this.prisma.alert.update({
         where: { id: alertId },
@@ -894,6 +951,8 @@ export class AlertService {
           location: alert.address,
           triggeredAt: alert.triggeredAt,
           duration: `${durationMins} mins`,
+          alertId,
+          mediaItems,
         },
       }),
     ]);
@@ -909,7 +968,8 @@ export class AlertService {
       homeLabel: "Back to Home",
     };
     this.realtime.emitToRoom(`room:${alertId}`, "alert:resolved", payload);
-    this.realtime.emit("admin:alert:resolved", payload);
+    this.realtime.emitToRoom("room:admin", "admin:alert:resolved", payload);
+    await this.emitAdminAlertForSubscriber(alert.userId, "admin:alert:resolved", payload);
 
     const notified = await this.prisma.alertNotifiedGroup.findMany({ where: { alertId } });
     const groups = await this.prisma.contactGroup.findMany({
@@ -924,6 +984,21 @@ export class AlertService {
       memberPhones: groups.flatMap((group) => group.members.map((member) => member.phone)),
     });
     return payload;
+  }
+
+  /** Emit to Super Admin room + coverage-scoped operator rooms. */
+  private async emitAdminAlertForSubscriber(
+    subscriberUserId: string,
+    event: string,
+    payload: unknown,
+  ): Promise<void> {
+    const coverage = await this.prisma.dashboardCoverage.findMany({
+      where: { subscriberUserId },
+      select: { operatorUserId: true },
+    });
+    for (const row of coverage) {
+      this.realtime.emitToRoom(`room:admin:operator:${row.operatorUserId}`, event, payload);
+    }
   }
 
   private async findActive(userId: string) {
@@ -1032,6 +1107,20 @@ export class AlertService {
       (viewer.role === Role.SUPER_ADMIN && isDesignatedAdminEmail(viewer.email))
     ) {
       return alert;
+    }
+
+    if (viewer.role === Role.SECURITY_OPERATOR) {
+      const coverage = await this.prisma.dashboardCoverage.findUnique({
+        where: {
+          operatorUserId_subscriberUserId: {
+            operatorUserId: userId,
+            subscriberUserId: alert.userId,
+          },
+        },
+      });
+      if (coverage) {
+        return alert;
+      }
     }
 
     const phones = new Set(

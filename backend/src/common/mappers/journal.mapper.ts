@@ -23,6 +23,7 @@ export function parseJournalType(value?: string): JournalEntryType {
 export function toJournalDto(entry: Journal) {
   const meta = typeMeta[entry.type];
   const occurredAt = entry.triggeredAt;
+  const mediaItems = Array.isArray(entry.mediaItems) ? entry.mediaItems : [];
   return {
     id: entry.id,
     userId: entry.userId,
@@ -32,6 +33,8 @@ export function toJournalDto(entry: Journal) {
     body: entry.body,
     source: entry.source,
     location: entry.location,
+    alertId: entry.alertId ?? null,
+    mediaItems,
     occurredAt: occurredAt.toISOString(),
     dateLabel: formatJournalDate(occurredAt),
     emergencyType: entry.emergencyType,

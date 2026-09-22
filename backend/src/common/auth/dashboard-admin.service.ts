@@ -6,6 +6,7 @@ import {
   designatedDashboardAdminEmail,
   isDashboardSession,
   isDesignatedAdminEmail,
+  isSecurityOperatorRole,
   isSuperAdminRole,
 } from "./dashboard-admin";
 
@@ -19,6 +20,7 @@ export class DashboardAdminService implements OnModuleInit {
 
   async ensureSingleAdmin(): Promise<void> {
     const email = designatedDashboardAdminEmail();
+    // Only demote extra SUPER_ADMIN accounts — never touch SECURITY_OPERATOR
     await this.prisma.user.updateMany({
       where: {
         role: Role.SUPER_ADMIN,
@@ -52,12 +54,28 @@ export class DashboardAdminService implements OnModuleInit {
       role: record.role,
     };
 
-    if (
-      !isDashboardSession(session) ||
-      !isDesignatedAdminEmail(record.email) ||
-      !isSuperAdminRole(record.role)
-    ) {
+    if (!isDashboardSession(session)) {
+      throw new ForbiddenException(
+        "Dashboard access requires Super Admin or an approved Security Operator account.",
+      );
+    }
+
+    // Super Admin must still be the designated email
+    if (isSuperAdminRole(record.role) && !isDesignatedAdminEmail(record.email)) {
       throw new ForbiddenException("Dashboard access is limited to the Super Admin account.");
     }
+  }
+
+  isOperator(user?: JwtPayload | null): boolean {
+    return isSecurityOperatorRole(user?.role);
+  }
+
+  isFullAdmin(user?: JwtPayload | null): boolean {
+    return (
+      !!user &&
+      isSuperAdminRole(user.role) &&
+      isDesignatedAdminEmail(user.email) &&
+      user.aud === "dashboard"
+    );
   }
 }

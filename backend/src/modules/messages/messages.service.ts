@@ -6,6 +6,7 @@ import {
 } from "@nestjs/common";
 import { MediaType } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
+import { assertStoredMediaUrl } from "../../common/utils/media-url";
 import { SendDirectMessageDto, StartConversationDto } from "./dto/message.dto";
 
 @Injectable()
@@ -95,7 +96,7 @@ export class MessagesService {
   async send(userId: string, conversationId: string, dto: SendDirectMessageDto) {
     await this.requireParticipant(userId, conversationId);
     const text = (dto.text ?? "").trim();
-    const mediaUrl = dto.mediaUrl?.trim();
+    const mediaUrl = assertStoredMediaUrl(dto.mediaUrl);
     if (!text && !mediaUrl) {
       throw new BadRequestException("Message text or media is required.");
     }

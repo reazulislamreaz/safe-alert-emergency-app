@@ -100,16 +100,34 @@ console.log("Largest:", largest);
 console.log("Second Largest:", secondLargest);
 */
 
-function average(n){
+// function average(n){
 
- if(n%2===0)
-{
-  console.log(n,""+ " is even number")
+//  if(n%2===0)
+// {
+//   console.log(n,""+ " is even number")
 
+// }
+// else if (n%2===1){
+//   console.log(n,"is odd number")
+// }
+// }
+// const result = average(10)
+// console.log(result)
+
+
+// ? find a single user using id
+
+const users = [
+  { id: 101, name: "Rahim" },
+  { id: 102, name: "Karim" },
+  { id: 103, name: "Reaz" },
+];
+
+const newUsers=[];
+
+for (let i=0 ; i < users.length ; i++){
+    const userName = users[i]
+    
+  newUsers.push(userName);
 }
-else if (n%2===1){
-  console.log(n,"is odd number")
-}
-}
-const result = average(10)
-console.log(result)
+console.log(newUsers)

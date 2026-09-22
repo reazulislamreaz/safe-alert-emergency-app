@@ -1,16 +1,31 @@
-import { Controller, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiQuery, ApiTags } from "@nestjs/swagger";
+import { IsOptional, IsString, MinLength } from "class-validator";
 import { NotificationService } from "./notification.service";
+import { PushService } from "./push.service";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { JwtPayload } from "../../config/env";
+
+class RegisterPushTokenDto {
+  @IsString()
+  @MinLength(8)
+  token!: string;
+
+  @IsOptional()
+  @IsString()
+  platform?: string;
+}
 
 @ApiTags("Notifications")
 @ApiBearerAuth("access-token")
 @Controller("api/notifications")
 @UseGuards(JwtAuthGuard)
 export class NotificationsController {
-  constructor(private readonly notificationService: NotificationService) {}
+  constructor(
+    private readonly notificationService: NotificationService,
+    private readonly push: PushService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: "Notification inbox — search, empty 'No Notification Yet'" })
@@ -27,6 +42,22 @@ export class NotificationsController {
       query,
       Number.isFinite(parsed) ? parsed : 20,
     );
+    return { success: true, data };
+  }
+
+  @Post("push-token")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Register device push token (FCM/APNs)" })
+  async registerPush(@CurrentUser() user: JwtPayload, @Body() dto: RegisterPushTokenDto) {
+    const data = await this.push.registerToken(user.sub, dto.token, dto.platform || "unknown");
+    return { success: true, data };
+  }
+
+  @Delete("push-token")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Unregister device push token" })
+  async unregisterPush(@CurrentUser() user: JwtPayload, @Body() dto: RegisterPushTokenDto) {
+    const data = await this.push.unregisterToken(user.sub, dto.token);
     return { success: true, data };
   }
 
