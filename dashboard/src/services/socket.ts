@@ -79,6 +79,22 @@ class SocketService {
     }) => {
       this.notifyListeners('presence:changed', payload);
     });
+
+    this.socket.on('alert:follow_up', (data: { alertId: string; body: string }) => {
+      this.notifyListeners('alert:follow_up', data);
+    });
+
+    this.socket.on('alert:alarm', (data: any) => {
+      this.notifyListeners('alert:alarm', data);
+    });
+
+    this.socket.on('admin:alert:alarm', (data: any) => {
+      this.notifyListeners('admin:alert:alarm', data);
+    });
+
+    this.socket.on('notification:new', (notification: any) => {
+      this.notifyListeners('notification:new', notification);
+    });
   }
 
   disconnect() {

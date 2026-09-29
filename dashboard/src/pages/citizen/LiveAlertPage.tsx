@@ -5,6 +5,7 @@ import { socketService } from '../../services/socket';
 import { AlertResponderView } from '../../types';
 import { LiveTacticalMap } from '../../components/common/LiveTacticalMap';
 import { AuthErrorBanner } from '../../components/auth/AuthFeedback';
+import { soundService } from '../../services/sound';
 
 function initialsFrom(name: string) {
   return name
@@ -40,8 +41,9 @@ export const LiveAlertPage: React.FC<LiveAlertPageProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isActing, setIsActing] = useState(false);
   const [now, setNow] = useState(Date.now());
-
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
+  const [isAlarmActive, setIsAlarmActive] = useState(false);
+  const [showBatteryDetails, setShowBatteryDetails] = useState(false);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -49,13 +51,38 @@ export const LiveAlertPage: React.FC<LiveAlertPageProps> = ({
   }, []);
 
   const copyLocation = async () => {
+    if (!alert) return;
     try {
       const share =
         (alert as any)?.shareableLocation ||
         (await api.getAlertLocationShare(alertId));
-      await navigator.clipboard.writeText(share.copiedText);
-      setCopyStatus('Location copied');
-      setTimeout(() => setCopyStatus(null), 2000);
+
+      const isLive = alert.status === 'BROADCASTING';
+      const lastPoint = alert.telemetryHistory?.length
+        ? alert.telemetryHistory[alert.telemetryHistory.length - 1]
+        : null;
+      const lastUpdated = lastPoint?.timestamp
+        ? new Date(lastPoint.timestamp).toLocaleTimeString()
+        : new Date(alert.triggeredAt).toLocaleTimeString();
+
+      const formatted = [
+        isLive ? 'Emergency Location (Live)' : 'Emergency Location (Recorded)',
+        '',
+        `Address: ${share.address || alert.location.address}`,
+        '',
+        'Coordinates:',
+        `${alert.location.latitude.toFixed(6)}, ${alert.location.longitude.toFixed(6)}`,
+        '',
+        'Map:',
+        share.mapsUrl || `https://maps.google.com/?q=${alert.location.latitude},${alert.location.longitude}`,
+        '',
+        'Last updated:',
+        lastUpdated,
+      ].join('\n');
+
+      await navigator.clipboard.writeText(formatted);
+      setCopyStatus('Emergency location copied to clipboard!');
+      setTimeout(() => setCopyStatus(null), 3000);
     } catch (err: unknown) {
       setErrorMessage(err instanceof Error ? err.message : 'Could not copy location.');
     }
@@ -64,11 +91,19 @@ export const LiveAlertPage: React.FC<LiveAlertPageProps> = ({
   const triggerAlarm = async () => {
     try {
       await api.triggerAlertAlarm(alertId);
-      setCopyStatus('Loud alarm triggered intentionally');
-      setTimeout(() => setCopyStatus(null), 2000);
+      soundService.startAlarm();
+      setIsAlarmActive(true);
+      setCopyStatus('Loud alarm sounding!');
     } catch (err: unknown) {
       setErrorMessage(err instanceof Error ? err.message : 'Could not trigger alarm.');
     }
+  };
+
+  const silenceAlarm = () => {
+    soundService.stopAlarm();
+    setIsAlarmActive(false);
+    setCopyStatus('Alarm silenced.');
+    setTimeout(() => setCopyStatus(null), 2000);
   };
 
   useEffect(() => {
@@ -84,14 +119,22 @@ export const LiveAlertPage: React.FC<LiveAlertPageProps> = ({
         }
       });
     socketService.joinAlertRoom(alertId);
-    const off = socketService.on('alert:state', (next: AlertResponderView) => {
+    const offState = socketService.on('alert:state', (next: AlertResponderView) => {
       if (next?.id === alertId) {
         setAlert((current) => ({ ...(current || next), ...next }));
       }
     });
+    const offAlarm = socketService.on('alert:alarm', (data: any) => {
+      if (data?.alertId === alertId && data?.intentional) {
+        soundService.startAlarm();
+        setIsAlarmActive(true);
+      }
+    });
     return () => {
       mounted = false;
-      off();
+      offState();
+      offAlarm();
+      soundService.stopAlarm();
     };
   }, [alertId]);
 
@@ -222,24 +265,54 @@ export const LiveAlertPage: React.FC<LiveAlertPageProps> = ({
             <Copy className="size-4 text-[#09003B]" />
             <span className="text-xs font-semibold text-[#09003B]">Copy Location</span>
           </button>
-          <button
-            type="button"
-            onClick={triggerAlarm}
-            className="flex-1 h-12 rounded-2xl bg-[#FEF2F2] border border-[#FECACA] flex items-center justify-center gap-2 touch-manipulation"
-          >
-            <Volume2 className="size-4 text-[#EB0909]" />
-            <span className="text-xs font-semibold text-[#EB0909]">Sound Alarm</span>
-          </button>
+          {isAlarmActive ? (
+            <button
+              type="button"
+              onClick={silenceAlarm}
+              className="flex-1 h-12 rounded-2xl bg-[#DC2626] text-white flex items-center justify-center gap-2 touch-manipulation font-bold animate-pulse"
+            >
+              <Volume2 className="size-4" />
+              <span className="text-xs">Silence Alarm</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={triggerAlarm}
+              className="flex-1 h-12 rounded-2xl bg-[#FEF2F2] border border-[#FECACA] flex items-center justify-center gap-2 touch-manipulation hover:bg-[#FEE2E2]"
+            >
+              <Volume2 className="size-4 text-[#EB0909]" />
+              <span className="text-xs font-semibold text-[#EB0909]">Sound Alarm</span>
+            </button>
+          )}
         </div>
         {copyStatus && <p className="text-xs text-center text-[#00AA1D] font-medium">{copyStatus}</p>}
         {(alert as any).batteryRecommendation?.show && (
-          <div className="rounded-2xl bg-[#FFFBEB] border border-[#FDE68A] px-3 py-2.5">
-            <p className="text-xs font-semibold text-[#92400E]">
-              {(alert as any).batteryRecommendation.title}
-            </p>
-            <p className="text-[11px] text-[#78350F] mt-1 leading-4">
+          <div className="rounded-2xl bg-[#FFFBEB] border border-[#FDE68A] p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-bold text-[#92400E]">
+                {(alert as any).batteryRecommendation.title}
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowBatteryDetails(!showBatteryDetails)}
+                className="text-[11px] font-semibold text-[#B45309] underline touch-manipulation"
+              >
+                {showBatteryDetails ? 'Hide' : 'Open Battery Settings Guide'}
+              </button>
+            </div>
+            <p className="text-[11px] text-[#78350F] leading-4">
               {(alert as any).batteryRecommendation.body}
             </p>
+            {showBatteryDetails && (
+              <div className="pt-2 border-t border-[#FDE68A] text-[11px] text-[#78350F] space-y-1">
+                <p className="font-semibold">How to adjust on your device:</p>
+                <p>• <span className="font-medium">Android:</span> Settings &gt; Battery &gt; Battery Saver</p>
+                <p>• <span className="font-medium">iOS:</span> Settings &gt; Battery &gt; Low Power Mode</p>
+                <p className="text-[10px] text-[#92400E] italic">
+                  Note: Battery saving mode helps extend battery life during emergencies, but can sometimes restrict background GPS freshness.
+                </p>
+              </div>
+            )}
           </div>
         )}
       </div>

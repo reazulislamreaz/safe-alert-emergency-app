@@ -85,6 +85,29 @@ export const LiveGroupStatusPage: React.FC = () => {
     };
   }, [loadGroups]);
 
+  const [assignedResponder, setAssignedResponder] = useState<string | null>(null);
+  const [isAssigning, setIsAssigning] = useState(false);
+  const [showAssignInput, setShowAssignInput] = useState(false);
+  const [operatorIdInput, setOperatorIdInput] = useState('');
+
+  const loadCoverage = useCallback(async (subscriberEmail?: string) => {
+    try {
+      const data = await api.listCoverage();
+      if (data?.items && subscriberEmail) {
+        const found = data.items.find(
+          (c: any) => c.subscriber?.email === subscriberEmail || c.subscriberUserId === subscriberEmail
+        );
+        if (found?.operator?.fullName) {
+          setAssignedResponder(found.operator.fullName);
+        } else {
+          setAssignedResponder(null);
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
   useEffect(() => {
     if (!selectedGroup?.alertId || selectedGroup.status !== 'SOS active') {
       setIncident(null);
@@ -94,7 +117,12 @@ export const LiveGroupStatusPage: React.FC = () => {
     api
       .getIncidentPanel(selectedGroup.alertId)
       .then((data) => {
-        if (!cancelled) setIncident(data);
+        if (!cancelled) {
+          setIncident(data);
+          if (data?.subscriber?.email) {
+            void loadCoverage(data.subscriber.email);
+          }
+        }
       })
       .catch(() => {
         if (!cancelled) setIncident(null);
@@ -102,7 +130,24 @@ export const LiveGroupStatusPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [selectedGroup?.alertId, selectedGroup?.status]);
+  }, [selectedGroup?.alertId, selectedGroup?.status, loadCoverage]);
+
+  const handleAssignCoverage = async () => {
+    if (!operatorIdInput.trim() || !incident?.subscriber?.email) return;
+    setIsAssigning(true);
+    setActionError(null);
+    try {
+      // Find subscriber user ID or pass subscriber email
+      await api.assignCoverage(operatorIdInput.trim(), incident.subscriber.email);
+      setAssignedResponder(operatorIdInput.trim());
+      setShowAssignInput(false);
+      setOperatorIdInput('');
+    } catch (err: unknown) {
+      setActionError(err instanceof Error ? err.message : 'Failed to assign responder');
+    } finally {
+      setIsAssigning(false);
+    }
+  };
 
   const categories = [
     { id: 'ALL', label: `All (${counts.all})` },
@@ -114,22 +159,29 @@ export const LiveGroupStatusPage: React.FC = () => {
     { id: 'IDLE', label: 'Idle' },
   ];
 
-  const filteredGroups = groups.filter((g) => {
-    const searchMatch =
-      g.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      g.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (g.subscriberName || '').toLowerCase().includes(searchQuery.toLowerCase());
+  const filteredGroups = groups
+    .filter((g) => {
+      const searchMatch =
+        g.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        g.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (g.subscriberName || '').toLowerCase().includes(searchQuery.toLowerCase());
 
-    if (!searchMatch) return false;
-    if (selectedCategory === 'ALL') return true;
-    if (selectedCategory === 'SOS') return g.status === 'SOS active';
-    if (selectedCategory === 'FIRE') return g.category === 'FIRE';
-    if (selectedCategory === 'MEDICAL') return g.category === 'MEDICAL';
-    if (selectedCategory === 'POLICE') return g.category === 'POLICE / SECURITY';
-    if (selectedCategory === 'NATURAL') return g.category === 'NATURAL DISASTER';
-    if (selectedCategory === 'IDLE') return g.status === 'Idle';
-    return true;
-  });
+      if (!searchMatch) return false;
+      if (selectedCategory === 'ALL') return true;
+      if (selectedCategory === 'SOS') return g.status === 'SOS active';
+      if (selectedCategory === 'FIRE') return g.category === 'FIRE';
+      if (selectedCategory === 'MEDICAL') return g.category === 'MEDICAL';
+      if (selectedCategory === 'POLICE') return g.category === 'POLICE / SECURITY';
+      if (selectedCategory === 'NATURAL') return g.category === 'NATURAL DISASTER';
+      if (selectedCategory === 'IDLE') return g.status === 'Idle';
+      return true;
+    })
+    .sort((a, b) => {
+      // Active emergencies appear first
+      if (a.status === 'SOS active' && b.status !== 'SOS active') return -1;
+      if (b.status === 'SOS active' && a.status !== 'SOS active') return 1;
+      return 0;
+    });
 
   const getCategoryBadgeClass = (category: string) => {
     switch (category) {
@@ -364,6 +416,49 @@ export const LiveGroupStatusPage: React.FC = () => {
                   {incident?.shareableLocation?.address && (
                     <p className="text-xs text-gray-600">{incident.shareableLocation.address}</p>
                   )}
+
+                  <div className="pt-2 border-t border-red-200/60 flex items-center justify-between">
+                    <div>
+                      <span className="text-[11px] font-semibold text-gray-700">Responder: </span>
+                      <span className="text-[11px] text-gray-900 font-bold">
+                        {assignedResponder || 'Unassigned'}
+                      </span>
+                    </div>
+                    {!showAssignInput ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowAssignInput(true)}
+                        className="text-[11px] font-semibold text-blue-600 hover:text-blue-700 bg-white border border-gray-200 px-2 py-1 rounded shadow-xs"
+                      >
+                        {assignedResponder ? 'Reassign' : 'Assign Responder'}
+                      </button>
+                    ) : (
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="text"
+                          placeholder="Operator ID / Name"
+                          value={operatorIdInput}
+                          onChange={(e) => setOperatorIdInput(e.target.value)}
+                          className="w-36 border border-gray-200 rounded px-2 py-0.5 text-xs bg-white"
+                        />
+                        <button
+                          type="button"
+                          disabled={isAssigning}
+                          onClick={handleAssignCoverage}
+                          className="text-[11px] font-semibold bg-blue-600 text-white px-2 py-0.5 rounded disabled:opacity-50"
+                        >
+                          {isAssigning ? '...' : 'Save'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowAssignInput(false)}
+                          className="text-[11px] text-gray-500 hover:text-gray-700 px-1"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )}
+                  </div>
 
                   <div>
                     <h4 className="text-xs font-bold text-gray-900 mb-2 flex items-center gap-1.5">

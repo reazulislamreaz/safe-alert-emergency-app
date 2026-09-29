@@ -81,6 +81,15 @@ export const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    // Feature 1: Deep Link referral invitation capture
+    const params = new URLSearchParams(window.location.search);
+    const inviteToken = params.get('invite');
+    if (inviteToken) {
+      sessionStorage.setItem('pending_invite_token', inviteToken);
+    }
+  }, []);
+
+  useEffect(() => {
     const media = window.matchMedia('(min-width: 1024px)');
     const onChange = () => {
       if (media.matches) setIsSidebarOpen(false);

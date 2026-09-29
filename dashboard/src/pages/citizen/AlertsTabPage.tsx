@@ -1,9 +1,14 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Bell, CheckCircle, MapPin, MessageCircle, Users, Video } from 'lucide-react';
+import { Bell, CheckCircle, MapPin, MessageCircle, Users, Video, Timer, UserPlus, Navigation, UserCheck, AlertTriangle, ArrowRight } from 'lucide-react';
 import { api } from '../../services/api';
 import { socketService } from '../../services/socket';
-import { AlertInbox, AlertInboxCard, User } from '../../types';
+import { soundService } from '../../services/sound';
+import { AlertInbox, AlertInboxCard, SafetyCountdownState, User } from '../../types';
 import { AuthErrorBanner } from '../../components/auth/AuthFeedback';
+import { InviteShareModal } from '../../components/citizen/InviteShareModal';
+import { SafetyCountdownModal } from '../../components/citizen/SafetyCountdownModal';
+import { BystanderRelayModal } from '../../components/citizen/BystanderRelayModal';
+import { LocationRequestsSheet } from '../../components/citizen/LocationRequestsSheet';
 import safeAlertMark from '../../assets/safealert-mark.png';
 import noActiveAlert from '../../assets/no-active-alert.png';
 
@@ -29,12 +34,20 @@ export const AlertsTabPage: React.FC<AlertsTabPageProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const [countdown, setCountdown] = useState<{
-    id: string;
-    remainingLabel: string;
-    status: string;
-  } | null>(null);
-  const [referralShare, setReferralShare] = useState<string | null>(null);
+  // Feature modals state
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showCountdownModal, setShowCountdownModal] = useState(false);
+  const [showBystanderModal, setShowBystanderModal] = useState(false);
+  const [showLocationRequests, setShowLocationRequests] = useState(false);
+
+  // Safety countdown state
+  const [countdown, setCountdown] = useState<SafetyCountdownState | null>(null);
+
+  // Location requests pending count
+  const [pendingLocationCount, setPendingLocationCount] = useState(0);
+
+  // Feature 4: 5-minute follow-up emergency alert banner
+  const [followUpAlert, setFollowUpAlert] = useState<{ alertId: string; body: string } | null>(null);
 
   const loadInbox = useCallback(async (nextTab: 'active' | 'past' = tab) => {
     const data = (await api.getAlertInbox(nextTab)) as AlertInbox;
@@ -42,11 +55,29 @@ export const AlertsTabPage: React.FC<AlertsTabPageProps> = ({
     setTab(data.selectedTab);
   }, [tab]);
 
-  useEffect(() => {
-    api.getCurrentSafetyCountdown()
-      .then((data) => setCountdown(data))
-      .catch(() => setCountdown(null));
+  const loadCountdown = useCallback(async () => {
+    try {
+      const data = await api.getCurrentSafetyCountdown();
+      setCountdown(data);
+    } catch {
+      setCountdown(null);
+    }
   }, []);
+
+  const loadLocationRequests = useCallback(async () => {
+    try {
+      const data = await api.getLocationRequestsInbox();
+      const count = (data.items || []).filter((item: any) => item.isIncoming && item.status === 'PENDING').length;
+      setPendingLocationCount(count);
+    } catch {
+      setPendingLocationCount(0);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadCountdown();
+    void loadLocationRequests();
+  }, [loadCountdown, loadLocationRequests]);
 
   const startCountdown = async () => {
     try {
@@ -67,18 +98,8 @@ export const AlertsTabPage: React.FC<AlertsTabPageProps> = ({
     }
   };
 
-  const shareReferral = async () => {
-    try {
-      const data = await api.getContactReferral();
-      setReferralShare(data.shareUrl);
-      if (navigator.share) {
-        await navigator.share({ title: data.title, text: data.shareText, url: data.shareUrl });
-      } else if (data.shareText) {
-        await navigator.clipboard.writeText(data.shareText);
-      }
-    } catch (err: unknown) {
-      setErrorMessage(err instanceof Error ? err.message : 'Could not load referral.');
-    }
+  const shareReferral = () => {
+    setShowInviteModal(true);
   };
 
   useEffect(() => {
@@ -99,16 +120,40 @@ export const AlertsTabPage: React.FC<AlertsTabPageProps> = ({
   }, []);
 
   useEffect(() => {
-    return socketService.on('presence:changed', () => {
+    const offPresence = socketService.on('presence:changed', () => {
       loadInbox(tab).catch(() => undefined);
     });
-  }, [loadInbox, tab]);
+    const offAlertNew = socketService.on('alert:new', () => {
+      soundService.playEmergencyAlert();
+      loadInbox(tab).catch(() => undefined);
+    });
+    const offFollowUp = socketService.on('alert:follow_up', (data: { alertId: string; body: string }) => {
+      setFollowUpAlert(data);
+      soundService.playEmergencyAlert();
+      loadInbox('active').catch(() => undefined);
+    });
+    const offNotification = socketService.on('notification:new', (ntf: any) => {
+      if (ntf?.soundKey === 'emergency_alert') {
+        soundService.playEmergencyAlert();
+      } else {
+        soundService.playCircleNotify();
+      }
+      if (ntf?.type === 'FOLLOW_UP_ALERT' && ntf?.alertId) {
+        setFollowUpAlert({ alertId: ntf.alertId, body: ntf.body });
+      }
+      if (ntf?.type === 'LOCATION_REQUEST') {
+        loadLocationRequests().catch(() => undefined);
+      }
+      loadInbox(tab).catch(() => undefined);
+    });
 
-  useEffect(() => {
-    return socketService.on('alert:new', () => {
-      loadInbox(tab).catch(() => undefined);
-    });
-  }, [loadInbox, tab]);
+    return () => {
+      offPresence();
+      offAlertNew();
+      offFollowUp();
+      offNotification();
+    };
+  }, [loadInbox, loadLocationRequests, tab]);
 
   const handleTab = async (next: 'active' | 'past') => {
     setTab(next);
@@ -144,7 +189,7 @@ export const AlertsTabPage: React.FC<AlertsTabPageProps> = ({
   const activeCount = inbox?.active.length ?? 0;
 
   return (
-    <div className="flex flex-col h-full bg-white">
+    <div className="flex flex-col h-full bg-white relative">
       <header className="relative px-4 pt-4 pb-2">
         <div className="flex items-center justify-between">
           <div className="min-w-0">
@@ -154,7 +199,7 @@ export const AlertsTabPage: React.FC<AlertsTabPageProps> = ({
           <button
             type="button"
             onClick={onOpenNotifications}
-            className="relative size-9 rounded-[18px] bg-[#F1F5FF] flex items-center justify-center touch-manipulation"
+            className="relative size-9 rounded-[18px] bg-[#F1F5FF] flex items-center justify-center touch-manipulation hover:bg-[#E2E8F0]"
             aria-label="Notifications"
           >
             <Bell className="size-5 text-[#09003B]" />
@@ -175,40 +220,123 @@ export const AlertsTabPage: React.FC<AlertsTabPageProps> = ({
       <div className="flex-1 overflow-y-auto px-4 pt-10 pb-4 space-y-6">
         <AuthErrorBanner message={errorMessage} />
 
-        <section className="rounded-2xl border border-[#E1E1E1] bg-[#F8FAFC] p-3 space-y-2">
-          <p className="text-xs font-bold text-[#09003B]">Safety tools</p>
-          {countdown ? (
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-semibold text-[#EB0909] tabular-nums">
-                Countdown {countdown.remainingLabel}
-              </p>
+        {/* Feature 4: 5-Minute Follow-Up Emergency Banner */}
+        {followUpAlert && (
+          <div className="rounded-2xl bg-[#FEF2F2] border-2 border-[#DC2626] p-4 text-[#991B1B] shadow-md animate-pulse space-y-2">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="size-5 text-[#DC2626] shrink-0" />
+                <p className="text-xs font-black uppercase tracking-wider text-[#DC2626]">
+                  5-Min Emergency Follow-Up
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setFollowUpAlert(null)}
+                className="text-[#991B1B] text-xs font-bold hover:text-black"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="text-xs font-semibold leading-relaxed">{followUpAlert.body}</p>
+            <button
+              type="button"
+              onClick={() => {
+                onOpenLive(followUpAlert.alertId);
+                setFollowUpAlert(null);
+              }}
+              className="w-full mt-2 h-9 rounded-xl bg-[#DC2626] text-white text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-[#B91C1C]"
+            >
+              Open Incident Detail
+              <ArrowRight className="size-3.5" />
+            </button>
+          </div>
+        )}
+
+        {/* Feature 3: Active Countdown Card if running */}
+        {countdown && countdown.status === 'ACTIVE' && (
+          <div className="rounded-2xl border-2 border-[#3A67D5] bg-[#EFF6FF] p-4 flex items-center justify-between shadow-xs">
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-[#2563EB]">Safety Check Running</p>
+              <p className="text-xl font-black font-mono text-[#09003B]">{countdown.remainingLabel}</p>
+              <p className="text-[10px] text-[#64748B]">Auto-escalates if not safe</p>
+            </div>
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={confirmCountdownSafe}
-                className="rounded-full bg-[#00AA1D] px-3 py-1.5 text-xs font-bold text-white"
+                className="px-3.5 py-2 rounded-xl bg-[#00AA1D] text-white text-xs font-bold shadow-xs hover:bg-[#009218] touch-manipulation"
               >
                 I'm Safe
               </button>
+              <button
+                type="button"
+                onClick={() => setShowCountdownModal(true)}
+                className="px-3 py-2 rounded-xl border border-[#CBD5E1] bg-white text-xs font-semibold text-[#09003B] touch-manipulation hover:bg-[#F8FAFC]"
+              >
+                View
+              </button>
             </div>
-          ) : (
+          </div>
+        )}
+
+        {/* Safety Tools Grid */}
+        <section className="space-y-2">
+          <p className="text-xs font-bold text-[#09003B]">Safety Tools & Circle Access</p>
+          <div className="grid grid-cols-2 gap-2.5">
             <button
               type="button"
-              onClick={startCountdown}
-              className="w-full rounded-xl bg-white border border-[#E1E1E1] px-3 py-2 text-xs font-semibold text-[#09003B]"
+              onClick={() => setShowCountdownModal(true)}
+              className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-2xl flex flex-col items-start gap-1 text-left touch-manipulation hover:bg-[#F1F5F9] transition-all"
             >
-              Start 30-min safety countdown
+              <div className="size-8 rounded-xl bg-[#EBF0FF] text-[#3A67D5] flex items-center justify-center">
+                <Timer className="size-4" />
+              </div>
+              <p className="text-xs font-bold text-[#09003B]">30-Min Safety Check</p>
+              <p className="text-[10px] text-[#64748B]">Auto-escalating timer</p>
             </button>
-          )}
-          <button
-            type="button"
-            onClick={shareReferral}
-            className="w-full rounded-xl bg-white border border-[#E1E1E1] px-3 py-2 text-xs font-semibold text-[#3A67D5]"
-          >
-            Share Safety Circle referral link
-          </button>
-          {referralShare && (
-            <p className="text-[10px] text-[#30302F] break-all">{referralShare}</p>
-          )}
+
+            <button
+              type="button"
+              onClick={() => setShowInviteModal(true)}
+              className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-2xl flex flex-col items-start gap-1 text-left touch-manipulation hover:bg-[#F1F5F9] transition-all"
+            >
+              <div className="size-8 rounded-xl bg-[#EBF0FF] text-[#3A67D5] flex items-center justify-center">
+                <UserPlus className="size-4" />
+              </div>
+              <p className="text-xs font-bold text-[#09003B]">Invite to Circle</p>
+              <p className="text-[10px] text-[#64748B]">SMS, WhatsApp, Link</p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowLocationRequests(true)}
+              className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-2xl flex flex-col items-start gap-1 text-left touch-manipulation hover:bg-[#F1F5F9] transition-all relative"
+            >
+              <div className="size-8 rounded-xl bg-[#EBF0FF] text-[#3A67D5] flex items-center justify-center">
+                <Navigation className="size-4" />
+              </div>
+              {pendingLocationCount > 0 && (
+                <span className="absolute top-2.5 right-2.5 size-2 rounded-full bg-[#EB0909] animate-ping" />
+              )}
+              <p className="text-xs font-bold text-[#09003B]">Location Requests</p>
+              <p className="text-[10px] text-[#64748B]">
+                {pendingLocationCount > 0 ? `${pendingLocationCount} pending action` : 'Family & Friends'}
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowBystanderModal(true)}
+              className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-2xl flex flex-col items-start gap-1 text-left touch-manipulation hover:bg-[#F1F5F9] transition-all"
+            >
+              <div className="size-8 rounded-xl bg-[#DCFCE7] text-[#15803D] flex items-center justify-center">
+                <UserCheck className="size-4" />
+              </div>
+              <p className="text-xs font-bold text-[#09003B]">Bystander Mode</p>
+              <p className="text-[10px] text-[#64748B]">1-time emergency relay</p>
+            </button>
+          </div>
         </section>
 
         {isLoading && !inbox && (
@@ -370,6 +498,34 @@ export const AlertsTabPage: React.FC<AlertsTabPageProps> = ({
           </section>
         )}
       </div>
+
+      {showInviteModal && <InviteShareModal onClose={() => setShowInviteModal(false)} />}
+
+      {showCountdownModal && (
+        <SafetyCountdownModal
+          currentCountdown={countdown}
+          onUpdate={(next) => setCountdown(next)}
+          onClose={() => setShowCountdownModal(false)}
+        />
+      )}
+
+      {showLocationRequests && (
+        <div className="fixed inset-0 z-50 bg-white max-w-[390px] mx-auto">
+          <LocationRequestsSheet onBack={() => {
+            setShowLocationRequests(false);
+            void loadLocationRequests();
+          }} />
+        </div>
+      )}
+
+      {showBystanderModal && (
+        <BystanderRelayModal
+          onClose={() => setShowBystanderModal(false)}
+          onRelaySent={() => {
+            void loadInbox(tab);
+          }}
+        />
+      )}
     </div>
   );
 };

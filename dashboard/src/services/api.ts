@@ -1667,6 +1667,264 @@ export const api = {
     }
     return data.data;
   },
+
+  async claimReferralToken(token: string) {
+    const res = await fetch(`${API_BASE}/contacts/referral/${encodeURIComponent(token)}/claim`, {
+      method: 'POST',
+      headers: this.authHeaders(false),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to claim invitation'));
+    }
+    return data.data;
+  },
+
+  async sendReferralEmail(email: string) {
+    const res = await fetch(`${API_BASE}/contacts/referral/send-email`, {
+      method: 'POST',
+      headers: this.authHeaders(),
+      body: JSON.stringify({ email }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to send referral email'));
+    }
+    return data.data;
+  },
+
+  async sendReferralSms(phone: string) {
+    const res = await fetch(`${API_BASE}/contacts/referral/send-sms`, {
+      method: 'POST',
+      headers: this.authHeaders(),
+      body: JSON.stringify({ phone }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to send referral SMS'));
+    }
+    return data.data;
+  },
+
+  async cancelSafetyCountdown(id: string) {
+    const res = await fetch(`${API_BASE}/safety-countdowns/${id}/cancel`, {
+      method: 'POST',
+      headers: this.authHeaders(false),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to cancel safety countdown'));
+    }
+    return data.data;
+  },
+
+  async createLocationRequest(groupId: string, targetUserId: string) {
+    const res = await fetch(`${API_BASE}/location-requests`, {
+      method: 'POST',
+      headers: this.authHeaders(),
+      body: JSON.stringify({ groupId, targetUserId }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to request location'));
+    }
+    return data.data;
+  },
+
+  async getLocationRequestsInbox() {
+    const res = await fetch(`${API_BASE}/location-requests/inbox`, {
+      headers: this.authHeaders(false),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to load location requests'));
+    }
+    return data.data as { items: any[] };
+  },
+
+  async respondLocationRequest(
+    id: string,
+    payload: { action: 'APPROVE' | 'DECLINE'; latitude?: number; longitude?: number; address?: string },
+  ) {
+    const res = await fetch(`${API_BASE}/location-requests/${id}/respond`, {
+      method: 'POST',
+      headers: this.authHeaders(),
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to respond to location request'));
+    }
+    return data.data;
+  },
+
+  async redeemPromoCode(code: string) {
+    const res = await fetch(`${API_BASE}/profile/redeem-promo`, {
+      method: 'POST',
+      headers: this.authHeaders(),
+      body: JSON.stringify({ code }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to redeem promotional code'));
+    }
+    return data.data;
+  },
+
+  async uploadMediaFiles(files: File[]) {
+    const formData = new FormData();
+    for (const file of files) {
+      formData.append('files', file);
+    }
+    const token = this.getAuthToken();
+    const res = await fetch(`${API_BASE}/uploads/media`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to upload media'));
+    }
+    return data.data as {
+      files: Array<{ key: string; url: string; contentType: string; size: number }>;
+      countLabel: string;
+    };
+  },
+
+  async listConversations() {
+    const res = await fetch(`${API_BASE}/messages/conversations`, {
+      headers: this.authHeaders(false),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to load conversations'));
+    }
+    return data.data as { items: any[] };
+  },
+
+  async startConversation(peerUserId: string) {
+    const res = await fetch(`${API_BASE}/messages/conversations`, {
+      method: 'POST',
+      headers: this.authHeaders(),
+      body: JSON.stringify({ peerUserId }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to start conversation'));
+    }
+    return data.data as { id: string; peer: any };
+  },
+
+  async getConversationMessages(id: string) {
+    const res = await fetch(`${API_BASE}/messages/conversations/${id}`, {
+      headers: this.authHeaders(false),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to load messages'));
+    }
+    return data.data as { conversationId: string; messages: any[] };
+  },
+
+  async sendConversationMessage(
+    id: string,
+    payload: { text?: string; mediaUrl?: string; mediaType?: 'IMAGE' | 'VIDEO' | 'NONE'; mimeType?: string },
+  ) {
+    const res = await fetch(`${API_BASE}/messages/conversations/${id}`, {
+      method: 'POST',
+      headers: this.authHeaders(),
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to send message'));
+    }
+    return data.data;
+  },
+
+  async sendAlertMessageWithMedia(
+    alertId: string,
+    payload: { text?: string; groupId?: string; mediaUrl?: string; mediaType?: 'IMAGE' | 'VIDEO' | 'NONE'; mimeType?: string },
+  ) {
+    const res = await fetch(`${API_BASE}/alerts/${alertId}/messages`, {
+      method: 'POST',
+      headers: this.authHeaders(),
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to send alert message'));
+    }
+    return data.data;
+  },
+
+  async sendBystanderRelay(payload: {
+    groupId: string;
+    targetMemberId?: string;
+    phone?: string;
+    message: string;
+    alertId?: string;
+  }) {
+    const res = await fetch(`${API_BASE}/bystander/relay`, {
+      method: 'POST',
+      headers: this.authHeaders(),
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to send bystander message'));
+    }
+    return data.data;
+  },
+
+  async listCoverage() {
+    const res = await fetch(`${API_BASE}/dashboard/coverage`, {
+      headers: this.authHeaders(false),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to load coverage'));
+    }
+    return data.data as { items: any[] };
+  },
+
+  async assignCoverage(operatorUserId: string, subscriberUserId: string) {
+    const res = await fetch(`${API_BASE}/dashboard/coverage`, {
+      method: 'POST',
+      headers: this.authHeaders(),
+      body: JSON.stringify({ operatorUserId, subscriberUserId }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to assign operator coverage'));
+    }
+    return data.data;
+  },
+
+  async removeCoverage(id: string) {
+    const res = await fetch(`${API_BASE}/dashboard/coverage/${id}`, {
+      method: 'DELETE',
+      headers: this.authHeaders(false),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to remove coverage'));
+    }
+    return data.data;
+  },
+
+  async promoteOperator(userId: string) {
+    const res = await fetch(`${API_BASE}/dashboard/operators/${userId}/promote`, {
+      method: 'POST',
+      headers: this.authHeaders(false),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(readApiError(data, 'Failed to promote security operator'));
+    }
+    return data.data;
+  },
 };
 
 export type PromoCodeItem = {

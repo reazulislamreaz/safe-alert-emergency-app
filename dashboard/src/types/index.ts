@@ -337,3 +337,129 @@ export interface TransactionItem {
   date: string;
   status: 'Paid' | 'Failed' | 'Refunded';
 }
+
+export interface ReferralPayload {
+  title: string;
+  subtitle: string;
+  shareUrl: string;
+  shareText: string;
+  cta: string;
+  token: string;
+  groupId: string;
+  channels: string[];
+  downloadUrl: string;
+  deepLinkPath: string;
+  signUpPath: string;
+}
+
+export interface ReferralResolution {
+  status: 'valid' | 'already_used' | 'expired' | 'unavailable';
+  message: string;
+  groupName?: string;
+  inviterName?: string;
+  token?: string;
+  groupId?: string;
+  expiresAt?: string | null;
+  downloadUrl?: string;
+  signUpPath?: string;
+}
+
+export interface LocationRequestItem {
+  id: string;
+  requesterId: string;
+  requesterName: string;
+  targetUserId: string;
+  targetName: string;
+  groupId: string;
+  groupName: string;
+  groupKind: string;
+  isIncoming: boolean;
+  status: 'PENDING' | 'APPROVED' | 'DECLINED' | 'EXPIRED';
+  latitude: number | null;
+  longitude: number | null;
+  address: string | null;
+  respondedAt: string | null;
+  expiresAt: string | null;
+  createdAt: string;
+  shareableLocation?: {
+    address: string;
+    latitude: number;
+    longitude: number;
+    mapsUrl: string;
+    copiedText: string;
+  };
+}
+
+export interface SafetyCountdownState {
+  id: string;
+  userId: string;
+  status: 'ACTIVE' | 'CONFIRMED_SAFE' | 'CANCELLED' | 'ESCALATED';
+  durationMinutes: number;
+  startedAt: string;
+  expiresAt: string;
+  remainingSeconds: number;
+  remainingLabel: string;
+  confirmedAt: string | null;
+  cancelledAt: string | null;
+  escalatedAt: string | null;
+  alertId: string | null;
+  notes: string | null;
+  serverTime: string;
+}
+
+export interface BystanderRelayResult {
+  id: string;
+  oneTime: boolean;
+  ongoingAccessGranted: boolean;
+  target: {
+    name: string;
+    phoneMasked: string;
+  };
+  message: string;
+  alertId: string | null;
+  createdAt: string;
+  deliveredInApp: boolean;
+  outboundChannel?: string | null;
+  outboundStatus?: string | null;
+  note: string;
+}
+
+export interface DirectConversationItem {
+  id: string;
+  peer: {
+    id: string;
+    fullName: string;
+    avatar?: string | null;
+  };
+  lastMessage?: {
+    id: string;
+    text: string;
+    mediaType: 'IMAGE' | 'VIDEO' | 'NONE';
+    createdAt: string;
+  } | null;
+  updatedAt: string;
+}
+
+export interface DirectMessageItem {
+  id: string;
+  senderUserId: string;
+  text: string;
+  mediaUrl: string | null;
+  mediaType: 'IMAGE' | 'VIDEO' | 'NONE';
+  mimeType: string | null;
+  createdAt: string;
+  isMine?: boolean;
+}
+
+export interface CoverageItem {
+  id: string;
+  operatorUserId: string;
+  operatorName: string;
+  operatorEmail: string;
+  operatorRole: string;
+  subscriberUserId: string;
+  subscriberName: string;
+  subscriberEmail: string;
+  createdAt: string;
+}
+

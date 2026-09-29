@@ -1,59 +1,55 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, Send, Image as ImageIcon, Camera, X, Play } from 'lucide-react';
 import { api } from '../../services/api';
-import { socketService } from '../../services/socket';
-import { AuthErrorBanner, AuthSpinner } from '../../components/auth/AuthFeedback';
+import { DirectMessageItem } from '../../types';
+import { AuthErrorBanner, AuthSpinner } from '../auth/AuthFeedback';
 
-type ChatMessage = {
-  id: string;
-  sender: string;
-  text: string;
-  timestamp: string;
-  mediaUrl?: string | null;
-  mediaType?: 'IMAGE' | 'VIDEO' | 'NONE';
-  mimeType?: string | null;
-  isMine?: boolean;
-};
-
-interface AlertChatSheetProps {
-  alertId: string;
+interface DirectChatSheetProps {
+  peerUserId: string;
+  peerName: string;
   onBack: () => void;
 }
 
-export const AlertChatSheet: React.FC<AlertChatSheetProps> = ({ alertId, onBack }) => {
-  const [title, setTitle] = useState('Emergency Group');
-  const [statusLabel, setStatusLabel] = useState('Online');
-  const [placeholder, setPlaceholder] = useState('Type your message...');
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+export const DirectChatSheet: React.FC<DirectChatSheetProps> = ({
+  peerUserId,
+  peerName,
+  onBack,
+}) => {
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<DirectMessageItem[]>([]);
   const [draft, setDraft] = useState('');
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
   const endRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
-  const load = async () => {
-    const data = await api.getAlertMessages(alertId);
-    setTitle(data.title || 'Emergency Group');
-    setStatusLabel(data.statusLabel || 'Online');
-    setPlaceholder(data.placeholder || 'Type your message...');
-    setMessages(data.messages || []);
-  };
-
   useEffect(() => {
-    load().catch((err: unknown) => {
-      setErrorMessage(err instanceof Error ? err.message : 'Could not load chat.');
-    });
-    socketService.joinAlertRoom(alertId);
-    const off = socketService.on('alert:messages:update', () => {
-      load().catch(() => undefined);
-    });
-    return off;
-  }, [alertId]);
+    let active = true;
+    setLoading(true);
+    api
+      .startConversation(peerUserId)
+      .then(async (conv) => {
+        if (!active) return;
+        setConversationId(conv.id);
+        const msgs = await api.getConversationMessages(conv.id);
+        if (active) setMessages(msgs.messages || []);
+      })
+      .catch((err) => {
+        if (active) setErrorMessage(err instanceof Error ? err.message : 'Could not start conversation.');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [peerUserId]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -86,17 +82,16 @@ export const AlertChatSheet: React.FC<AlertChatSheetProps> = ({ alertId, onBack 
   };
 
   const handleClearSelectedFile = () => {
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
-    }
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
     setSelectedFile(null);
     setPreviewUrl(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
     if (cameraInputRef.current) cameraInputRef.current.value = '';
   };
 
-  const send = async (e: React.FormEvent) => {
+  const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!conversationId) return;
     const text = draft.trim();
     if (!text && !selectedFile) return;
 
@@ -118,7 +113,7 @@ export const AlertChatSheet: React.FC<AlertChatSheetProps> = ({ alertId, onBack 
         }
       }
 
-      await api.sendAlertMessageWithMedia(alertId, {
+      await api.sendConversationMessage(conversationId, {
         text: text || undefined,
         mediaUrl,
         mediaType,
@@ -127,7 +122,8 @@ export const AlertChatSheet: React.FC<AlertChatSheetProps> = ({ alertId, onBack 
 
       setDraft('');
       handleClearSelectedFile();
-      await load();
+      const updated = await api.getConversationMessages(conversationId);
+      setMessages(updated.messages || []);
     } catch (err: unknown) {
       setErrorMessage(err instanceof Error ? err.message : 'Could not send message.');
     } finally {
@@ -147,61 +143,67 @@ export const AlertChatSheet: React.FC<AlertChatSheetProps> = ({ alertId, onBack 
           <ChevronLeft className="size-5 text-[#09003B]" />
         </button>
         <div className="min-w-0">
-          <p className="text-sm font-bold text-[#09003B] truncate">{title}</p>
-          <p className="text-xs text-[#00AA1D]">{statusLabel}</p>
+          <p className="text-sm font-bold text-[#09003B] truncate">{peerName}</p>
+          <p className="text-[11px] text-[#64748B]">Safety Circle 1-on-1</p>
         </div>
       </header>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
         <AuthErrorBanner message={errorMessage} />
-        {messages.map((message) => (
-          <div key={message.id} className={`flex ${message.isMine ? 'justify-end' : 'justify-start'}`}>
-            <div
-              className={`max-w-[85%] rounded-2xl p-3 shadow-2xs ${
-                message.isMine ? 'bg-[#3A67D5] text-white' : 'bg-[#F5F5F5] text-[#09003B]'
-              }`}
-            >
-              {!message.isMine && (
-                <p className="text-[10px] font-semibold opacity-70 mb-1">{message.sender}</p>
-              )}
-
-              {/* Render Media */}
-              {message.mediaUrl && message.mediaType === 'IMAGE' && (
-                <div
-                  onClick={() => setLightboxUrl(message.mediaUrl || null)}
-                  className="rounded-xl overflow-hidden mb-1.5 cursor-pointer max-h-56 bg-black/5"
-                >
-                  <img
-                    src={message.mediaUrl}
-                    alt="Shared"
-                    className="w-full h-auto object-cover max-h-56 rounded-xl hover:opacity-95"
-                    loading="lazy"
-                  />
-                </div>
-              )}
-
-              {message.mediaUrl && message.mediaType === 'VIDEO' && (
-                <div className="rounded-xl overflow-hidden mb-1.5 max-h-64 bg-black">
-                  <video
-                    src={message.mediaUrl}
-                    controls
-                    className="w-full max-h-64 rounded-xl"
-                    preload="metadata"
-                  />
-                </div>
-              )}
-
-              {message.text && <p className="text-sm leading-5 whitespace-pre-wrap">{message.text}</p>}
-              <p
-                className={`text-[9px] text-right mt-1 ${
-                  message.isMine ? 'text-white/70' : 'text-[#888887]'
+        {loading ? (
+          <div className="py-12 flex justify-center">
+            <AuthSpinner />
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="py-16 text-center text-xs text-[#888887]">
+            Start a direct message with {peerName}.
+          </div>
+        ) : (
+          messages.map((message) => (
+            <div key={message.id} className={`flex ${message.isMine ? 'justify-end' : 'justify-start'}`}>
+              <div
+                className={`max-w-[85%] rounded-2xl p-3 shadow-2xs ${
+                  message.isMine ? 'bg-[#3A67D5] text-white' : 'bg-[#F5F5F5] text-[#09003B]'
                 }`}
               >
-                {message.timestamp}
-              </p>
+                {/* Render Media */}
+                {message.mediaUrl && message.mediaType === 'IMAGE' && (
+                  <div
+                    onClick={() => setLightboxUrl(message.mediaUrl || null)}
+                    className="rounded-xl overflow-hidden mb-1.5 cursor-pointer max-h-56 bg-black/5"
+                  >
+                    <img
+                      src={message.mediaUrl}
+                      alt="Shared"
+                      className="w-full h-auto object-cover max-h-56 rounded-xl hover:opacity-95"
+                      loading="lazy"
+                    />
+                  </div>
+                )}
+
+                {message.mediaUrl && message.mediaType === 'VIDEO' && (
+                  <div className="rounded-xl overflow-hidden mb-1.5 max-h-64 bg-black">
+                    <video
+                      src={message.mediaUrl}
+                      controls
+                      className="w-full max-h-64 rounded-xl"
+                      preload="metadata"
+                    />
+                  </div>
+                )}
+
+                {message.text && <p className="text-sm leading-5 whitespace-pre-wrap">{message.text}</p>}
+                <p
+                  className={`text-[9px] text-right mt-1 ${
+                    message.isMine ? 'text-white/70' : 'text-[#888887]'
+                  }`}
+                >
+                  {message.createdAt ? new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                </p>
+              </div>
             </div>
-          </div>
-        ))}
+          ))
+        )}
         <div ref={endRef} />
       </div>
 
@@ -250,7 +252,7 @@ export const AlertChatSheet: React.FC<AlertChatSheetProps> = ({ alertId, onBack 
         onChange={handleSelectFile}
       />
 
-      <form onSubmit={send} className="p-3 bg-white flex items-center gap-1.5 border-t border-[#E1E1E1]">
+      <form onSubmit={handleSend} className="p-3 bg-white flex items-center gap-1.5 border-t border-[#E1E1E1]">
         <button
           type="button"
           onClick={() => cameraInputRef.current?.click()}
@@ -273,7 +275,7 @@ export const AlertChatSheet: React.FC<AlertChatSheetProps> = ({ alertId, onBack 
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          placeholder={isUploading ? 'Uploading media…' : placeholder}
+          placeholder={isUploading ? 'Uploading media…' : 'Type message...'}
           disabled={isUploading}
           className="flex-1 h-11 rounded-full bg-[#F5F5F5] border border-[#E1E1E1] px-4 text-xs text-[#09003B] placeholder-gray-400 focus:outline-none focus:border-[#3A67D5] disabled:opacity-50"
         />
