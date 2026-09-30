@@ -12,9 +12,11 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthService = void 0;
 const common_1 = require("@nestjs/common");
 const jwt_1 = require("@nestjs/jwt");
+const crypto_1 = require("crypto");
 const bcryptjs_1 = require("bcryptjs");
 const client_1 = require("@prisma/client");
 const prisma_service_1 = require("../../prisma/prisma.service");
+const mail_service_1 = require("../../mail/mail.service");
 const env_1 = require("../../config/env");
 const phone_1 = require("../../common/utils/phone");
 const token_hash_1 = require("../../common/utils/token-hash");
@@ -27,46 +29,58 @@ let AuthService = class AuthService {
     prisma;
     jwt;
     dashboardAdmin;
-    constructor(prisma, jwt, dashboardAdmin) {
+    mail;
+    constructor(prisma, jwt, dashboardAdmin, mail) {
         this.prisma = prisma;
         this.jwt = jwt;
         this.dashboardAdmin = dashboardAdmin;
+        this.mail = mail;
     }
     async register(dto) {
         const email = dto.email.toLowerCase();
-        const phoneDigits = (0, phone_1.digitsOnly)(dto.phone);
+        const phone = dto.phone.trim();
+        const phoneDigits = (0, phone_1.digitsOnly)(phone);
         if ((0, dashboard_admin_1.isDesignatedAdminEmail)(email)) {
             throw new common_1.BadRequestException("This email is reserved for the Super Admin account.");
         }
-        const existing = await this.prisma.user.findFirst({
-            where: {
-                OR: [{ email }, { phoneDigits }],
-            },
-        });
-        if (existing) {
-            throw new common_1.BadRequestException("An account with this email or phone number already exists.");
+        const existingEmail = await this.prisma.user.findUnique({ where: { email } });
+        if (existingEmail) {
+            if (existingEmail.role === client_1.Role.SUPER_ADMIN) {
+                throw new common_1.BadRequestException("An account with this email already exists.");
+            }
+            const registrationIncomplete = !existingEmail.isVerified || (!existingEmail.pinHash && !existingEmail.faceIdEnabled);
+            if (!registrationIncomplete) {
+                throw new common_1.BadRequestException("An account with this email already exists.");
+            }
+            return this.resumeIncompleteRegistration(existingEmail.id, dto, email, phone, phoneDigits);
         }
-        const pinHash = await (0, bcryptjs_1.hash)(dto.pin || "0000", 10);
-        const passwordHash = dto.password ? await (0, bcryptjs_1.hash)(dto.password, 10) : null;
+        if (phoneDigits.length >= 7) {
+            const existingPhone = await this.prisma.user.findFirst({ where: { phoneDigits } });
+            if (existingPhone) {
+                throw new common_1.BadRequestException("An account with this phone number already exists.");
+            }
+        }
+        const credentialHash = await (0, bcryptjs_1.hash)(dto.password, 10);
         const userId = `usr-${crypto.randomUUID().slice(0, 8)}`;
         const contactId = `ct-${crypto.randomUUID().slice(0, 8)}`;
         const groupId = `grp-${crypto.randomUUID().slice(0, 8)}`;
         const memberId = `mem-${crypto.randomUUID().slice(0, 8)}`;
-        const emergencyPhone = dto.emergencyContactPhone || dto.phone;
-        const emergencyRelation = dto.emergencyContactRelation || "Emergency Contact";
+        const emergencyPhone = dto.emergencyContactPhone.trim();
+        const emergencyContactName = "Emergency Contact";
+        const emergencyRelation = "Emergency Contact";
         const user = await this.prisma.user.create({
             data: {
                 id: userId,
-                fullName: dto.fullName,
+                fullName: dto.fullName.trim(),
                 email,
-                phone: dto.phone,
+                phone,
                 phoneDigits,
-                pinHash,
-                passwordHash,
+                pinHash: credentialHash,
+                passwordHash: credentialHash,
                 dob: dto.dob,
                 race: dto.race,
-                location: dto.location,
-                emergencyContactName: dto.emergencyContactName,
+                location: dto.location.trim(),
+                emergencyContactName,
                 role: client_1.Role.USER,
                 emergencyContactPhone: emergencyPhone,
                 emergencyContactRelation: emergencyRelation,
@@ -76,9 +90,9 @@ let AuthService = class AuthService {
                 contacts: {
                     create: {
                         id: contactId,
-                        name: dto.emergencyContactName,
+                        name: emergencyContactName,
                         phone: emergencyPhone,
-                        phoneDigits: (0, phone_1.digitsOnly)(emergencyPhone),
+                        phoneDigits: (0, phone_1.digitsOnly)(emergencyPhone) || "0",
                         relationship: emergencyRelation,
                     },
                 },
@@ -88,12 +102,13 @@ let AuthService = class AuthService {
                         name: "Family (Primary)",
                         color: "#2563EB",
                         isDefaultSOS: true,
+                        kind: "FAMILY_FRIENDS",
                         memberCount: 1,
                         members: {
                             create: {
                                 id: memberId,
                                 contactId,
-                                name: dto.emergencyContactName,
+                                name: emergencyContactName,
                                 phone: emergencyPhone,
                                 relationship: emergencyRelation,
                             },
@@ -102,9 +117,159 @@ let AuthService = class AuthService {
                 },
             },
         });
-        const otp = await this.sendPhoneOtp(user.phone);
-        const token = this.signToken(user.id, user.email, user.phone, user.role, user.subscriptionTier, "app");
-        return { user: (0, user_mapper_1.toPublicUser)(user), token, otpCode: otp.code };
+        if (dto.inviteToken?.trim()) {
+            try {
+                await this.claimInviteToken(user.id, dto.inviteToken.trim());
+            }
+            catch {
+            }
+        }
+        return this.issueRegistrationSession(user);
+    }
+    async claimInviteToken(userId, token) {
+        const invite = await this.prisma.groupInvitation.findFirst({ where: { token } });
+        if (!invite || invite.useCount >= invite.maxUses) {
+            return;
+        }
+        if (invite.status === "DECLINED") {
+            return;
+        }
+        if (invite.expiresAt && invite.expiresAt.getTime() < Date.now()) {
+            return;
+        }
+        const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+        const already = await this.prisma.contactMember.findFirst({
+            where: { groupId: invite.groupId, phoneDigits: user.phoneDigits },
+        });
+        if (already) {
+            return;
+        }
+        await this.prisma.contactMember.create({
+            data: {
+                id: `mem-${crypto.randomUUID().slice(0, 8)}`,
+                groupId: invite.groupId,
+                name: user.fullName,
+                phone: user.phone || "N/A",
+                phoneDigits: user.phoneDigits,
+                relationship: "Member",
+            },
+        });
+        await this.prisma.contactGroup.update({
+            where: { id: invite.groupId },
+            data: { memberCount: { increment: 1 } },
+        });
+        const nextUseCount = invite.useCount + 1;
+        await this.prisma.groupInvitation.update({
+            where: { id: invite.id },
+            data: {
+                useCount: nextUseCount,
+                inviteeUserId: userId,
+                respondedAt: new Date(),
+                status: nextUseCount >= invite.maxUses ? "ACCEPTED" : "PENDING",
+            },
+        });
+    }
+    async resumeIncompleteRegistration(userId, dto, email, phone, phoneDigits) {
+        if (phoneDigits.length >= 7) {
+            const phoneTaken = await this.prisma.user.findFirst({
+                where: { phoneDigits, NOT: { id: userId } },
+            });
+            if (phoneTaken) {
+                throw new common_1.BadRequestException("An account with this phone number already exists.");
+            }
+        }
+        const emergencyPhone = dto.emergencyContactPhone.trim();
+        const emergencyContactName = "Emergency Contact";
+        const emergencyRelation = "Emergency Contact";
+        const credentialHash = await (0, bcryptjs_1.hash)(dto.password, 10);
+        const user = await this.prisma.user.update({
+            where: { id: userId },
+            data: {
+                fullName: dto.fullName.trim(),
+                email,
+                phone,
+                phoneDigits,
+                passwordHash: credentialHash,
+                pinHash: credentialHash,
+                dob: dto.dob,
+                race: dto.race,
+                location: dto.location.trim(),
+                emergencyContactName,
+                emergencyContactPhone: emergencyPhone,
+                emergencyContactRelation: emergencyRelation,
+                profilePhotos: (0, uploads_constants_1.requireStoredImageUrls)(dto.profilePhotos) ?? [],
+                avatar: dto.profilePhotos?.[0] ||
+                    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
+                isVerified: false,
+                faceIdEnabled: false,
+                faceIdCredentialId: null,
+            },
+        });
+        if (dto.inviteToken?.trim()) {
+            try {
+                await this.claimInviteToken(user.id, dto.inviteToken.trim());
+            }
+            catch {
+            }
+        }
+        return this.issueRegistrationSession(user);
+    }
+    async issueRegistrationSession(user) {
+        const otp = await this.sendEmailVerificationOtp(user.email);
+        const token = this.signToken(user.id, user.email, user.phone || "", user.role, user.subscriptionTier, "app");
+        const fullUser = await this.prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+        return {
+            user: (0, user_mapper_1.toPublicUser)(fullUser),
+            token,
+            otpCode: otp.code,
+            delivered: otp.delivered,
+        };
+    }
+    async sendEmailVerificationOtp(email) {
+        const normalizedEmail = email.toLowerCase().trim();
+        const delivered = this.mail.isConfigured();
+        const code = delivered ? (0, crypto_1.randomInt)(100000, 1000000).toString() : "123456";
+        const expiresAt = new Date(Date.now() + env_1.env.otpExpiryMinutes * 60 * 1000);
+        await this.prisma.emailOtp.upsert({
+            where: { email: normalizedEmail },
+            create: { email: normalizedEmail, code, expiresAt, attempts: 0, verified: false },
+            update: { code, expiresAt, attempts: 0, verified: false },
+        });
+        if (delivered) {
+            await this.mail.sendEmailVerificationOtp(normalizedEmail, code, env_1.env.otpExpiryMinutes);
+        }
+        return {
+            email: normalizedEmail,
+            ...(delivered ? {} : { code }),
+            delivered,
+            expiresInMinutes: env_1.env.otpExpiryMinutes,
+        };
+    }
+    async verifyEmailOtp(email, code) {
+        const record = await this.getActiveEmailOtp(email);
+        if (record.code !== code) {
+            await this.recordFailedOtpAttempt(record.email);
+            throw new common_1.BadRequestException("Invalid verification code. Please check and try again.");
+        }
+        await this.prisma.emailOtp.delete({ where: { email: record.email } });
+        const user = await this.prisma.user.findUnique({ where: { email: record.email } });
+        if (!user) {
+            throw new common_1.NotFoundException("User account not found.");
+        }
+        if ((0, dashboard_admin_1.isDesignatedAdminEmail)(user.email) || user.role === client_1.Role.SUPER_ADMIN) {
+            throw new common_1.ForbiddenException("Super Admin accounts cannot use citizen email verification.");
+        }
+        const verified = await this.prisma.user.update({
+            where: { id: user.id },
+            data: { isVerified: true },
+        });
+        const token = this.signToken(verified.id, verified.email, verified.phone || "", verified.role, verified.subscriptionTier, "app");
+        return {
+            verified: true,
+            message: "Email successfully verified.",
+            token,
+            user: (0, user_mapper_1.toPublicUser)(verified),
+        };
     }
     async sendPhoneOtp(phone) {
         const cleanPhone = (0, phone_1.digitsOnly)(phone);
@@ -159,7 +324,7 @@ let AuthService = class AuthService {
                     user: (0, user_mapper_1.toPublicUser)(verified),
                 };
             }
-            const token = this.signToken(verified.id, verified.email, verified.phone, verified.role, verified.subscriptionTier, "app");
+            const token = this.signToken(verified.id, verified.email, verified.phone || "", verified.role, verified.subscriptionTier, "app");
             return {
                 verified: true,
                 message: "Phone successfully verified.",
@@ -170,68 +335,81 @@ let AuthService = class AuthService {
         return { verified: true, message: "Phone verified successfully." };
     }
     async setupPin(userId, pin) {
-        if (!/^\d{1,4}$/.test(pin)) {
-            throw new common_1.BadRequestException("PIN must be 1 to 4 digits.");
+        if (!/^\d{4}$/.test(pin)) {
+            throw new common_1.BadRequestException("PIN must be exactly 4 digits.");
         }
         const user = await this.prisma.user.findUnique({ where: { id: userId } });
         if (!user) {
             throw new common_1.NotFoundException("User not found.");
         }
-        await this.prisma.user.update({
+        if (!user.isVerified) {
+            throw new common_1.BadRequestException("Verify your email before setting a PIN.");
+        }
+        const updated = await this.prisma.user.update({
             where: { id: userId },
             data: { pinHash: await (0, bcryptjs_1.hash)(pin, 10) },
         });
-        return { success: true, message: "Security PIN updated successfully." };
-    }
-    async setFaceId(userId, enabled) {
-        const user = await this.prisma.user.update({
-            where: { id: userId },
-            data: { faceIdEnabled: enabled },
-        });
+        const token = this.signToken(updated.id, updated.email, updated.phone || "", updated.role, updated.subscriptionTier, "app");
         return {
-            faceIdEnabled: user.faceIdEnabled,
+            success: true,
+            message: "Security PIN updated successfully.",
+            user: (0, user_mapper_1.toPublicUser)(updated),
+            token,
+        };
+    }
+    async setFaceId(userId, enabled, credentialId) {
+        const user = await this.prisma.user.findUnique({ where: { id: userId } });
+        if (!user) {
+            throw new common_1.NotFoundException("User not found.");
+        }
+        if (!user.isVerified) {
+            throw new common_1.BadRequestException("Verify your email before enabling Face ID.");
+        }
+        if (enabled && !credentialId?.trim()) {
+            throw new common_1.BadRequestException("Face ID credential id is required.");
+        }
+        const updated = await this.prisma.user.update({
+            where: { id: userId },
+            data: {
+                faceIdEnabled: enabled,
+                faceIdCredentialId: enabled ? credentialId.trim() : null,
+            },
+        });
+        const token = this.signToken(updated.id, updated.email, updated.phone || "", updated.role, updated.subscriptionTier, "app");
+        return {
+            faceIdEnabled: updated.faceIdEnabled,
             message: enabled ? "Face ID registered!" : "Face ID skipped.",
             completeLabel: "Complete Setup",
             skipLabel: "Skip for now",
+            user: (0, user_mapper_1.toPublicUser)(updated),
+            token,
         };
     }
     async verifyPin(userId, pin) {
         const user = await this.prisma.user.findUnique({ where: { id: userId } });
-        if (!user) {
+        if (!user?.pinHash) {
             return { valid: false };
         }
         const valid = await (0, bcryptjs_1.compare)(pin, user.pinHash);
         return { valid };
     }
     async login(dto) {
-        const cleanInput = dto.emailOrPhone.toLowerCase().trim();
-        const cleanPhone = (0, phone_1.digitsOnly)(dto.emailOrPhone);
-        const user = await this.prisma.user.findFirst({
-            where: {
-                OR: [
-                    { email: cleanInput },
-                    ...(cleanPhone.length >= 7 ? [{ phoneDigits: cleanPhone }] : []),
-                ],
-            },
-        });
+        const email = dto.email.toLowerCase().trim();
+        if (!email) {
+            throw new common_1.BadRequestException("Email is required.");
+        }
+        const user = await this.prisma.user.findUnique({ where: { email } });
         if (!user) {
             throw new common_1.UnauthorizedException("Invalid credentials. Account not found.");
         }
-        if (dto.password) {
-            if (!user.passwordHash || !(await (0, bcryptjs_1.compare)(dto.password, user.passwordHash))) {
-                throw new common_1.UnauthorizedException("Incorrect password.");
-            }
+        if (!user.passwordHash || !(await (0, bcryptjs_1.compare)(dto.password, user.passwordHash))) {
+            throw new common_1.UnauthorizedException("Incorrect password.");
         }
-        else if (dto.pin) {
-            if (!(await (0, bcryptjs_1.compare)(dto.pin, user.pinHash))) {
-                throw new common_1.UnauthorizedException("Incorrect security PIN.");
-            }
+        if (user.role === client_1.Role.USER && !user.isVerified) {
+            throw new common_1.UnauthorizedException("Verify your email before logging in.");
         }
-        else {
-            throw new common_1.UnauthorizedException("Please provide your security PIN or password to log in.");
-        }
-        if (user.role === client_1.Role.USER && !user.isPhoneVerified) {
-            throw new common_1.UnauthorizedException("Verify your phone number before logging in.");
+        if (user.role === client_1.Role.USER && !user.pinHash && !user.faceIdEnabled) {
+            throw new common_1.UnauthorizedException("Complete authentication setup (PIN or Face ID) before logging in.");
         }
         await this.dashboardAdmin.ensureSingleAdmin();
         const fresh = await this.prisma.user.findUnique({ where: { id: user.id } });
@@ -241,8 +419,29 @@ let AuthService = class AuthService {
         if ((0, dashboard_admin_1.isDesignatedAdminEmail)(fresh.email) || fresh.role === client_1.Role.SUPER_ADMIN) {
             throw new common_1.ForbiddenException("This account must sign in through the dashboard.");
         }
-        const token = this.signToken(fresh.id, fresh.email, fresh.phone, fresh.role, fresh.subscriptionTier, "app");
+        const token = this.signToken(fresh.id, fresh.email, fresh.phone || "", fresh.role, fresh.subscriptionTier, "app");
         return { user: (0, user_mapper_1.toPublicUser)(fresh), token };
+    }
+    async loginWithBiometric(email, credentialId) {
+        const normalizedEmail = email.toLowerCase().trim();
+        const user = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
+        if (!user) {
+            throw new common_1.UnauthorizedException("Invalid credentials. Account not found.");
+        }
+        if ((0, dashboard_admin_1.isDesignatedAdminEmail)(user.email) || user.role === client_1.Role.SUPER_ADMIN) {
+            throw new common_1.ForbiddenException("This account must sign in through the dashboard.");
+        }
+        if (!user.isVerified) {
+            throw new common_1.UnauthorizedException("Verify your email before logging in.");
+        }
+        if (!user.faceIdEnabled || !user.faceIdCredentialId) {
+            throw new common_1.UnauthorizedException("Face ID is not enabled for this account.");
+        }
+        if (user.faceIdCredentialId !== credentialId.trim()) {
+            throw new common_1.UnauthorizedException("Face ID verification failed for this account.");
+        }
+        const token = this.signToken(user.id, user.email, user.phone || "", user.role, user.subscriptionTier, "app");
+        return { user: (0, user_mapper_1.toPublicUser)(user), token };
     }
     async loginDashboard(dto) {
         const email = dto.email.trim().toLowerCase();
@@ -252,12 +451,15 @@ let AuthService = class AuthService {
         }
         await this.dashboardAdmin.ensureSingleAdmin();
         const fresh = await this.prisma.user.findUnique({ where: { id: user.id } });
-        if (!fresh ||
-            fresh.role !== client_1.Role.SUPER_ADMIN ||
-            !(0, dashboard_admin_1.isDesignatedAdminEmail)(fresh.email)) {
-            throw new common_1.ForbiddenException("Dashboard access is limited to the Super Admin account.");
+        if (!fresh) {
+            throw new common_1.ForbiddenException("Dashboard access is limited to approved operator accounts.");
         }
-        const token = this.signToken(fresh.id, fresh.email, fresh.phone, fresh.role, fresh.subscriptionTier, "dashboard");
+        const isSuper = fresh.role === client_1.Role.SUPER_ADMIN && (0, dashboard_admin_1.isDesignatedAdminEmail)(fresh.email);
+        const isOperator = fresh.role === client_1.Role.SECURITY_OPERATOR;
+        if (!isSuper && !isOperator) {
+            throw new common_1.ForbiddenException("Dashboard access requires Super Admin or an approved Security Operator account.");
+        }
+        const token = this.signToken(fresh.id, fresh.email, fresh.phone || "", fresh.role, fresh.subscriptionTier, "dashboard");
         return { user: (0, user_mapper_1.toPublicUser)(fresh), token, audience: "dashboard" };
     }
     async requestPasswordReset(email) {
@@ -266,16 +468,23 @@ let AuthService = class AuthService {
         if (!user) {
             throw new common_1.NotFoundException("No account found with this email address.");
         }
-        const code = "123456";
+        const delivered = this.mail.isConfigured();
+        const code = delivered
+            ? (0, crypto_1.randomInt)(100000, 1000000).toString()
+            : "123456";
         const expiresAt = new Date(Date.now() + env_1.env.otpExpiryMinutes * 60 * 1000);
         await this.prisma.emailOtp.upsert({
             where: { email: normalizedEmail },
             create: { email: normalizedEmail, code, expiresAt, attempts: 0, verified: false },
             update: { code, expiresAt, attempts: 0, verified: false },
         });
+        if (delivered) {
+            await this.mail.sendPasswordResetOtp(normalizedEmail, code, env_1.env.otpExpiryMinutes);
+        }
         return {
             email: normalizedEmail,
-            code,
+            ...(delivered ? {} : { code }),
+            delivered,
             expiresInMinutes: env_1.env.otpExpiryMinutes,
         };
     }
@@ -313,41 +522,55 @@ let AuthService = class AuthService {
         ]);
         return { message: "Password updated successfully." };
     }
-    async requestPinReset(phone) {
-        const cleanPhone = (0, phone_1.digitsOnly)(phone);
-        const user = await this.prisma.user.findFirst({ where: { phoneDigits: cleanPhone } });
-        if (!user) {
-            throw new common_1.NotFoundException("No account found with this phone number.");
+    async requestPinReset(email) {
+        const normalizedEmail = email.toLowerCase().trim();
+        const user = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
+        if (!user || user.role === client_1.Role.SUPER_ADMIN) {
+            throw new common_1.NotFoundException("No account found with this email address.");
         }
-        return this.sendPhoneOtp(user.phone);
+        const delivered = this.mail.isConfigured();
+        const code = delivered ? (0, crypto_1.randomInt)(100000, 1000000).toString() : "123456";
+        const expiresAt = new Date(Date.now() + env_1.env.otpExpiryMinutes * 60 * 1000);
+        await this.prisma.emailOtp.upsert({
+            where: { email: normalizedEmail },
+            create: { email: normalizedEmail, code, expiresAt, attempts: 0, verified: false },
+            update: { code, expiresAt, attempts: 0, verified: false },
+        });
+        if (delivered) {
+            await this.mail.sendPinResetOtp(normalizedEmail, code, env_1.env.otpExpiryMinutes);
+        }
+        return {
+            email: normalizedEmail,
+            ...(delivered ? {} : { code }),
+            delivered,
+            expiresInMinutes: env_1.env.otpExpiryMinutes,
+        };
     }
-    async verifyPinResetOtp(phone, code) {
-        const record = await this.getActivePhoneOtp(phone);
+    async verifyPinResetOtp(email, code) {
+        const record = await this.getActiveEmailOtp(email);
         if (record.code !== code) {
-            await this.recordFailedPhoneOtpAttempt(record.phone);
+            await this.recordFailedOtpAttempt(record.email);
             throw new common_1.BadRequestException("Invalid verification code. Please check and try again.");
         }
-        await this.prisma.phoneOtp.update({
-            where: { phone: record.phone },
+        await this.prisma.emailOtp.update({
+            where: { email: record.email },
             data: { verified: true },
         });
-        return { verified: true, message: "Phone verified. You may now set a new PIN." };
+        return { verified: true, message: "Email verified. You may now set a new PIN." };
     }
-    async resetPin(phone, code, newPin) {
-        if (!/^\d{1,4}$/.test(newPin)) {
-            throw new common_1.BadRequestException("PIN must be 1 to 4 digits.");
+    async resetPin(email, code, newPin) {
+        if (!/^\d{4}$/.test(newPin)) {
+            throw new common_1.BadRequestException("PIN must be exactly 4 digits.");
         }
-        const record = await this.getActivePhoneOtp(phone);
+        const record = await this.getActiveEmailOtp(email);
         if (record.code !== code) {
             throw new common_1.BadRequestException("Invalid verification code. Please request a new code.");
         }
         if (!record.verified) {
             throw new common_1.BadRequestException("Please verify the code before setting a new PIN.");
         }
-        const user = await this.prisma.user.findFirst({
-            where: { phoneDigits: record.phone },
-        });
-        if (!user) {
+        const user = await this.prisma.user.findUnique({ where: { email: record.email } });
+        if (!user || user.role === client_1.Role.SUPER_ADMIN) {
             throw new common_1.NotFoundException("User account not found.");
         }
         await this.prisma.$transaction([
@@ -355,35 +578,9 @@ let AuthService = class AuthService {
                 where: { id: user.id },
                 data: { pinHash: await (0, bcryptjs_1.hash)(newPin, 10) },
             }),
-            this.prisma.phoneOtp.delete({ where: { phone: record.phone } }),
+            this.prisma.emailOtp.delete({ where: { email: record.email } }),
         ]);
         return { message: "PIN updated successfully." };
-    }
-    async getActivePhoneOtp(phone) {
-        const cleanPhone = (0, phone_1.digitsOnly)(phone);
-        const record = await this.prisma.phoneOtp.findUnique({ where: { phone: cleanPhone } });
-        if (!record) {
-            throw new common_1.BadRequestException("No pending verification found for this phone number. Please request a new code.");
-        }
-        if (Date.now() > record.expiresAt.getTime()) {
-            await this.prisma.phoneOtp.delete({ where: { phone: cleanPhone } });
-            throw new common_1.BadRequestException("Verification code has expired. Please request a new code.");
-        }
-        return record;
-    }
-    async recordFailedPhoneOtpAttempt(phone) {
-        const record = await this.prisma.phoneOtp.findUnique({ where: { phone } });
-        if (!record)
-            return;
-        const attempts = record.attempts + 1;
-        if (attempts >= 5) {
-            await this.prisma.phoneOtp.delete({ where: { phone } });
-            throw new common_1.BadRequestException("Too many failed attempts. Verification code invalidated.");
-        }
-        await this.prisma.phoneOtp.update({
-            where: { phone },
-            data: { attempts },
-        });
     }
     async getActiveEmailOtp(email) {
         const normalizedEmail = email.toLowerCase().trim();
@@ -459,6 +656,7 @@ exports.AuthService = AuthService = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
         jwt_1.JwtService,
-        dashboard_admin_service_1.DashboardAdminService])
+        dashboard_admin_service_1.DashboardAdminService,
+        mail_service_1.MailService])
 ], AuthService);
 //# sourceMappingURL=auth.service.js.map

@@ -14,6 +14,11 @@ const common_1 = require("@nestjs/common");
 const client_1 = require("@prisma/client");
 const prisma_service_1 = require("../../prisma/prisma.service");
 const user_mapper_1 = require("../../common/mappers/user.mapper");
+const phone_1 = require("../../common/utils/phone");
+const profile_constants_1 = require("../profile/profile.constants");
+const uploads_constants_1 = require("../uploads/uploads.constants");
+const ADMIN_AVATAR_COLOR = "#2563EB";
+const LEGAL_SLUGS = ["about", "privacy", "terms"];
 function initialsFromName(name) {
     return name
         .split(" ")
@@ -36,64 +41,209 @@ function timeAgo(date) {
 function titleCase(value) {
     return value.charAt(0) + value.slice(1).toLowerCase();
 }
+function formatJoined(date) {
+    return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+function percentChange(current, previous, suffix) {
+    if (previous <= 0) {
+        if (current <= 0) {
+            return `0% ${suffix}`;
+        }
+        return `+100% ${suffix}`;
+    }
+    const pct = Math.round(((current - previous) / previous) * 100);
+    const sign = pct > 0 ? "+" : "";
+    return `${sign}${pct}% ${suffix}`;
+}
+function slugifyKey(value) {
+    const slug = value
+        .trim()
+        .toUpperCase()
+        .replace(/[^A-Z0-9]+/g, "_")
+        .replace(/^_|_$/g, "");
+    return slug || `TYPE_${Date.now()}`;
+}
+function resolveIcon(icon) {
+    const trimmed = icon?.trim();
+    if (!trimmed) {
+        return undefined;
+    }
+    if (trimmed.includes("/") || trimmed.startsWith("http")) {
+        if (!(0, uploads_constants_1.isStoredImageUrl)(trimmed)) {
+            throw new common_1.BadRequestException("Upload the icon with POST /api/uploads/images.");
+        }
+    }
+    return trimmed;
+}
+function slugifyId(value) {
+    const slug = value
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "");
+    return slug || `plan-${Date.now().toString(36)}`;
+}
+function groupCode(id) {
+    const compact = id.replace(/[^a-zA-Z0-9]/g, "").slice(-4).toUpperCase();
+    return `GRP-${compact || "0000"}`;
+}
+function categoryFromType(label) {
+    const value = (label ?? "").toLowerCase();
+    if (value.includes("fire"))
+        return "FIRE";
+    if (value.includes("medical") || value.includes("mental") || value.includes("health") || value.includes("child")) {
+        return "MEDICAL";
+    }
+    if (value.includes("assault") ||
+        value.includes("theft") ||
+        value.includes("stalk") ||
+        value.includes("police") ||
+        value.includes("unsafe") ||
+        value.includes("security")) {
+        return "POLICE / SECURITY";
+    }
+    if (value.includes("disaster") || value.includes("flood") || value.includes("natural")) {
+        return "NATURAL DISASTER";
+    }
+    return "GENERAL";
+}
+function statusFromAlert(status) {
+    if (status === client_1.AlertStatus.BROADCASTING)
+        return "SOS active";
+    if (status === client_1.AlertStatus.TRIGGERED)
+        return "Monitoring";
+    return "Idle";
+}
+function mapPlanFeatures(plan) {
+    const catalog = plan.id === profile_constants_1.PLAN_CATALOG.FREE.id
+        ? profile_constants_1.PLAN_CATALOG.FREE
+        : plan.id === profile_constants_1.PLAN_CATALOG.PREMIUM.id
+            ? profile_constants_1.PLAN_CATALOG.PREMIUM
+            : null;
+    if (!catalog) {
+        return plan.features.map((text) => ({ text, included: true }));
+    }
+    const stored = new Set(plan.features);
+    const catalogIncluded = catalog.features.filter((row) => row.included).map((row) => row.label);
+    const matchesCatalog = stored.size === catalogIncluded.length && catalogIncluded.every((label) => stored.has(label));
+    if (matchesCatalog || plan.features.length === 0) {
+        return catalog.features.map((row) => ({ text: row.label, included: row.included }));
+    }
+    const excluded = catalog.features
+        .filter((row) => !row.included && !stored.has(row.label))
+        .map((row) => ({ text: row.label, included: false }));
+    return [...plan.features.map((text) => ({ text, included: true })), ...excluded];
+}
 let DashboardService = class DashboardService {
     prisma;
     constructor(prisma) {
         this.prisma = prisma;
     }
     async getOverviewMetrics() {
-        const [totalUsers, activeAlerts, premiumUsers, freeUsers, groupsActive, recent] = await Promise.all([
+        const now = new Date();
+        const startOfToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+        const startOfThisMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+        const [totalUsers, usersThisMonth, activeAlerts, alertsToday, premiumUsers, premiumThisMonth, freeUsers, groupsActive, premiumPlan, recent,] = await Promise.all([
             this.prisma.user.count(),
+            this.prisma.user.count({ where: { createdAt: { gte: startOfThisMonth } } }),
             this.prisma.alert.count({ where: { status: client_1.AlertStatus.BROADCASTING } }),
+            this.prisma.alert.count({ where: { triggeredAt: { gte: startOfToday } } }),
             this.prisma.user.count({ where: { subscriptionTier: client_1.SubscriptionTier.PREMIUM } }),
+            this.prisma.user.count({
+                where: {
+                    subscriptionTier: client_1.SubscriptionTier.PREMIUM,
+                    subscriptionStartedAt: { gte: startOfThisMonth },
+                },
+            }),
             this.prisma.user.count({ where: { subscriptionTier: client_1.SubscriptionTier.FREE } }),
             this.prisma.contactGroup.count(),
+            this.prisma.subscriptionPlan.findUnique({ where: { id: profile_constants_1.PLAN_CATALOG.PREMIUM.id } }),
             this.prisma.alert.findMany({
                 orderBy: { triggeredAt: "desc" },
                 take: 5,
             }),
         ]);
-        const monthlyRevenue = Math.round(premiumUsers * 7.99);
+        const priceMonthly = premiumPlan?.priceMonthly ?? profile_constants_1.PLAN_CATALOG.PREMIUM.price;
+        const monthlyRevenue = Math.round(premiumUsers * priceMonthly * 100) / 100;
+        const usersAtMonthStart = Math.max(0, totalUsers - usersThisMonth);
+        const premiumAtMonthStart = Math.max(0, premiumUsers - premiumThisMonth);
+        const lastMonthRevenue = Math.round(premiumAtMonthStart * priceMonthly * 100) / 100;
         return {
             kpis: {
-                totalUsers: { value: totalUsers, change: "+12% this month" },
-                activeAlerts: { value: activeAlerts, change: "+3 today this month" },
-                premiumUsers: { value: premiumUsers, change: "+8% this month" },
-                groupsActive: { value: groupsActive, change: "+5% this month" },
+                totalUsers: {
+                    value: totalUsers,
+                    change: percentChange(totalUsers, usersAtMonthStart, "this month"),
+                },
+                activeAlerts: {
+                    value: activeAlerts,
+                    change: `+${alertsToday} today this month`,
+                },
+                premiumUsers: {
+                    value: premiumUsers,
+                    change: percentChange(premiumUsers, premiumAtMonthStart, "this month"),
+                },
+                groupsActive: {
+                    value: groupsActive,
+                    change: "0% this month",
+                },
             },
             subscriptionSplit: {
                 premium: premiumUsers,
                 free: freeUsers,
                 monthlyRevenue,
-                revenueGrowth: "+14% from last month",
+                revenueGrowth: percentChange(monthlyRevenue, lastMonthRevenue, "from last month"),
             },
             recentAlerts: recent.map((alert) => ({
                 id: alert.id,
                 userName: alert.userName,
                 userInitials: initialsFromName(alert.userName),
-                color: "#2563EB",
+                color: ADMIN_AVATAR_COLOR,
                 category: alert.emergencyTypeLabel,
                 severity: titleCase(alert.severity),
                 timeAgo: timeAgo(alert.triggeredAt),
-                status: alert.status === client_1.AlertStatus.BROADCASTING ? "Active" : titleCase(alert.status),
+                status: alert.status === client_1.AlertStatus.BROADCASTING ? "Active" : "Resolved",
             })),
         };
     }
     async getUsers(query) {
-        const where = query
+        const q = query?.trim();
+        const where = q
             ? {
                 OR: [
-                    { fullName: { contains: query, mode: "insensitive" } },
-                    { email: { contains: query, mode: "insensitive" } },
-                    { phone: { contains: query, mode: "insensitive" } },
+                    { fullName: { contains: q, mode: "insensitive" } },
+                    { email: { contains: q, mode: "insensitive" } },
+                    { phone: { contains: q, mode: "insensitive" } },
+                    { location: { contains: q, mode: "insensitive" } },
                 ],
             }
             : {};
-        const users = await this.prisma.user.findMany({
-            where,
-            orderBy: { createdAt: "desc" },
-        });
-        return users.map(user_mapper_1.toPublicUser);
+        const [users, total, alertCounts] = await Promise.all([
+            this.prisma.user.findMany({
+                where,
+                orderBy: { createdAt: "desc" },
+            }),
+            this.prisma.user.count(),
+            this.prisma.alert.groupBy({
+                by: ["userId"],
+                _count: { _all: true },
+            }),
+        ]);
+        const alertsByUser = new Map(alertCounts.map((row) => [row.userId, row._count._all]));
+        return {
+            total,
+            users: users.map((user) => ({
+                id: user.id,
+                name: user.fullName,
+                email: user.email,
+                initials: initialsFromName(user.fullName),
+                avatarColor: ADMIN_AVATAR_COLOR,
+                plan: user.subscriptionTier === client_1.SubscriptionTier.PREMIUM ? "Premium" : "Free",
+                status: user.isVerified ? "Active" : "Inactive",
+                location: user.location?.trim() || "—",
+                joined: formatJoined(user.createdAt),
+                alerts: alertsByUser.get(user.id) ?? 0,
+            })),
+        };
     }
     async toggleUserVerification(userId) {
         const user = await this.prisma.user.findUnique({ where: { id: userId } });
@@ -104,7 +254,19 @@ let DashboardService = class DashboardService {
             where: { id: userId },
             data: { isVerified: !user.isVerified },
         });
-        return (0, user_mapper_1.toPublicUser)(updated);
+        const alerts = await this.prisma.alert.count({ where: { userId } });
+        return {
+            id: updated.id,
+            name: updated.fullName,
+            email: updated.email,
+            initials: initialsFromName(updated.fullName),
+            avatarColor: ADMIN_AVATAR_COLOR,
+            plan: updated.subscriptionTier === client_1.SubscriptionTier.PREMIUM ? "Premium" : "Free",
+            status: updated.isVerified ? "Active" : "Inactive",
+            location: updated.location?.trim() || "—",
+            joined: formatJoined(updated.createdAt),
+            alerts,
+        };
     }
     async getEmergencyTypes(options) {
         const query = options?.query?.trim();
@@ -125,19 +287,59 @@ let DashboardService = class DashboardService {
         });
     }
     async createEmergencyType(dto) {
+        const label = dto.label.trim();
+        let key = dto.key?.trim() ? slugifyKey(dto.key) : slugifyKey(label);
+        const existing = await this.prisma.emergencyType.findUnique({ where: { key } });
+        if (existing) {
+            if (dto.key?.trim()) {
+                throw new common_1.ConflictException("An emergency type with this key already exists.");
+            }
+            key = `${key}_${Date.now().toString(36).toUpperCase()}`;
+        }
         const last = await this.prisma.emergencyType.aggregate({ _max: { sortOrder: true } });
         return this.prisma.emergencyType.create({
             data: {
                 id: `et-${Date.now()}`,
-                key: dto.key,
-                label: dto.label,
-                severity: dto.severity,
-                icon: dto.icon,
-                description: dto.description,
+                key,
+                label,
+                severity: dto.severity ?? client_1.Severity.URGENT,
+                icon: resolveIcon(dto.icon) || "ShieldAlert",
+                description: dto.description?.trim() || label,
                 isActive: dto.isActive ?? true,
                 sortOrder: (last._max.sortOrder ?? 0) + 1,
             },
         });
+    }
+    async updateEmergencyType(id, dto) {
+        const type = await this.prisma.emergencyType.findUnique({ where: { id } });
+        if (!type) {
+            return null;
+        }
+        const nextIcon = resolveIcon(dto.icon);
+        return this.prisma.emergencyType.update({
+            where: { id },
+            data: {
+                ...(dto.label?.trim() ? { label: dto.label.trim() } : {}),
+                ...(nextIcon ? { icon: nextIcon } : {}),
+                ...(dto.description !== undefined ? { description: dto.description.trim() } : {}),
+                ...(dto.severity ? { severity: dto.severity } : {}),
+                ...(dto.isActive !== undefined ? { isActive: dto.isActive } : {}),
+            },
+        });
+    }
+    async deleteEmergencyType(id) {
+        const type = await this.prisma.emergencyType.findUnique({
+            where: { id },
+            include: { _count: { select: { alerts: true } } },
+        });
+        if (!type) {
+            return null;
+        }
+        if (type._count.alerts > 0) {
+            throw new common_1.BadRequestException("Cannot delete an emergency type that has been used in alerts.");
+        }
+        await this.prisma.emergencyType.delete({ where: { id } });
+        return { id, deleted: true };
     }
     async toggleEmergencyType(id) {
         const type = await this.prisma.emergencyType.findUnique({ where: { id } });
@@ -150,7 +352,388 @@ let DashboardService = class DashboardService {
         });
     }
     async getSubscriptions() {
-        return this.prisma.subscriptionPlan.findMany({ orderBy: { priceMonthly: "asc" } });
+        const [plans, premiumCount, freeCount, billedUsers] = await Promise.all([
+            this.prisma.subscriptionPlan.findMany({ orderBy: { priceMonthly: "asc" } }),
+            this.prisma.user.count({ where: { subscriptionTier: client_1.SubscriptionTier.PREMIUM } }),
+            this.prisma.user.count({ where: { subscriptionTier: client_1.SubscriptionTier.FREE } }),
+            this.prisma.user.findMany({
+                where: {
+                    OR: [{ subscriptionStartedAt: { not: null } }, { subscriptionTier: client_1.SubscriptionTier.PREMIUM }],
+                },
+                orderBy: [{ subscriptionStartedAt: "desc" }, { createdAt: "desc" }],
+                take: 50,
+            }),
+        ]);
+        const premiumPlan = plans.find((plan) => plan.id === profile_constants_1.PLAN_CATALOG.PREMIUM.id);
+        const premiumPrice = premiumPlan?.priceMonthly ?? profile_constants_1.PLAN_CATALOG.PREMIUM.price;
+        return {
+            plans: plans.map((plan) => ({
+                id: plan.id,
+                name: plan.name,
+                price: plan.priceMonthly,
+                period: plan.priceMonthly <= 0 ? "forever" : "month",
+                features: mapPlanFeatures(plan),
+                subscriberCount: plan.id === profile_constants_1.PLAN_CATALOG.PREMIUM.id
+                    ? premiumCount
+                    : plan.id === profile_constants_1.PLAN_CATALOG.FREE.id
+                        ? freeCount
+                        : plan.subscriberCount,
+            })),
+            transactions: billedUsers.map((user) => {
+                const isPremium = user.subscriptionTier === client_1.SubscriptionTier.PREMIUM && !user.subscriptionCancelledAt;
+                const amount = isPremium || user.subscriptionStartedAt ? premiumPrice : 0;
+                const status = user.subscriptionCancelledAt ? "Refunded" : "Paid";
+                const date = user.subscriptionStartedAt ?? user.createdAt;
+                return {
+                    id: `tx-${user.id}`,
+                    userName: user.fullName,
+                    plan: user.subscriptionTier === client_1.SubscriptionTier.PREMIUM ? "Premium" : "Free",
+                    amount: `$${amount.toFixed(2)}`,
+                    date: formatJoined(date),
+                    status,
+                };
+            }),
+        };
+    }
+    async createSubscriptionPlan(dto) {
+        const name = dto.name.trim();
+        const priceMonthly = dto.priceMonthly ?? dto.price ?? 0;
+        const features = (dto.features ?? []).map((item) => item.trim()).filter(Boolean);
+        const id = `plan-${slugifyId(name)}`;
+        const existing = await this.prisma.subscriptionPlan.findUnique({ where: { id } });
+        if (existing) {
+            throw new common_1.ConflictException("A subscription plan with this name already exists.");
+        }
+        const created = await this.prisma.subscriptionPlan.create({
+            data: {
+                id,
+                name,
+                priceMonthly,
+                priceYearly: Math.round(priceMonthly * 12 * 100) / 100,
+                maxContacts: dto.maxContacts ?? 5,
+                maxGroups: dto.maxGroups ?? 2,
+                features,
+                subscriberCount: 0,
+            },
+        });
+        return this.toAdminPlan(created, 0);
+    }
+    async updateSubscriptionPlan(id, dto) {
+        const plan = await this.prisma.subscriptionPlan.findUnique({ where: { id } });
+        if (!plan) {
+            return null;
+        }
+        const priceMonthly = dto.priceMonthly ?? dto.price;
+        const features = dto.features?.map((item) => item.trim()).filter(Boolean);
+        const updated = await this.prisma.subscriptionPlan.update({
+            where: { id },
+            data: {
+                ...(dto.name?.trim() ? { name: dto.name.trim() } : {}),
+                ...(priceMonthly !== undefined
+                    ? { priceMonthly, priceYearly: Math.round(priceMonthly * 12 * 100) / 100 }
+                    : {}),
+                ...(features ? { features } : {}),
+                ...(dto.maxContacts !== undefined ? { maxContacts: dto.maxContacts } : {}),
+                ...(dto.maxGroups !== undefined ? { maxGroups: dto.maxGroups } : {}),
+            },
+        });
+        const subscriberCount = await this.subscriberCountFor(updated);
+        return this.toAdminPlan(updated, subscriberCount);
+    }
+    async deleteSubscriptionPlan(id) {
+        const plan = await this.prisma.subscriptionPlan.findUnique({ where: { id } });
+        if (!plan) {
+            return null;
+        }
+        await this.prisma.subscriptionPlan.delete({ where: { id } });
+        return { id, deleted: true };
+    }
+    async getLiveGroups(operatorUserId) {
+        let coveredSubscriberIds = null;
+        if (operatorUserId) {
+            const operator = await this.prisma.user.findUnique({
+                where: { id: operatorUserId },
+                select: { role: true },
+            });
+            if (operator?.role === "SECURITY_OPERATOR") {
+                const rows = await this.prisma.dashboardCoverage.findMany({
+                    where: { operatorUserId },
+                    select: { subscriberUserId: true },
+                });
+                coveredSubscriberIds = rows.map((row) => row.subscriberUserId);
+                if (!coveredSubscriberIds.length) {
+                    return {
+                        groups: [],
+                        counts: { all: 0, sos: 0, fire: 0, medical: 0, police: 0, natural: 0, idle: 0 },
+                        isolation: "coverage",
+                    };
+                }
+            }
+        }
+        const [groups, notifiedRows, activeAlerts] = await Promise.all([
+            this.prisma.contactGroup.findMany({
+                where: coveredSubscriberIds ? { userId: { in: coveredSubscriberIds } } : undefined,
+                include: {
+                    user: { select: { id: true, fullName: true } },
+                    members: true,
+                },
+                orderBy: { name: "asc" },
+            }),
+            this.prisma.alertNotifiedGroup.findMany({
+                include: { alert: true },
+                orderBy: { alert: { triggeredAt: "desc" } },
+            }),
+            this.prisma.alert.findMany({
+                where: {
+                    status: { in: [client_1.AlertStatus.BROADCASTING, client_1.AlertStatus.TRIGGERED] },
+                    ...(coveredSubscriberIds ? { userId: { in: coveredSubscriberIds } } : {}),
+                },
+                orderBy: { triggeredAt: "desc" },
+            }),
+        ]);
+        const latestByGroupId = new Map();
+        const latestActiveByGroupId = new Map();
+        for (const row of notifiedRows) {
+            if (!latestByGroupId.has(row.groupId)) {
+                latestByGroupId.set(row.groupId, row.alert);
+            }
+            if (!latestActiveByGroupId.has(row.groupId) &&
+                (row.alert.status === client_1.AlertStatus.BROADCASTING || row.alert.status === client_1.AlertStatus.TRIGGERED)) {
+                latestActiveByGroupId.set(row.groupId, row.alert);
+            }
+        }
+        const latestByOwner = new Map();
+        for (const alert of activeAlerts) {
+            if (!latestByOwner.has(alert.userId)) {
+                latestByOwner.set(alert.userId, alert);
+            }
+        }
+        const mapped = groups.map((group) => {
+            const alert = latestActiveByGroupId.get(group.id) ??
+                (group.isDefaultSOS ? latestByOwner.get(group.userId) : undefined) ??
+                latestByGroupId.get(group.id);
+            const status = statusFromAlert(alert?.status);
+            const ownerSos = Boolean(alert && alert.userId === group.userId && alert.status === client_1.AlertStatus.BROADCASTING);
+            const ownerMember = {
+                id: `owner-${group.userId}`,
+                name: group.user.fullName,
+                initials: initialsFromName(group.user.fullName),
+                color: ADMIN_AVATAR_COLOR,
+                role: "Group Admin",
+                status: (ownerSos ? "SOS triggered" : "Safe"),
+                timeAgo: alert ? timeAgo(alert.triggeredAt) : "",
+            };
+            const members = [
+                ownerMember,
+                ...group.members.map((member) => ({
+                    id: member.id,
+                    name: member.name,
+                    initials: initialsFromName(member.name),
+                    color: ADMIN_AVATAR_COLOR,
+                    role: "Member",
+                    status: "Safe",
+                    timeAgo: alert ? timeAgo(alert.triggeredAt) : "",
+                })),
+            ];
+            return {
+                id: group.id,
+                code: groupCode(group.id),
+                name: group.name,
+                category: categoryFromType(alert?.emergencyTypeLabel),
+                membersCount: members.length,
+                timeAgo: alert ? timeAgo(alert.triggeredAt) : "",
+                status,
+                lat: alert?.latitude ?? 0,
+                lng: alert?.longitude ?? 0,
+                address: alert?.address ?? null,
+                alertId: alert?.id ?? null,
+                emergencyType: alert?.emergencyTypeLabel ?? null,
+                subscriberUserId: group.userId,
+                subscriberName: group.user.fullName,
+                members,
+            };
+        });
+        mapped.sort((a, b) => {
+            const rank = (status) => status === "SOS active" ? 0 : status === "Monitoring" ? 1 : 2;
+            return rank(a.status) - rank(b.status);
+        });
+        const counts = {
+            all: mapped.length,
+            sos: mapped.filter((group) => group.status === "SOS active").length,
+            fire: mapped.filter((group) => group.category === "FIRE").length,
+            medical: mapped.filter((group) => group.category === "MEDICAL").length,
+            police: mapped.filter((group) => group.category === "POLICE / SECURITY").length,
+            natural: mapped.filter((group) => group.category === "NATURAL DISASTER").length,
+            idle: mapped.filter((group) => group.status === "Idle").length,
+        };
+        return { groups: mapped, counts, isolation: coveredSubscriberIds ? "coverage" : "global" };
+    }
+    async getLegalPage(slug) {
+        const normalized = this.requireLegalSlug(slug);
+        const page = await this.prisma.legalPage.findUnique({ where: { slug: normalized } });
+        if (page) {
+            return {
+                slug: page.slug,
+                title: page.title,
+                body: page.body,
+                updatedAt: page.updatedAt.toISOString(),
+            };
+        }
+        const fallback = profile_constants_1.LEGAL_PAGES.find((item) => item.slug === normalized);
+        if (!fallback) {
+            throw new common_1.NotFoundException("Page not found");
+        }
+        return { ...fallback, updatedAt: null };
+    }
+    async updateLegalPage(slug, dto) {
+        const normalized = this.requireLegalSlug(slug);
+        const fallback = profile_constants_1.LEGAL_PAGES.find((page) => page.slug === normalized);
+        const title = dto.title?.trim() || fallback?.title || titleCase(normalized);
+        return this.prisma.legalPage.upsert({
+            where: { slug: normalized },
+            create: {
+                slug: normalized,
+                title,
+                body: dto.body,
+            },
+            update: {
+                body: dto.body,
+                ...(dto.title?.trim() ? { title: dto.title.trim() } : {}),
+            },
+        });
+    }
+    async getAdminProfile(userId) {
+        const user = await this.prisma.user.findUnique({ where: { id: userId } });
+        if (!user) {
+            throw new common_1.NotFoundException("User not found");
+        }
+        return { user: (0, user_mapper_1.toPublicUser)(user) };
+    }
+    async updateAdminProfile(userId, dto) {
+        const user = await this.prisma.user.findUnique({ where: { id: userId } });
+        if (!user) {
+            throw new common_1.NotFoundException("User not found");
+        }
+        if (dto.email) {
+            const email = dto.email.toLowerCase();
+            const taken = await this.prisma.user.findFirst({
+                where: { email, NOT: { id: userId } },
+            });
+            if (taken) {
+                throw new common_1.BadRequestException("An account with this email already exists.");
+            }
+        }
+        if (dto.phone) {
+            const phoneDigits = (0, phone_1.digitsOnly)(dto.phone);
+            if (phoneDigits.length < 7) {
+                throw new common_1.BadRequestException("Enter a valid phone number.");
+            }
+            const taken = await this.prisma.user.findFirst({
+                where: { phoneDigits, NOT: { id: userId } },
+            });
+            if (taken) {
+                throw new common_1.BadRequestException("An account with this phone number already exists.");
+            }
+        }
+        const updated = await this.prisma.user.update({
+            where: { id: userId },
+            data: {
+                ...(dto.fullName?.trim() ? { fullName: dto.fullName.trim() } : {}),
+                ...(dto.email ? { email: dto.email.toLowerCase() } : {}),
+                ...(dto.phone ? { phone: dto.phone.trim(), phoneDigits: (0, phone_1.digitsOnly)(dto.phone) } : {}),
+            },
+        });
+        return { user: (0, user_mapper_1.toPublicUser)(updated) };
+    }
+    async getNotifications() {
+        const [alerts, unreadAlerts, notifications] = await Promise.all([
+            this.prisma.alert.findMany({
+                orderBy: { triggeredAt: "desc" },
+                take: 20,
+            }),
+            this.prisma.alert.count({ where: { status: client_1.AlertStatus.BROADCASTING } }),
+            this.prisma.notification.findMany({
+                orderBy: { createdAt: "desc" },
+                take: 20,
+            }),
+        ]);
+        if (alerts.length > 0) {
+            return {
+                items: alerts.map((alert) => ({
+                    id: alert.id,
+                    title: alert.emergencyTypeLabel,
+                    body: `${alert.userName} · ${alert.address}`,
+                    read: alert.status !== client_1.AlertStatus.BROADCASTING,
+                })),
+                unreadCount: unreadAlerts,
+            };
+        }
+        return {
+            items: notifications.map((item) => ({
+                id: item.id,
+                title: item.title,
+                body: item.body,
+                read: Boolean(item.readAt),
+            })),
+            unreadCount: notifications.filter((item) => !item.readAt).length,
+        };
+    }
+    async markAllNotificationsRead() {
+        return { read: true };
+    }
+    async getGroupLocationHistory(groupId) {
+        const group = await this.prisma.contactGroup.findUnique({
+            where: { id: groupId },
+            select: { id: true, name: true, userId: true },
+        });
+        if (!group) {
+            throw new common_1.NotFoundException("Group not found");
+        }
+        const notified = await this.prisma.alertNotifiedGroup.findFirst({
+            where: { groupId },
+            include: {
+                alert: {
+                    include: { telemetryHistory: { orderBy: { timestamp: "asc" } } },
+                },
+            },
+            orderBy: { alert: { triggeredAt: "desc" } },
+        });
+        const alert = notified?.alert ??
+            (await this.prisma.alert.findFirst({
+                where: { userId: group.userId },
+                include: { telemetryHistory: { orderBy: { timestamp: "asc" } } },
+                orderBy: { triggeredAt: "desc" },
+            }));
+        const telemetry = alert?.telemetryHistory ?? [];
+        const points = telemetry.length > 0
+            ? telemetry.map((point) => ({
+                id: point.id,
+                latitude: point.latitude,
+                longitude: point.longitude,
+                accuracy: point.accuracy,
+                timestamp: point.timestamp.toISOString(),
+                timeAgo: timeAgo(point.timestamp),
+                address: null,
+            }))
+            : alert
+                ? [
+                    {
+                        id: alert.id,
+                        latitude: alert.latitude,
+                        longitude: alert.longitude,
+                        accuracy: 0,
+                        timestamp: alert.triggeredAt.toISOString(),
+                        timeAgo: timeAgo(alert.triggeredAt),
+                        address: alert.address,
+                    },
+                ]
+                : [];
+        return {
+            groupId: group.id,
+            groupName: group.name,
+            alertId: alert?.id ?? null,
+            points,
+        };
     }
     async getJournals() {
         const journals = await this.prisma.journal.findMany({
@@ -161,6 +744,296 @@ let DashboardService = class DashboardService {
             triggeredAt: journal.triggeredAt.toISOString(),
             createdAt: journal.createdAt.toISOString(),
         }));
+    }
+    requireLegalSlug(slug) {
+        const normalized = slug.trim().toLowerCase();
+        if (!LEGAL_SLUGS.includes(normalized)) {
+            throw new common_1.NotFoundException("Page not found");
+        }
+        return normalized;
+    }
+    toAdminPlan(plan, subscriberCount) {
+        return {
+            id: plan.id,
+            name: plan.name,
+            price: plan.priceMonthly,
+            period: plan.priceMonthly <= 0 ? "forever" : "month",
+            features: mapPlanFeatures(plan),
+            subscriberCount,
+        };
+    }
+    async subscriberCountFor(plan) {
+        if (plan.id === profile_constants_1.PLAN_CATALOG.PREMIUM.id) {
+            return this.prisma.user.count({ where: { subscriptionTier: client_1.SubscriptionTier.PREMIUM } });
+        }
+        if (plan.id === profile_constants_1.PLAN_CATALOG.FREE.id) {
+            return this.prisma.user.count({ where: { subscriptionTier: client_1.SubscriptionTier.FREE } });
+        }
+        return plan.subscriberCount;
+    }
+    async listPromoCodes() {
+        const codes = await this.prisma.promoCode.findMany({
+            include: {
+                redemptions: {
+                    include: { user: { select: { id: true, fullName: true, email: true } } },
+                    orderBy: { redeemedAt: "desc" },
+                    take: 50,
+                },
+            },
+            orderBy: { createdAt: "desc" },
+        });
+        return { items: codes.map((code) => this.toPromoDto(code)) };
+    }
+    async createPromoCode(dto) {
+        const code = dto.code.trim().toUpperCase();
+        const existing = await this.prisma.promoCode.findUnique({ where: { code } });
+        if (existing) {
+            throw new common_1.ConflictException("A promotional code with this value already exists.");
+        }
+        const expiresAt = dto.expiresAt ? new Date(dto.expiresAt) : null;
+        const created = await this.prisma.promoCode.create({
+            data: {
+                code,
+                campaignName: dto.campaignName.trim(),
+                durationMonths: dto.durationMonths,
+                maxRedemptions: dto.maxRedemptions ?? 1,
+                expiresAt,
+            },
+            include: { redemptions: true },
+        });
+        if (expiresAt) {
+            await this.prisma.scheduledJob.upsert({
+                where: {
+                    type_refId: { type: client_1.ScheduledJobType.PROMO_EXPIRE, refId: created.id },
+                },
+                create: {
+                    type: client_1.ScheduledJobType.PROMO_EXPIRE,
+                    refId: created.id,
+                    runAt: expiresAt,
+                    status: client_1.ScheduledJobStatus.PENDING,
+                },
+                update: {
+                    runAt: expiresAt,
+                    status: client_1.ScheduledJobStatus.PENDING,
+                    attempts: 0,
+                    lastError: null,
+                    processedAt: null,
+                },
+            }).catch(() => undefined);
+        }
+        return this.toPromoDto(created);
+    }
+    async updatePromoCode(id, dto) {
+        const existing = await this.prisma.promoCode.findUnique({ where: { id } });
+        if (!existing) {
+            throw new common_1.NotFoundException("Promotional code not found.");
+        }
+        const updated = await this.prisma.promoCode.update({
+            where: { id },
+            data: {
+                ...(dto.campaignName ? { campaignName: dto.campaignName.trim() } : {}),
+                ...(dto.status ? { status: dto.status } : {}),
+                ...(dto.maxRedemptions ? { maxRedemptions: dto.maxRedemptions } : {}),
+                ...(dto.expiresAt !== undefined
+                    ? { expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null }
+                    : {}),
+            },
+            include: {
+                redemptions: {
+                    include: { user: { select: { id: true, fullName: true, email: true } } },
+                    orderBy: { redeemedAt: "desc" },
+                    take: 50,
+                },
+            },
+        });
+        return this.toPromoDto(updated);
+    }
+    async getIncidentPanel(alertId, operatorUserId) {
+        const alert = await this.prisma.alert.findUnique({
+            where: { id: alertId },
+            include: {
+                telemetryHistory: { orderBy: { timestamp: "asc" } },
+                notifiedGroups: true,
+                liveMessages: { orderBy: { createdAt: "asc" } },
+                user: { select: { id: true, fullName: true, email: true, phone: true, subscriptionTier: true } },
+            },
+        });
+        if (!alert) {
+            throw new common_1.NotFoundException("Incident not found.");
+        }
+        const coverage = await this.prisma.dashboardCoverage.findFirst({
+            where: { operatorUserId, subscriberUserId: alert.userId },
+        });
+        const operator = await this.prisma.user.findUnique({
+            where: { id: operatorUserId },
+            select: { role: true },
+        });
+        if (operator?.role !== "SUPER_ADMIN" && !coverage) {
+            throw new common_1.NotFoundException("Incident not found.");
+        }
+        const journals = await this.prisma.journal.findMany({
+            where: { userId: alert.userId, triggeredAt: { gte: alert.triggeredAt } },
+            orderBy: { triggeredAt: "asc" },
+            take: 20,
+        });
+        const mapsUrl = `https://maps.google.com/?q=${alert.latitude},${alert.longitude}`;
+        const copiedText = [
+            alert.address,
+            `GPS: ${alert.latitude.toFixed(6)}, ${alert.longitude.toFixed(6)}`,
+            mapsUrl,
+        ].join("\n");
+        const timeline = [
+            ...alert.liveMessages.map((message) => ({
+                kind: "message",
+                at: message.createdAt.toISOString(),
+                label: message.timestamp,
+                text: message.text,
+                sender: message.sender,
+                mediaUrl: message.mediaUrl,
+                mediaType: message.mediaType,
+            })),
+            ...alert.telemetryHistory.map((point) => ({
+                kind: "telemetry",
+                at: point.timestamp.toISOString(),
+                label: point.timestamp.toISOString(),
+                text: `Location update · battery ${point.batteryLevel}%`,
+                latitude: point.latitude,
+                longitude: point.longitude,
+            })),
+            ...journals.map((journal) => ({
+                kind: "journal",
+                at: journal.triggeredAt.toISOString(),
+                label: journal.type,
+                text: journal.body,
+            })),
+        ].sort((a, b) => a.at.localeCompare(b.at));
+        return {
+            alertId: alert.id,
+            subscriber: {
+                id: alert.user.id,
+                fullName: alert.user.fullName,
+                email: alert.user.email,
+                phone: alert.user.phone,
+                subscriptionTier: alert.user.subscriptionTier,
+            },
+            activeEmergency: alert.status === client_1.AlertStatus.BROADCASTING || alert.status === client_1.AlertStatus.TRIGGERED,
+            status: alert.status,
+            emergencyType: alert.emergencyTypeLabel,
+            severity: alert.severity,
+            mode: alert.mode,
+            liveLocation: {
+                latitude: alert.latitude,
+                longitude: alert.longitude,
+                address: alert.address,
+            },
+            shareableLocation: {
+                address: alert.address,
+                latitude: alert.latitude,
+                longitude: alert.longitude,
+                mapsUrl,
+                copiedText,
+            },
+            roomId: alert.roomId,
+            participants: alert.participants,
+            notifiedGroups: alert.notifiedGroups,
+            messages: alert.liveMessages,
+            timeline,
+            triggeredAt: alert.triggeredAt.toISOString(),
+            resolvedAt: alert.resolvedAt?.toISOString() ?? null,
+            resolutionReason: alert.resolutionReason,
+            resolutionNotes: alert.resolutionNotes,
+            actions: {
+                copyLocation: true,
+                messaging: true,
+                videoCall: true,
+                resolve: alert.status === client_1.AlertStatus.BROADCASTING,
+            },
+        };
+    }
+    async listCoverage() {
+        const rows = await this.prisma.dashboardCoverage.findMany({
+            include: {
+                operator: { select: { id: true, fullName: true, email: true, role: true } },
+                subscriber: { select: { id: true, fullName: true, email: true } },
+            },
+            orderBy: { createdAt: "desc" },
+        });
+        return {
+            items: rows.map((row) => ({
+                id: row.id,
+                operatorUserId: row.operatorUserId,
+                operatorName: row.operator.fullName,
+                operatorEmail: row.operator.email,
+                subscriberUserId: row.subscriberUserId,
+                subscriberName: row.subscriber.fullName,
+                subscriberEmail: row.subscriber.email,
+                createdAt: row.createdAt.toISOString(),
+            })),
+        };
+    }
+    async assignCoverage(operatorUserId, subscriberUserId) {
+        const operator = await this.prisma.user.findUnique({ where: { id: operatorUserId } });
+        const subscriber = await this.prisma.user.findUnique({ where: { id: subscriberUserId } });
+        if (!operator || operator.role !== "SECURITY_OPERATOR") {
+            throw new common_1.BadRequestException("Operator must be a SECURITY_OPERATOR user.");
+        }
+        if (!subscriber) {
+            throw new common_1.NotFoundException("Subscriber not found.");
+        }
+        const row = await this.prisma.dashboardCoverage.upsert({
+            where: {
+                operatorUserId_subscriberUserId: { operatorUserId, subscriberUserId },
+            },
+            create: { operatorUserId, subscriberUserId },
+            update: {},
+        });
+        return { id: row.id, operatorUserId, subscriberUserId };
+    }
+    async removeCoverage(id) {
+        const existing = await this.prisma.dashboardCoverage.findUnique({ where: { id } });
+        if (!existing) {
+            throw new common_1.NotFoundException("Coverage assignment not found.");
+        }
+        await this.prisma.dashboardCoverage.delete({ where: { id } });
+        return { id, deleted: true };
+    }
+    async promoteSecurityOperator(userId) {
+        const user = await this.prisma.user.findUnique({ where: { id: userId } });
+        if (!user) {
+            throw new common_1.NotFoundException("User not found.");
+        }
+        if (user.role === "SUPER_ADMIN") {
+            throw new common_1.BadRequestException("Cannot change Super Admin role.");
+        }
+        const updated = await this.prisma.user.update({
+            where: { id: userId },
+            data: { role: "SECURITY_OPERATOR" },
+        });
+        return (0, user_mapper_1.toPublicUser)(updated);
+    }
+    toPromoDto(code) {
+        const expired = Boolean(code.expiresAt && code.expiresAt.getTime() < Date.now());
+        return {
+            id: code.id,
+            code: code.code,
+            campaignName: code.campaignName,
+            durationMonths: code.durationMonths,
+            maxRedemptions: code.maxRedemptions,
+            redemptionCount: code.redemptionCount,
+            remainingRedemptions: Math.max(0, code.maxRedemptions - code.redemptionCount),
+            expiresAt: code.expiresAt?.toISOString() ?? null,
+            status: expired && code.status === "ACTIVE" ? "EXPIRED" : code.status,
+            createdAt: code.createdAt.toISOString(),
+            updatedAt: code.updatedAt.toISOString(),
+            redemptions: (code.redemptions ?? []).map((item) => ({
+                id: item.id,
+                userId: item.user?.id ?? item.userId,
+                userName: item.user?.fullName,
+                userEmail: item.user?.email,
+                redeemedAt: item.redeemedAt.toISOString(),
+                grantedUntil: item.grantedUntil.toISOString(),
+            })),
+        };
     }
 };
 exports.DashboardService = DashboardService;

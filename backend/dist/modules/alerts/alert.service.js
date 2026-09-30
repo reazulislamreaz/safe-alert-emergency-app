@@ -8,6 +8,9 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var __param = (this && this.__param) || function (paramIndex, decorator) {
+    return function (target, key) { decorator(target, key, paramIndex); }
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AlertService = void 0;
 const common_1 = require("@nestjs/common");
@@ -21,7 +24,11 @@ const alert_mapper_1 = require("../../common/mappers/alert.mapper");
 const alert_constants_1 = require("./alert.constants");
 const zego_util_1 = require("./zego.util");
 const notification_service_1 = require("../notifications/notification.service");
+const jobs_service_1 = require("../jobs/jobs.service");
 const phone_1 = require("../../common/utils/phone");
+const location_share_1 = require("../../common/utils/location-share");
+const geocode_1 = require("../../common/utils/geocode");
+const media_url_1 = require("../../common/utils/media-url");
 const groupWithMembers = {
     members: { orderBy: { name: "asc" } },
 };
@@ -29,10 +36,12 @@ let AlertService = class AlertService {
     prisma;
     realtime;
     notifications;
-    constructor(prisma, realtime, notifications) {
+    jobs;
+    constructor(prisma, realtime, notifications, jobs) {
         this.prisma = prisma;
         this.realtime = realtime;
         this.notifications = notifications;
+        this.jobs = jobs;
     }
     getModes() {
         return {
@@ -40,6 +49,7 @@ let AlertService = class AlertService {
             prompt: "How Should we alert?",
             subtitle: "This will immediately notify your emergency contacts and share your live location.",
             continueLabel: "Continue",
+            sounds: alert_constants_1.NOTIFICATION_SOUNDS,
             modes: alert_constants_1.ALERT_MODES.map((mode) => ({ ...mode })),
         };
     }
@@ -152,6 +162,13 @@ let AlertService = class AlertService {
                 badge: entry.type === "TEST" ? "Test" : entry.source === "ALERT" ? "Safe" : "Update",
             })),
             activeAlert: active ? (0, alert_mapper_1.toAlertDto)(active) : null,
+            batteryRecommendation: (0, location_share_1.buildBatteryRecommendation)({
+                batteryLevel: active?.telemetryHistory?.[active.telemetryHistory.length - 1]?.batteryLevel,
+                alertActiveMinutes: active
+                    ? Math.floor((Date.now() - active.triggeredAt.getTime()) / 60000)
+                    : 0,
+            }),
+            sounds: alert_constants_1.NOTIFICATION_SOUNDS,
         };
     }
     async getCurrent(userId) {
@@ -370,7 +387,7 @@ let AlertService = class AlertService {
                 id: alertId,
                 userId: user.id,
                 userName: user.fullName,
-                userPhone: user.phone,
+                userPhone: user.phone || "",
                 emergencyTypeId: emergencyType.id,
                 emergencyTypeLabel: emergencyType.label,
                 severity: emergencyType.severity,
@@ -402,7 +419,7 @@ let AlertService = class AlertService {
                 },
                 liveMessages: {
                     create: {
-                        sender: "SafeAlert System",
+                        sender: "Safety Circle System",
                         text: mode === client_1.AlertMode.TEST
                             ? `Test alert sent for ${emergencyType.label}. Contacts notified.`
                             : `🚨 SOS broadcast started for ${emergencyType.label}. Emergency circle alerted.`,
@@ -414,7 +431,8 @@ let AlertService = class AlertService {
             include: alert_mapper_1.alertInclude,
         });
         const dto = withSentScreen((0, alert_mapper_1.toAlertDto)(alert));
-        this.realtime.emit("admin:alert:new", dto);
+        this.realtime.emitToRoom("room:admin", "admin:alert:new", dto);
+        await this.emitAdminAlertForSubscriber(alert.userId, "admin:alert:new", dto);
         await this.notifications.notifyAlertOpened({
             ownerId: user.id,
             ownerName: firstName,
@@ -422,7 +440,9 @@ let AlertService = class AlertService {
             source,
             groupNames: groups.map((group) => group.name),
             memberPhones: groups.flatMap((group) => group.members.map((member) => member.phone)),
+            mode,
         });
+        await this.jobs.enqueue(client_1.ScheduledJobType.ALERT_FOLLOW_UP, alert.id, new Date(Date.now() + 5 * 60 * 1000));
         return dto;
     }
     async triggerDirect(params) {
@@ -472,6 +492,7 @@ let AlertService = class AlertService {
     }
     async getCallSession(id, userId) {
         const alert = await this.requireAccessible(id, userId);
+        const viewer = await this.requireUser(userId);
         const dto = (0, alert_mapper_1.toAlertDto)(alert);
         const appId = env_1.env.zegoAppId;
         const secret = env_1.env.zegoServerSecret;
@@ -479,6 +500,9 @@ let AlertService = class AlertService {
         if (appId && secret.length === 32) {
             token = (0, zego_util_1.generateZegoToken04)(appId, userId, secret, 3600, "");
         }
+        const server = appId && token
+            ? env_1.env.zegoServer || `wss://webliveroom${appId}-api.cool.zego.im/ws`
+            : null;
         return {
             alertId: dto.id,
             roomId: dto.roomId,
@@ -486,17 +510,38 @@ let AlertService = class AlertService {
             groupLabel: "Emergency Group",
             durationLabel: dto.durationLabel,
             userId,
-            userName: dto.userName,
+            userName: viewer.fullName,
             appId: appId || null,
             token,
+            server,
             demo: !token,
             participants: dto.activeCallParticipants,
             quickResponses: alert_constants_1.QUICK_RESPONSES.map((item) => ({ ...item })),
         };
     }
-    async getActiveAlerts() {
+    async getActiveAlerts(operatorUserId) {
+        let coveredSubscriberIds = null;
+        if (operatorUserId) {
+            const operator = await this.prisma.user.findUnique({
+                where: { id: operatorUserId },
+                select: { role: true },
+            });
+            if (operator?.role === client_1.Role.SECURITY_OPERATOR) {
+                const rows = await this.prisma.dashboardCoverage.findMany({
+                    where: { operatorUserId },
+                    select: { subscriberUserId: true },
+                });
+                coveredSubscriberIds = rows.map((row) => row.subscriberUserId);
+                if (!coveredSubscriberIds.length) {
+                    return [];
+                }
+            }
+        }
         const alerts = await this.prisma.alert.findMany({
-            where: { status: client_1.AlertStatus.BROADCASTING },
+            where: {
+                status: client_1.AlertStatus.BROADCASTING,
+                ...(coveredSubscriberIds ? { userId: { in: coveredSubscriberIds } } : {}),
+            },
             include: alert_mapper_1.alertInclude,
             orderBy: { triggeredAt: "desc" },
         });
@@ -504,11 +549,13 @@ let AlertService = class AlertService {
     }
     async updateTelemetry(alertId, userId, point) {
         await this.requireOwned(alertId, userId);
+        const address = await (0, geocode_1.reverseGeocode)(point.latitude, point.longitude);
         const alert = await this.prisma.alert.update({
             where: { id: alertId },
             data: {
                 latitude: point.latitude,
                 longitude: point.longitude,
+                address,
                 telemetryHistory: {
                     create: {
                         latitude: point.latitude,
@@ -516,7 +563,9 @@ let AlertService = class AlertService {
                         speed: point.speed ?? 0,
                         heading: point.heading ?? 0,
                         accuracy: point.accuracy ?? 3,
-                        batteryLevel: point.batteryLevel ?? 85,
+                        ...(typeof point.batteryLevel === "number"
+                            ? { batteryLevel: point.batteryLevel }
+                            : { batteryLevel: null }),
                     },
                 },
             },
@@ -532,13 +581,21 @@ let AlertService = class AlertService {
             alertId,
             location: dto.location,
         });
+        await this.emitAdminAlertForSubscriber(alert.userId, "admin:alert:telemetry", {
+            alertId,
+            location: dto.location,
+        });
         return dto;
     }
-    async addMessage(alertId, sender, text, type = client_1.MessageType.USER, senderUserId) {
+    async addMessage(alertId, sender, text, type = client_1.MessageType.USER, senderUserId, media) {
         const existing = await this.prisma.alert.findUnique({ where: { id: alertId } });
         if (!existing) {
             return null;
         }
+        if (senderUserId) {
+            await this.requireAccessible(alertId, senderUserId);
+        }
+        const mediaUrl = media?.mediaUrl ? (0, media_url_1.assertStoredMediaUrl)(media.mediaUrl) : undefined;
         const alert = await this.prisma.alert.update({
             where: { id: alertId },
             data: {
@@ -549,6 +606,9 @@ let AlertService = class AlertService {
                         text,
                         timestamp: clockLabel(),
                         type,
+                        mediaUrl,
+                        mediaType: media?.mediaType ?? client_1.MediaType.NONE,
+                        mimeType: media?.mimeType,
                     },
                 },
             },
@@ -562,17 +622,61 @@ let AlertService = class AlertService {
     }
     async sendMessage(alertId, userId, dto) {
         const alert = await this.requireAccessible(alertId, userId);
-        const text = dto.text.trim();
-        if (!text) {
-            throw new common_1.BadRequestException("Type your message...");
+        const text = (dto.text ?? "").trim();
+        const mediaUrl = (0, media_url_1.assertStoredMediaUrl)(dto.mediaUrl);
+        if (!text && !mediaUrl) {
+            throw new common_1.BadRequestException("Type your message or attach media...");
+        }
+        let mediaType = client_1.MediaType.NONE;
+        if (mediaUrl) {
+            const mime = (dto.mimeType || "").toLowerCase();
+            if (mime.startsWith("video/") || dto.mediaType === "VIDEO") {
+                mediaType = client_1.MediaType.VIDEO;
+            }
+            else {
+                mediaType = client_1.MediaType.IMAGE;
+            }
         }
         const sender = await this.requireUser(userId);
-        const updated = await this.addMessage(alert.id, sender.fullName.split(" ")[0], text, client_1.MessageType.USER, sender.id);
+        const updated = await this.addMessage(alert.id, sender.fullName.split(" ")[0], text || (mediaType === client_1.MediaType.VIDEO ? "📹 Video" : "📷 Photo"), client_1.MessageType.USER, sender.id, mediaUrl
+            ? { mediaUrl, mediaType, mimeType: dto.mimeType }
+            : undefined);
         if (updated) {
             this.realtime.emitToRoom(`room:${alertId}`, "alert:messages:update", updated.liveMessages);
         }
         const fresh = await this.requireAlert(alertId);
         return this.toChatThread(fresh, userId, dto.groupId);
+    }
+    async getLocationShare(alertId, userId) {
+        const alert = await this.requireAccessible(alertId, userId);
+        if (alert.status !== client_1.AlertStatus.BROADCASTING) {
+            throw new common_1.BadRequestException("Live location is only available during an active emergency.");
+        }
+        return (0, location_share_1.buildShareableLocation)({
+            latitude: alert.latitude,
+            longitude: alert.longitude,
+            address: alert.address,
+        });
+    }
+    async triggerAlarm(alertId, userId) {
+        const alert = await this.requireAccessible(alertId, userId);
+        if (alert.status !== client_1.AlertStatus.BROADCASTING) {
+            throw new common_1.BadRequestException("Alarm is only available during an active alert.");
+        }
+        const actor = await this.requireUser(userId);
+        const payload = {
+            alertId,
+            triggeredBy: actor.fullName.split(" ")[0],
+            triggeredByUserId: actor.id,
+            soundKey: "emergency_alert",
+            soundUrl: "/sounds/emergency-alert.mp3",
+            intentional: true,
+            at: new Date().toISOString(),
+        };
+        this.realtime.emitToRoom(`room:${alertId}`, "alert:alarm", payload);
+        this.realtime.emitToRoom("room:admin", "admin:alert:alarm", payload);
+        await this.addMessage(alertId, "Safety Circle System", `🔊 Loud emergency alarm triggered intentionally by ${actor.fullName.split(" ")[0]}.`, client_1.MessageType.SOS);
+        return payload;
     }
     async quickResponse(alertId, userId, dto) {
         await this.requireOwned(alertId, userId);
@@ -589,19 +693,39 @@ let AlertService = class AlertService {
     }
     async updateParticipant(alertId, userId, dto) {
         const alert = await this.requireAccessible(alertId, userId);
+        const viewer = await this.requireUser(userId);
+        const status = dto.status ?? "CONNECTED";
+        const selfParticipantId = `part-${userId}`;
+        let matched = false;
         const participants = (alert.participants ?? []).map((participant) => {
-            const matched = (dto.participantId && participant.id === dto.participantId) ||
-                (dto.contactId && participant.contactId === dto.contactId);
-            if (!matched) {
+            const matchedSelf = participant.id === selfParticipantId ||
+                (dto.participantId && participant.id === dto.participantId) ||
+                (dto.contactId && participant.contactId === dto.contactId) ||
+                participant.name === viewer.fullName;
+            if (!matchedSelf) {
                 return participant;
             }
-            const status = dto.status ?? "CONNECTED";
+            matched = true;
             return {
                 ...participant,
                 status,
                 responderStatus: status === "CONNECTED" ? "JOINED" : "CALLING",
             };
         });
+        if (!matched) {
+            participants.push({
+                id: selfParticipantId,
+                contactId: null,
+                name: viewer.fullName,
+                displayName: viewer.fullName.split(" ")[0],
+                initials: initialsFrom(viewer.fullName),
+                relationship: alert.userId === userId ? "Sender" : "Responder",
+                status,
+                responderStatus: status === "CONNECTED" ? "JOINED" : "CALLING",
+                color: alert_constants_1.PARTICIPANT_COLORS[alert.userId === userId ? 0 : 1],
+                isSender: alert.userId === userId,
+            });
+        }
         const updated = await this.prisma.alert.update({
             where: { id: alertId },
             data: { participants: participants },
@@ -628,7 +752,7 @@ let AlertService = class AlertService {
         }
         const owner = await this.requireUser(alert.userId);
         if (pin) {
-            if (!(await (0, bcryptjs_1.compare)(pin, owner.pinHash))) {
+            if (!owner.pinHash || !(await (0, bcryptjs_1.compare)(pin, owner.pinHash))) {
                 throw new common_1.BadRequestException("Incorrect Security PIN");
             }
         }
@@ -636,6 +760,17 @@ let AlertService = class AlertService {
         const durationMins = Math.max(1, Math.round((Date.now() - alert.triggeredAt.getTime()) / 60000));
         const firstName = owner.fullName.split(" ")[0];
         const cancelledBody = `${firstName} has cancelled their emergency safety alert and indicated that it was a ${reasonPhrase(reasonMeta.key)}.`;
+        const mediaItems = alert.liveMessages
+            .filter((message) => message.mediaUrl && message.mediaType !== client_1.MediaType.NONE)
+            .map((message) => ({
+            mediaUrl: message.mediaUrl,
+            mediaType: message.mediaType,
+            mimeType: message.mimeType,
+            sender: message.sender,
+            text: message.text,
+            createdAt: message.createdAt.toISOString(),
+            timestamp: message.timestamp,
+        }));
         const [resolved] = await this.prisma.$transaction([
             this.prisma.alert.update({
                 where: { id: alertId },
@@ -662,9 +797,12 @@ let AlertService = class AlertService {
                     location: alert.address,
                     triggeredAt: alert.triggeredAt,
                     duration: `${durationMins} mins`,
+                    alertId,
+                    mediaItems,
                 },
             }),
         ]);
+        await this.jobs.cancel(client_1.ScheduledJobType.ALERT_FOLLOW_UP, alertId);
         const dto = (0, alert_mapper_1.toAlertDto)(resolved);
         const payload = {
             ...dto,
@@ -674,7 +812,8 @@ let AlertService = class AlertService {
             homeLabel: "Back to Home",
         };
         this.realtime.emitToRoom(`room:${alertId}`, "alert:resolved", payload);
-        this.realtime.emit("admin:alert:resolved", payload);
+        this.realtime.emitToRoom("room:admin", "admin:alert:resolved", payload);
+        await this.emitAdminAlertForSubscriber(alert.userId, "admin:alert:resolved", payload);
         const notified = await this.prisma.alertNotifiedGroup.findMany({ where: { alertId } });
         const groups = await this.prisma.contactGroup.findMany({
             where: { id: { in: notified.map((group) => group.groupId) } },
@@ -688,6 +827,15 @@ let AlertService = class AlertService {
             memberPhones: groups.flatMap((group) => group.members.map((member) => member.phone)),
         });
         return payload;
+    }
+    async emitAdminAlertForSubscriber(subscriberUserId, event, payload) {
+        const coverage = await this.prisma.dashboardCoverage.findMany({
+            where: { subscriberUserId },
+            select: { operatorUserId: true },
+        });
+        for (const row of coverage) {
+            this.realtime.emitToRoom(`room:admin:operator:${row.operatorUserId}`, event, payload);
+        }
     }
     async findActive(userId) {
         return this.prisma.alert.findFirst({
@@ -780,6 +928,19 @@ let AlertService = class AlertService {
             (viewer.role === client_1.Role.SUPER_ADMIN && (0, dashboard_admin_1.isDesignatedAdminEmail)(viewer.email))) {
             return alert;
         }
+        if (viewer.role === client_1.Role.SECURITY_OPERATOR) {
+            const coverage = await this.prisma.dashboardCoverage.findUnique({
+                where: {
+                    operatorUserId_subscriberUserId: {
+                        operatorUserId: userId,
+                        subscriberUserId: alert.userId,
+                    },
+                },
+            });
+            if (coverage) {
+                return alert;
+            }
+        }
         const phones = new Set((await this.prisma.contactMember.findMany({
             where: {
                 OR: [
@@ -827,6 +988,9 @@ let AlertService = class AlertService {
                 text: message.text,
                 timestamp: message.timestamp,
                 type: message.type,
+                mediaUrl: message.mediaUrl ?? null,
+                mediaType: message.mediaType ?? "NONE",
+                mimeType: message.mimeType ?? null,
                 isMine: isOwnMessage(message.senderUserId, message.sender, message.type, viewer),
             })),
         };
@@ -842,9 +1006,11 @@ let AlertService = class AlertService {
 exports.AlertService = AlertService;
 exports.AlertService = AlertService = __decorate([
     (0, common_1.Injectable)(),
+    __param(3, (0, common_1.Inject)((0, common_1.forwardRef)(() => jobs_service_1.JobsService))),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
         realtime_service_1.RealtimeService,
-        notification_service_1.NotificationService])
+        notification_service_1.NotificationService,
+        jobs_service_1.JobsService])
 ], AlertService);
 function parseSource(value) {
     const normalized = (value || "").trim().toUpperCase();
