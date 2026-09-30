@@ -117,17 +117,94 @@ console.log("Second Largest:", secondLargest);
 
 // ? find a single user using id
 
-const users = [
-  { id: 101, name: "Rahim" },
-  { id: 102, name: "Karim" },
-  { id: 103, name: "Reaz" },
-];
+// const users = [
+//   { id: 101, name: "Rahim" },
+//   { id: 102, name: "Karim" },
+//   { id: 103, name: "Reaz" },
+// ];
 
-const newUsers=[];
+// const newUsers=[];
 
-for (let i=0 ; i < users.length ; i++){
-    const userName = users[i]
-    
-  newUsers.push(userName);
+// for (let i=0 ; i < users.length ; i++){
+//     const userName = users[i]
+
+//   newUsers.push(userName);
+// }
+// console.log(newUsers)
+
+
+// const arr = [3, 5, 1, 2, 4, 7, 8, 9]
+
+// const evenNum = [];
+// for (const num of arr) {
+//   if (num % 2 == 0) {
+//     evenNum.push(num)
+//   }
+// }
+// console.log(evenNum)
+
+// const str = "hello";
+
+// const reverse = str.split("").reverse().join("")
+// console.log(reverse)
+
+
+// ? reverse a string
+
+// const str = "hello";
+
+// let reverse= "";
+
+// for (let i = str.length - 1; i >= 0; i--){
+//   reverse= reverse+str[i]
+// }
+
+// console.log(reverse);
+
+// ?count odd number
+// const arr = [1, 2, 3, 4, 6, 7, 8];
+// let count = 0;
+
+// for (let i = 0; i < arr.length; i++){
+//   if (arr[i]%2==1){
+//     count++
+//   }
+// }
+// console.log(count)
+// ? remove duplicates
+// const arr = [1, 2, 2, 3, 4, 4, 5];
+
+// let num = []
+
+// for (let i = 0; i<arr.length; i++){
+//   if (!num.includes(arr[i])){
+//     num.push(arr[i])
+//   }
+// }
+// console.log(num)
+
+// ? find duplicates
+// const arr = [1, 2, 3, 2, 4, 5];
+
+// let uniqueArr=[]
+// let duplicate = null
+// for (let i = 0 ; i <arr.length; i++){
+//   if(!uniqueArr.includes(arr[i])){
+//     uniqueArr.push(arr[i])
+//   }
+//   else {
+//     duplicate=arr[i]
+
+//   }
+// }
+// console.log(uniqueArr, duplicate)
+
+const arr = [1, 2, 3, 2, 4, 5];
+
+for (let i = 0; i < arr.length; i++) {
+  for (let j = i + 1; j < arr.length; j++) {
+    if (arr[i] === arr[j]) {
+      console.log("Duplicate:", arr[i]);
+    }
+  }
 }
-console.log(newUsers)
