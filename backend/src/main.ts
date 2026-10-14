@@ -8,7 +8,7 @@ import { AppModule } from "./app.module";
 import { env } from "./config/env";
 import { setupSwagger } from "./config/swagger";
 import { HttpExceptionFilter } from "./common/filters/http-exception.filter";
-
+// test commit
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   app.useWebSocketAdapter(new IoAdapter(app));
