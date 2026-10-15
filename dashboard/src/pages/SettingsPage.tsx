@@ -230,10 +230,20 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser, onProfi
       {/* Sub Tab: Privacy Policy */}
       {activeSubTab === 'privacy' && (
         <div className="figma-card p-4 sm:p-6 max-w-3xl">
-          <h3 className="text-sm font-bold text-gray-900 mb-4">Privacy Policy</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-bold text-gray-900">Privacy Policy</h3>
+            <a
+              href="/privacy-policy"
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs font-bold text-[#2563EB] hover:underline inline-flex items-center gap-1"
+            >
+              View Public Policy Page ↗
+            </a>
+          </div>
           <form onSubmit={handleSave} className="space-y-4">
             <textarea
-              rows={8}
+              rows={14}
               value={privacyText}
               onChange={(e) => setPrivacyText(e.target.value)}
               className="w-full bg-white border border-gray-200 rounded-xl p-4 text-xs text-gray-800 leading-relaxed focus:outline-none focus:border-blue-500 shadow-sm"

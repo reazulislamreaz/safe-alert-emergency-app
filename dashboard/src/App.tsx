@@ -16,11 +16,17 @@ import { EmergencyTypesPage } from './pages/EmergencyTypesPage';
 import { LiveGroupStatusPage } from './pages/LiveGroupStatusPage';
 import { SubscriptionManagementPage } from './pages/SubscriptionManagementPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { AlertCircle } from 'lucide-react';
 import { api } from './services/api';
 import { socketService } from './services/socket';
 import { AuthAudience, isDashboardAdmin, User } from './types';
+
+function normalizePath(pathname: string): string {
+  const clean = pathname.toLowerCase().split('?')[0].split('#')[0];
+  return clean.endsWith('/') && clean.length > 1 ? clean.slice(0, -1) : clean;
+}
 
 type AuthView =
   | 'welcome'
@@ -39,6 +45,9 @@ type SignupSession = {
 };
 
 export const App: React.FC = () => {
+  const [currentPath, setCurrentPath] = useState<string>(() =>
+    normalizePath(window.location.pathname),
+  );
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState<boolean>(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -48,6 +57,22 @@ export const App: React.FC = () => {
   const [signupSession, setSignupSession] = useState<SignupSession | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
   const [activeSosCount, setActiveSosCount] = useState(0);
+
+  useEffect(() => {
+    const onPopState = () => {
+      setCurrentPath(normalizePath(window.location.pathname));
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  const navigateTo = (path: string) => {
+    const normalized = normalizePath(path);
+    if (window.location.pathname !== normalized) {
+      window.history.pushState({}, '', normalized);
+    }
+    setCurrentPath(normalized);
+  };
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -165,6 +190,22 @@ export const App: React.FC = () => {
     setAuthView(nextView);
     setIsLogoutModalOpen(false);
   };
+
+  if (currentPath === '/privacy-policy') {
+    return (
+      <PrivacyPolicyPage
+        currentUser={currentUser}
+        sessionAudience={sessionAudience}
+        onBack={() => {
+          if (window.history.length > 1) {
+            window.history.back();
+          } else {
+            navigateTo('/');
+          }
+        }}
+      />
+    );
+  }
 
   if (isAuthChecking) {
     return (

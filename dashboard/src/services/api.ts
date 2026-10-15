@@ -561,6 +561,19 @@ export const api = {
     return data.data;
   },
 
+  async getPublicLegalPage(slug: 'about' | 'privacy' | 'terms') {
+    try {
+      const res = await fetch(`${API_BASE}/legal/${slug}`);
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success && data.data) {
+        return data.data as { slug: string; title: string; body: string; updatedAt: string | null };
+      }
+    } catch {
+      // Gracefully fall back to local bundled copy
+    }
+    return null;
+  },
+
   // --- Dashboard Metrics ---
   async getMetrics(): Promise<DashboardMetrics> {
     const res = await fetch(`${API_BASE}/dashboard/metrics`, {
