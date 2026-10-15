@@ -26,7 +26,7 @@ WORKDIR /app
 RUN apk add --no-cache wget openssl
 
 ENV NODE_ENV=production
-ENV PORT=5000
+ENV PORT=4000
 
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/node_modules ./node_modules
@@ -37,10 +37,10 @@ COPY docker-entrypoint.sh ./docker-entrypoint.sh
 
 RUN chmod +x docker-entrypoint.sh
 
-EXPOSE 5000
+EXPOSE 4000
 
 HEALTHCHECK --interval=15s --timeout=5s --start-period=40s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:5000/health || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost:4000/health || exit 1
 
 ENTRYPOINT ["./docker-entrypoint.sh"]
 CMD ["node", "dist/main.js"]

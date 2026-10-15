@@ -10,11 +10,11 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': {
-        target: process.env.API_PROXY_TARGET || 'http://localhost:5000',
+        target: process.env.API_PROXY_TARGET || 'http://localhost:4000',
         changeOrigin: true,
       },
       '/socket.io': {
-        target: process.env.API_PROXY_TARGET || 'http://localhost:5000',
+        target: process.env.API_PROXY_TARGET || 'http://localhost:4000',
         ws: true,
       },
     },

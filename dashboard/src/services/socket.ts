@@ -22,7 +22,7 @@ class SocketService {
     this.asAdmin = asAdmin;
     const socketUrl =
       (import.meta as any).env?.VITE_SOCKET_URL ||
-      (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5000');
+      (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:4000');
 
     this.socket = io(socketUrl, {
       transports: ['websocket', 'polling'],

@@ -68,9 +68,9 @@ docker compose ps
 
 echo -e "\n${BLUE}🌐 Access Endpoints:${NC}"
 echo -e "   • ${GREEN}Admin Dashboard & Simulator:${NC} http://localhost:3000"
-echo -e "   • ${GREEN}Backend REST API:${NC}           http://localhost:5000/api"
-echo -e "   • ${GREEN}WebSocket Hub:${NC}              ws://localhost:5000/socket.io"
-echo -e "   • ${GREEN}Health Check:${NC}               http://localhost:5000/health"
+echo -e "   • ${GREEN}Backend REST API:${NC}           http://localhost:4000/api"
+echo -e "   • ${GREEN}WebSocket Hub:${NC}              ws://localhost:4000/socket.io"
+echo -e "   • ${GREEN}Health Check:${NC}               http://localhost:4000/health"
 echo -e "\n${BLUE}📋 Useful Commands:${NC}"
 echo -e "   • View Logs:    ${YELLOW}docker compose logs -f${NC}"
 echo -e "   • Stop Stack:   ${YELLOW}docker compose down${NC}"
