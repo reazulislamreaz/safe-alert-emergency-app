@@ -33,7 +33,7 @@ loadEnvFile((0, path_1.resolve)(process.cwd(), ".env"));
 loadEnvFile((0, path_1.resolve)(process.cwd(), "../.env"));
 const smtpPort = process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT, 10) : 587;
 exports.env = {
-    port: process.env.PORT ? parseInt(process.env.PORT, 10) : 5000,
+    port: process.env.PORT ? parseInt(process.env.PORT, 10) : 4000,
     jwtSecret: process.env.JWT_SECRET || "safealert_super_secret_jwt_key_2026_production",
     jwtExpiresIn: process.env.JWT_EXPIRES_IN || "7d",
     otpExpiryMinutes: process.env.OTP_EXPIRY_MINUTES
