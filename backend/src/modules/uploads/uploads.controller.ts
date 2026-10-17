@@ -18,6 +18,7 @@ import {
 } from "@nestjs/swagger";
 import { memoryStorage } from "multer";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
+import { OptionalJwtGuard } from "../../common/guards/optional-jwt.guard";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { JwtPayload } from "../../config/env";
 import { UploadsService } from "./uploads.service";
@@ -25,13 +26,12 @@ import { PresignUploadDto } from "./dto/presign.dto";
 import { UPLOAD_MAX_BYTES, UPLOAD_MAX_FILES, UPLOAD_MEDIA_MAX_BYTES } from "./uploads.constants";
 
 @ApiTags("Uploads")
-@ApiBearerAuth("access-token")
 @Controller("api/uploads")
-@UseGuards(JwtAuthGuard)
 export class UploadsController {
   constructor(private readonly uploads: UploadsService) {}
 
   @Post("images")
+  @UseGuards(OptionalJwtGuard)
   @HttpCode(HttpStatus.CREATED)
   @UseInterceptors(
     FilesInterceptor("files", UPLOAD_MAX_FILES, {
@@ -52,12 +52,12 @@ export class UploadsController {
       required: ["files"],
     },
   })
-  @ApiOperation({ summary: "Upload profile photos (JPEG/PNG/WebP/GIF, max 3, 5 MB each) to S3" })
+  @ApiOperation({ summary: "Upload profile photos (JPEG/PNG/WebP/GIF, max 3, 5 MB each) to S3 without mandatory authentication" })
   async upload(
     @UploadedFiles() files: Express.Multer.File[],
-    @CurrentUser() user: JwtPayload,
+    @CurrentUser() user?: JwtPayload,
   ) {
-    const stored = await this.uploads.uploadFiles(files ?? [], user.sub);
+    const stored = await this.uploads.uploadFiles(files ?? [], user?.sub);
     return {
       success: true,
       data: {
@@ -68,6 +68,8 @@ export class UploadsController {
   }
 
   @Post("presign")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth("access-token")
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: "Presigned S3 PUT URL for direct browser/mobile upload" })
   async presign(@Body() dto: PresignUploadDto, @CurrentUser() user: JwtPayload) {
@@ -76,6 +78,8 @@ export class UploadsController {
   }
 
   @Post("media")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth("access-token")
   @HttpCode(HttpStatus.CREATED)
   @UseInterceptors(
     FilesInterceptor("files", UPLOAD_MAX_FILES, {
