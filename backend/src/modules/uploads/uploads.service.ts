@@ -41,7 +41,7 @@ export class UploadsService {
           : {}),
       });
     } else {
-      this.logger.warn("AWS_S3_BUCKET is unset — storing images on local disk for development.");
+      this.logger.warn("AWS_S3_BUCKET_NAME is unset — storing images on local disk for development.");
     }
   }
 
@@ -116,10 +116,6 @@ export class UploadsService {
 
   publicUrl(key: string): string {
     if (this.usesS3()) {
-      const base = env.s3.publicBaseUrl.replace(/\/$/, "");
-      if (base) {
-        return `${base}/${key}`;
-      }
       return `https://${env.s3.bucket}.s3.${env.s3.region}.amazonaws.com/${key}`;
     }
     return `/api/uploads/files/${key}`;

@@ -371,7 +371,7 @@ paths:
                 - files
       responses:
         '201':
-          description: Images stored in S3 (or local disk when AWS_S3_BUCKET is unset)
+          description: Images stored in S3 (or local disk when AWS_S3_BUCKET_NAME is unset)
       summary: Upload profile photos to S3
       tags:
         - Uploads
