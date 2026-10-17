@@ -10,6 +10,8 @@ import {
   X,
 } from 'lucide-react';
 
+import { User } from '../../types';
+
 interface SidebarProps {
   currentTab: string;
   onSelectTab: (tab: string) => void;
@@ -17,6 +19,7 @@ interface SidebarProps {
   activeSOSCount?: number;
   isOpen: boolean;
   onClose: () => void;
+  currentUser?: User | null;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -26,6 +29,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   activeSOSCount = 3,
   isOpen,
   onClose,
+  currentUser,
 }) => {
   const menuItems = [
     {
@@ -156,11 +160,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
           >
             <div className="flex items-center gap-3 min-w-0">
               <div className="w-9 h-9 rounded-full bg-[#2563EB] flex items-center justify-center font-bold text-xs text-white border border-blue-300/30 shrink-0">
-                AU
+                {currentUser?.fullName
+                  ? currentUser.fullName
+                      .split(' ')
+                      .filter(Boolean)
+                      .slice(0, 2)
+                      .map((p) => p[0]?.toUpperCase())
+                      .join('')
+                  : 'SA'}
               </div>
               <div className="text-left min-w-0">
-                <p className="text-xs font-bold text-white leading-tight">Admin User</p>
-                <p className="text-[10px] text-blue-200/60 truncate">admin@safealert.app</p>
+                <p className="text-xs font-bold text-white leading-tight truncate">
+                  {currentUser?.fullName || 'Super Admin'}
+                </p>
+                <p className="text-[10px] text-blue-200/60 truncate">
+                  {currentUser?.email || 'admin@safety-circle-app.com'}
+                </p>
               </div>
             </div>
             <LogOut className="w-4 h-4 text-blue-200/50 group-hover:text-red-400 transition-colors shrink-0" />

@@ -1,15 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
-import { WelcomePage } from './pages/WelcomePage';
-import { LoginPage } from './pages/LoginPage';
 import { OperatorLoginPage } from './pages/OperatorLoginPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
-import { ForgotPinPage } from './pages/ForgotPinPage';
-import { CreateAccountPage } from './pages/CreateAccountPage';
-import { VerifyEmailPage } from './pages/VerifyEmailPage';
-import { SecureAccountPage } from './pages/SecureAccountPage';
-import { CitizenHomePage } from './pages/CitizenHomePage';
 import { DashboardPage } from './pages/DashboardPage';
 import { UserManagementPage } from './pages/UserManagementPage';
 import { EmergencyTypesPage } from './pages/EmergencyTypesPage';
@@ -21,28 +14,14 @@ import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { AlertCircle } from 'lucide-react';
 import { api } from './services/api';
 import { socketService } from './services/socket';
-import { AuthAudience, isDashboardAdmin, User } from './types';
+import { User } from './types';
 
 function normalizePath(pathname: string): string {
   const clean = pathname.toLowerCase().split('?')[0].split('#')[0];
   return clean.endsWith('/') && clean.length > 1 ? clean.slice(0, -1) : clean;
 }
 
-type AuthView =
-  | 'welcome'
-  | 'login'
-  | 'operator'
-  | 'register'
-  | 'verify-email'
-  | 'secure-account'
-  | 'forgot-pin'
-  | 'forgot-password';
-
-type SignupSession = {
-  email: string;
-  token: string;
-  otpCode?: string;
-};
+type AuthView = 'operator' | 'forgot-password';
 
 export const App: React.FC = () => {
   const [currentPath, setCurrentPath] = useState<string>(() =>
@@ -51,10 +30,8 @@ export const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState<boolean>(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [sessionAudience, setSessionAudience] = useState<AuthAudience>('app');
   const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
-  const [authView, setAuthView] = useState<AuthView>('welcome');
-  const [signupSession, setSignupSession] = useState<SignupSession | null>(null);
+  const [authView, setAuthView] = useState<AuthView>('operator');
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
   const [activeSosCount, setActiveSosCount] = useState(0);
 
@@ -84,15 +61,13 @@ export const App: React.FC = () => {
 
       try {
         const response = await api.getMe();
-        if (response.user.role === 'SUPER_ADMIN' && response.audience !== 'dashboard') {
+        if (response.user.role !== 'SUPER_ADMIN') {
           api.logout();
           setCurrentUser(null);
-          setSessionAudience('app');
           setAuthView('operator');
           return;
         }
         setCurrentUser(response.user);
-        setSessionAudience(response.audience === 'dashboard' ? 'dashboard' : 'app');
       } catch (err) {
         console.warn('Session expired or invalid, please sign in.');
         api.logout();
@@ -103,15 +78,6 @@ export const App: React.FC = () => {
     };
 
     checkAuth();
-  }, []);
-
-  useEffect(() => {
-    // Feature 1: Deep Link referral invitation capture
-    const params = new URLSearchParams(window.location.search);
-    const inviteToken = params.get('invite');
-    if (inviteToken) {
-      sessionStorage.setItem('pending_invite_token', inviteToken);
-    }
   }, []);
 
   useEffect(() => {
@@ -139,14 +105,15 @@ export const App: React.FC = () => {
     };
   }, [isSidebarOpen]);
 
-  const canAccessDashboard = isDashboardAdmin(currentUser, sessionAudience);
+  const canAccessDashboard = currentUser?.role === 'SUPER_ADMIN';
 
   useEffect(() => {
     if (!canAccessDashboard) {
       return;
     }
     let cancelled = false;
-    api.getMetrics()
+    api
+      .getMetrics()
       .then((data) => {
         if (!cancelled) setActiveSosCount(data.kpis.activeAlerts.value);
       })
@@ -166,28 +133,23 @@ export const App: React.FC = () => {
     return () => socketService.disconnect();
   }, [canAccessDashboard]);
 
-  const handleLoginSuccess = (user: User, audience: AuthAudience = 'app') => {
-    if (user.role === 'SUPER_ADMIN' && audience !== 'dashboard') {
+  const handleLoginSuccess = (user: User) => {
+    if (user.role !== 'SUPER_ADMIN') {
       api.logout();
       setCurrentUser(null);
-      setSessionAudience('app');
       setAuthView('operator');
       return;
     }
     setCurrentUser(user);
-    setSessionAudience(audience);
     setCurrentTab('dashboard');
-    setAuthView(isDashboardAdmin(user, audience) ? 'operator' : 'login');
-    setSignupSession(null);
+    setAuthView('operator');
   };
 
-  const handleLogout = (nextView: AuthView = 'welcome') => {
+  const handleLogout = () => {
     socketService.disconnect();
     api.logout();
     setCurrentUser(null);
-    setSessionAudience('app');
-    setSignupSession(null);
-    setAuthView(nextView);
+    setAuthView('operator');
     setIsLogoutModalOpen(false);
   };
 
@@ -195,7 +157,7 @@ export const App: React.FC = () => {
     return (
       <PrivacyPolicyPage
         currentUser={currentUser}
-        sessionAudience={sessionAudience}
+        sessionAudience="dashboard"
         onBack={() => {
           if (window.history.length > 1) {
             window.history.back();
@@ -209,103 +171,26 @@ export const App: React.FC = () => {
 
   if (isAuthChecking) {
     return (
-      <div className="min-h-dvh w-full bg-[#F3F4F6] flex items-center justify-center px-4">
+      <div className="min-h-dvh w-full bg-[#0A1145] flex items-center justify-center px-4">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-[3px] border-[#3A67D5] border-t-transparent rounded-full animate-spin" />
-          <p className="text-xs text-gray-400 font-medium">Verifying session...</p>
+          <div className="w-10 h-10 border-[3px] border-[#3A67D5] border-t-transparent rounded-full animate-spin" />
+          <p className="text-xs text-blue-200/80 font-medium tracking-wide">
+            Connecting to Command Center...
+          </p>
         </div>
       </div>
     );
   }
 
-  if (currentUser && !canAccessDashboard) {
-    return (
-      <CitizenHomePage
-        user={currentUser}
-        onLogout={() => handleLogout('welcome')}
-        onOperatorLogin={() => handleLogout('operator')}
-      />
-    );
-  }
-
-  if (!currentUser) {
-    if (authView === 'login') {
-      return (
-        <LoginPage
-          onLoginSuccess={handleLoginSuccess}
-          onForgotPin={() => setAuthView('forgot-pin')}
-          onCreateAccount={() => setAuthView('register')}
-          onClose={() => setAuthView('welcome')}
-          onOperatorLogin={() => setAuthView('operator')}
-        />
-      );
-    }
-
-    if (authView === 'operator') {
-      return (
-        <OperatorLoginPage
-          onLoginSuccess={handleLoginSuccess}
-          onForgotPassword={() => setAuthView('forgot-password')}
-          onBack={() => setAuthView('welcome')}
-        />
-      );
-    }
-
+  if (!currentUser || !canAccessDashboard) {
     if (authView === 'forgot-password') {
       return <ForgotPasswordPage onBackToLogin={() => setAuthView('operator')} />;
     }
 
-    if (authView === 'forgot-pin') {
-      return <ForgotPinPage onBackToLogin={() => setAuthView('login')} />;
-    }
-
-    if (authView === 'register') {
-      return (
-        <CreateAccountPage
-          onClose={() => setAuthView('welcome')}
-          onRegistered={(session) => {
-            setSignupSession(session);
-            setAuthView('verify-email');
-          }}
-        />
-      );
-    }
-
-    if (authView === 'verify-email' && signupSession) {
-      return (
-        <VerifyEmailPage
-          email={signupSession.email}
-          demoCode={signupSession.otpCode}
-          onBack={() => setAuthView('register')}
-          onVerified={(token) => {
-            setSignupSession({
-              ...signupSession,
-              token: token || signupSession.token,
-            });
-            setAuthView('secure-account');
-          }}
-        />
-      );
-    }
-
-    if (authView === 'secure-account' && signupSession) {
-      return (
-        <SecureAccountPage
-          setupToken={signupSession.token}
-          email={signupSession.email}
-          onBack={() => setAuthView('verify-email')}
-          onComplete={(user) => {
-            handleLoginSuccess(user, 'app');
-          }}
-        />
-      );
-    }
-
     return (
-      <WelcomePage
-        onCreateAccount={() => setAuthView('register')}
-        onLogin={() => setAuthView('login')}
-        onOperatorLogin={() => setAuthView('operator')}
+      <OperatorLoginPage
+        onLoginSuccess={handleLoginSuccess}
+        onForgotPassword={() => setAuthView('forgot-password')}
       />
     );
   }
@@ -319,6 +204,7 @@ export const App: React.FC = () => {
         activeSOSCount={activeSosCount}
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
+        currentUser={currentUser}
       />
 
       <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
@@ -361,7 +247,7 @@ export const App: React.FC = () => {
             </div>
 
             <h3 className="text-base font-bold text-gray-900 mb-1">
-              Log out from App
+              Log out from Command Center
             </h3>
             <p className="text-xs text-gray-500 mb-6 max-w-xs mx-auto">
               Are you sure you want to log out from <strong>{currentUser.email}</strong>?
@@ -371,14 +257,14 @@ export const App: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsLogoutModalOpen(false)}
-                className="flex-1 py-2.5 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition-colors"
+                className="flex-1 py-2.5 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition-colors cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="button"
-                onClick={() => handleLogout('welcome')}
-                className="flex-1 py-2.5 px-4 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl transition-colors shadow-md"
+                onClick={handleLogout}
+                className="flex-1 py-2.5 px-4 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl transition-colors shadow-md cursor-pointer"
               >
                 Log Out
               </button>
