@@ -67,7 +67,7 @@ echo -e "${GREEN}===============================================================
 docker compose ps
 
 echo -e "\n${BLUE}🌐 Access Endpoints:${NC}"
-echo -e "   • ${GREEN}Admin Dashboard & Simulator:${NC} http://localhost:3000"
+echo -e "   • ${GREEN}Admin Dashboard & Simulator:${NC} http://localhost:${FRONTEND_PORT:-3001}"
 echo -e "   • ${GREEN}Backend REST API:${NC}           http://localhost:4000/api"
 echo -e "   • ${GREEN}WebSocket Hub:${NC}              ws://localhost:4000/socket.io"
 echo -e "   • ${GREEN}Health Check:${NC}               http://localhost:4000/health"

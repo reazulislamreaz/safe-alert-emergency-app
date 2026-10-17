@@ -9,11 +9,16 @@ interface PrivacyPolicyPageProps {
   onBack?: () => void;
 }
 
-const DEFAULT_PRIVACY_BODY = `1. INTRODUCTION
-Welcome to Safe Alert (operated in conjunction with the Safety Circle emergency response platform, referred to as "Safe Alert", "we", "us", or "our"). Safe Alert is an emergency communication and safety coordination application designed to connect citizens with their trusted emergency contacts, family, and designated responders during urgent situations. This Privacy Policy details what information we collect, how we use and protect it, your privacy rights, and how you can permanently delete your data.
+const DEFAULT_PRIVACY_BODY = `SAFETY CIRCLE PRIVACY POLICY
+Effective Date: October 17, 2026
+Version: 2.5 (Production)
+Applies to: Safety Circle Mobile Application, Citizen Web Client, and Admin Command Center (safety-circle-app.com)
+
+1. INTRODUCTION
+Welcome to Safety Circle (operated under safety-circle-app.com, referred to as "Safety Circle", "we", "us", or "our"). Safety Circle is an emergency communication and safety coordination platform designed to connect citizens with their trusted emergency contacts, family circles, and designated emergency responders during urgent situations. This Privacy Policy details what information we collect, how we use and protect it, your privacy rights, and how you can manage or permanently delete your data.
 
 2. INFORMATION WE COLLECT
-• Account & Profile: Full name, verified email address (for 6-digit OTP verification and account administration), mobile phone number (for contact matching), location label (city/state), optional date of birth, optional race classification (from catalog to assist visual identification in emergencies), and up to 3 profile photos.
+• Account & Profile Information: Full name, verified email address (for 6-digit OTP verification and administrative notifications), mobile phone number (for contact matching), location label (city/state), optional date of birth, optional race classification (from catalog to assist visual identification in emergency response), and profile photos (up to 3).
 • Authentication Credentials: 4-digit security PIN (stored strictly as salted bcrypt cryptographic hashes) and biometric public credential identifiers (faceIdCredentialId). Raw biometric data (Face ID / fingerprints) is processed exclusively on your device's local Secure Enclave and is never transmitted to or stored on our servers.
 • Emergency Contacts & Circles: Contact names, phone numbers, relationship designations (parent, spouse, friend), custom circle colors, and invitation tokens.
 • Real-Time Geolocation Telemetry: When an emergency alert is active, we collect precise GPS coordinates (latitude, longitude), geocoded street address, accuracy radius (meters), movement speed (m/s), compass heading (degrees), device battery level, and millisecond timestamps.
@@ -24,25 +29,25 @@ Welcome to Safe Alert (operated in conjunction with the Safety Circle emergency 
 We process your information strictly for safety-focused purposes:
 • Delivering immediate SOS broadcasts and high-priority audible alarms to your designated emergency circle.
 • Streaming live telemetry points, movement paths, and battery status on interactive maps (Google Maps / OpenStreetMap Leaflet) during active emergencies.
-• Authenticating accounts via 6-digit email OTPs and secure JWT tokens with audience segregation.
+• Authenticating accounts via 6-digit email OTPs and secure JWT tokens with strict audience segregation.
 • Facilitating live incident chat, photo sharing, and group audio/video conference calls.
 • Managing subscription tiers (Free vs. Premium), group limits, and partner promotional vouchers.
 • Archiving incident duration, notes, and close-time media snapshots in your private Incident Journal upon alert resolution.
 • Monitoring platform uptime and investigating abusive or fraudulent alerts.
 
 4. LOCATION INFORMATION AND DEVICE PERMISSIONS
-• Precise Location: Accessed ONLY when you trigger an emergency SOS, during an active broadcast (foreground and background), upon safety countdown expiration, or during an explicit test drill. Safe Alert DOES NOT run persistent background location tracking outside active emergency sessions.
+• Precise Location: Accessed ONLY when you trigger an emergency SOS, during an active broadcast (foreground and background), upon safety countdown expiration, or during an explicit test drill. Safety Circle DOES NOT run persistent background location tracking outside active emergency sessions.
 • Device Permissions: Location (precise/background during active SOS), Camera (profile & evidence photos), Microphone (group audio/video calls), Notifications (emergency chimes and updates), and Biometrics (local rapid unlock). Permissions can be modified or revoked at any time in device system settings.
 
 5. EMERGENCY ALERTS AND SOS FUNCTIONALITY
 • Alert Modes: Standard Emergency (audible alarm, push broadcast, live telemetry), Silent Emergency (discreet alert suppressing loud sounds on the user's phone while alerting contacts), and Test Drill Mode.
 • Resolution: Resolving or cancelling an alert halts telemetry streaming immediately, dispatches cancellation notices to all recipients, and commits the summary to your journal.
-• Emergency Disclaimer: Safe Alert is a peer safety tool and NOT a direct replacement for 911 or local emergency authorities. Always dial official emergency services first in life-threatening situations.
+• Emergency Disclaimer: Safety Circle is a peer safety tool and NOT a direct replacement for 911 or local emergency authorities. Always dial official emergency services first in life-threatening situations.
 
 6. EMERGENCY CONTACTS AND SHARING
 • Circle Sharing: Designated emergency contacts receive your live coordinates, battery level, name, and live chat access during active incidents.
 • Security Operators: Designated Super Admins monitor active alerts via the command dashboard.
-• No Sale of Data: Safe Alert DOES NOT sell, rent, license, or monetize your personal information or location history to data brokers or advertising aggregators.
+• No Sale of Data: Safety Circle DOES NOT sell, rent, license, or monetize your personal information or location history to data brokers or advertising aggregators.
 
 7. THIRD-PARTY SERVICES
 • Amazon Web Services (AWS S3): Encrypted cloud object storage for profile photos and incident media attachments.
@@ -64,7 +69,7 @@ Active account records are kept while your account is open. Incident journals ar
 You can permanently delete your account directly in the app under Profile > Delete Account by entering your 4-digit PIN. Deletion immediately triggers a database cascade (onDelete: Cascade) that permanently erases your profile, contacts, groups, alerts, telemetry points, live messages, journals, and notifications, and revokes your active token.
 
 12. CHILDREN'S PRIVACY
-Safe Alert is not directed to children under 13 (or under 16 in the EEA/UK). We do not knowingly collect personal data directly from unsupervised minors without verifiable guardian consent.
+Safety Circle is not directed to children under 13 (or under 16 in the EEA/UK). We do not knowingly collect personal data directly from unsupervised minors without verifiable guardian consent.
 
 13. INTERNATIONAL TRANSFERS
 Data is stored on cloud servers located primarily in the United States under standard international contractual safeguards.
@@ -73,7 +78,7 @@ Data is stored on cloud servers located primarily in the United States under sta
 We may update this policy periodically. Material changes will be communicated via in-app notification, email alert, or dashboard notice.
 
 15. CONTACT US
-For questions, privacy requests, or assistance, contact: support@safealert.app or visit https://safealert.app.`;
+For questions, privacy requests, or assistance, contact: support@safety-circle-app.com or visit https://safety-circle-app.com.`;
 
 export const PrivacyPolicyPage: React.FC<PrivacyPolicyPageProps> = ({
   currentUser,
@@ -154,7 +159,7 @@ export const PrivacyPolicyPage: React.FC<PrivacyPolicyPageProps> = ({
                 SC
               </div>
               <span className="font-bold text-gray-900 text-sm tracking-tight">
-                Safe Alert
+                Safety Circle
               </span>
             </div>
           </div>

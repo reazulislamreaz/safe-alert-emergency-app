@@ -57,7 +57,7 @@ services:
     container_name: safealert-dashboard
     restart: unless-stopped
     ports:
-      - "${FRONTEND_PORT:-3000}:80"
+      - "${FRONTEND_PORT:-3001}:80"
     depends_on:
       backend:
         condition: service_healthy

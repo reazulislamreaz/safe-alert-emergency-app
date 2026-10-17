@@ -7,7 +7,7 @@ export default defineConfig({
     include: ['zego-express-engine-webrtc'],
   },
   server: {
-    port: 3000,
+    port: 3001,
     proxy: {
       '/api': {
         target: process.env.API_PROXY_TARGET || 'http://localhost:4000',
